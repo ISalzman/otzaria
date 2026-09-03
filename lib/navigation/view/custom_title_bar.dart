@@ -234,8 +234,22 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
                 navState.currentScreen == Screen.search ||
                 (navState.currentScreen == Screen.reading &&
                     context.select((TabsBloc bloc) => bloc.state.hasOpenTabs));
+            // ⚠️ הסרגל מזמין את חמשת הפיקסלים שהכרטיסיה הפעילה מציירת
+            // **מתחת** לעצמה כדי להתמזג בגוף (`_TabBackgroundPainter`,
+            // `bottomOffset`).
+            //
+            // הגשר הזה נכתב כדי שהכרטיסיה תיראה חלק אחד עם התוכן, והוא
+            // **מעולם לא נראה**: `CustomTitleBar` יושב ב-`Column` לפני
+            // התוכן, ולכן התוכן נצבע מעליו. מה שהמשתמש ראה זה קו דק במקום
+            // מיזוג.
+            //
+            // התיקון כאן ולא בסדר הצביעה שב-`main_window_screen`: גובה
+            // הסרגל אינו קבוע (במצב כרטיסיות מוערמות נוספת שורה), ולכן
+            // `Stack` עם ריווח קשיח שם היה נכון בדיוק במצב אחד. כשהסרגל
+            // מזמין את השטח, שום דבר אינו יכול לצבוע מעליו.
+            const bridge = _TabBackgroundPainter.bottomOffset;
             final topBar = SizedBox(
-              height: 40,
+              height: useReaderStyle ? 40 + bridge : 40,
               child: Stack(
                 clipBehavior: Clip.none,
                 children: [
@@ -257,82 +271,95 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
                               ),
                             ),
                     ),
-                    child: Row(
-                      children: [
-                        // כפתורי פעולה (היסטוריה וכו') - תמיד מוצגים
-                        SizedBox(
-                          height: 40,
-                          child: Center(
-                            child: _buildActionButtons(context),
-                          ),
-                        ),
-
-                        // תוכן הכותרת (טאבים או כותרת רגילה)
-                        Expanded(
-                          child: _buildContent(
-                            context,
-                            navState,
-                            settingsState,
-                          ),
-                        ),
-
-                        // כפתורי חלון (רק בדסקטופ)
-                        if (!kIsWeb &&
-                            (Platform.isWindows ||
-                                Platform.isLinux ||
-                                Platform.isMacOS))
+                    // ⚠️ ה-`Container` ממלא את כל הגובה כדי שהרקע שלו יכסה
+                    // גם את רצועת הגשר, וה-`Row` מוגבל ל-40 — אחרת
+                    // ה-`crossAxisAlignment: center` שלו היה מרכז את
+                    // הכרטיסיות בתוך 45 ומזיז אותן 2.5 פיקסלים למטה.
+                    child: Padding(
+                      padding: EdgeInsets.only(
+                        bottom: useReaderStyle ? bridge : 0,
+                      ),
+                      child: Row(
+                        children: [
+                          // כפתורי פעולה (היסטוריה וכו') - תמיד מוצגים
                           SizedBox(
-                            height: 50,
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const ManagedUpdateTitleBarIndicator(),
-                                _buildFullscreenCaptionButton(
-                                  context,
-                                  settingsState,
-                                ),
-                                if (settingsState.isFullscreen)
-                                  _CaptionActionButton(
-                                    brightness: Theme.of(context).brightness,
-                                    tooltip: 'מזער',
-                                    icon: FluentIcons.subtract_24_regular,
-                                    onPressed: () async {
-                                      // נלקח לפני ה-await: אחריו ה-context
-                                      // עלול כבר לא להיות מותקן.
-                                      final window =
-                                          AppWindowScope.controllerOf(context);
-                                      await FullscreenHelper.toggleFullscreen(
-                                        context,
-                                        false,
-                                      );
-                                      await window.minimize();
-                                    },
-                                  ),
-                                if (settingsState.isFullscreen)
-                                  _CaptionActionButton(
-                                    brightness: Theme.of(context).brightness,
-                                    tooltip: 'סגור',
-                                    icon: FluentIcons.dismiss_24_regular,
-                                    // סגירה מנומסת — עוברת דרך ה-handshake
-                                    // של onWindowClose ולא הורגת מיד.
-                                    onPressed: () =>
-                                        AppWindowScope.controllerOf(
-                                          context,
-                                        ).close(),
-                                  ),
-                                if (!settingsState.isFullscreen)
-                                  SizedBox(
-                                    width: _kWindowCaptionButtonsWidth,
-                                    height: 50,
-                                    child: WindowCaption(
-                                      brightness: Theme.of(context).brightness,
-                                      backgroundColor: Colors.transparent,
-                                    ),
-                                  ),
-                              ],
+                            height: 40,
+                            child: Center(
+                              child: _buildActionButtons(context),
                             ),
                           ),
-                      ],
+
+                          // תוכן הכותרת (טאבים או כותרת רגילה)
+                          Expanded(
+                            child: _buildContent(
+                              context,
+                              navState,
+                              settingsState,
+                            ),
+                          ),
+
+                          // כפתורי חלון (רק בדסקטופ)
+                          if (!kIsWeb &&
+                              (Platform.isWindows ||
+                                  Platform.isLinux ||
+                                  Platform.isMacOS))
+                            SizedBox(
+                              height: 50,
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const ManagedUpdateTitleBarIndicator(),
+                                  _buildFullscreenCaptionButton(
+                                    context,
+                                    settingsState,
+                                  ),
+                                  if (settingsState.isFullscreen)
+                                    _CaptionActionButton(
+                                      brightness: Theme.of(context).brightness,
+                                      tooltip: 'מזער',
+                                      icon: FluentIcons.subtract_24_regular,
+                                      onPressed: () async {
+                                        // נלקח לפני ה-await: אחריו ה-context
+                                        // עלול כבר לא להיות מותקן.
+                                        final window =
+                                            AppWindowScope.controllerOf(
+                                              context,
+                                            );
+                                        await FullscreenHelper.toggleFullscreen(
+                                          context,
+                                          false,
+                                        );
+                                        await window.minimize();
+                                      },
+                                    ),
+                                  if (settingsState.isFullscreen)
+                                    _CaptionActionButton(
+                                      brightness: Theme.of(context).brightness,
+                                      tooltip: 'סגור',
+                                      icon: FluentIcons.dismiss_24_regular,
+                                      // סגירה מנומסת — עוברת דרך ה-handshake
+                                      // של onWindowClose ולא הורגת מיד.
+                                      onPressed: () =>
+                                          AppWindowScope.controllerOf(
+                                            context,
+                                          ).close(),
+                                    ),
+                                  if (!settingsState.isFullscreen)
+                                    SizedBox(
+                                      width: _kWindowCaptionButtonsWidth,
+                                      height: 50,
+                                      child: WindowCaption(
+                                        brightness: Theme.of(
+                                          context,
+                                        ).brightness,
+                                        backgroundColor: Colors.transparent,
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                        ],
+                      ),
                     ),
                   ),
                 ],
@@ -1308,6 +1335,13 @@ class _TabBackgroundPainter extends CustomPainter {
 
   _TabBackgroundPainter(this.color);
 
+  /// כמה הכרטיסיה מציירת **מתחת** לגובה שלה, כדי להתמזג בגוף.
+  ///
+  /// ⚠️ חשוף כי הסרגל חייב **להזמין** את השטח הזה. הגשר צויר מחוץ לגבולות
+  /// ה-widget, ולכן התוכן — שיושב אחריו ב-`Column` — נצבע מעליו, והמיזוג
+  /// מעולם לא נראה. מה שנראה זה קו דק.
+  static const double bottomOffset = 5.0;
+
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
@@ -1317,7 +1351,6 @@ class _TabBackgroundPainter extends CustomPainter {
     final path = Path();
     const topRadius = 8.0;
     const bottomRadius = 15.0;
-    const bottomOffset = 5.0;
 
     path.moveTo(-bottomRadius, size.height + bottomOffset);
 
