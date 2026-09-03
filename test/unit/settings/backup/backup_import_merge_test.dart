@@ -68,7 +68,7 @@ void main() {
   });
 
   group('היסטוריה', () {
-    test('הרשומות המקומיות נשמרות, והמיובאות נחתכות בתקרה', () {
+    test('המיובאות מפנות את הרשומות המקומיות הישנות בתקרה', () {
       final local = List.generate(
         BackupImportMerge.maxHistory,
         (i) => bookmark(ref: 'מקומי $i'),
@@ -77,9 +77,11 @@ void main() {
 
       final result = BackupImportMerge.mergeHistory(local, incoming);
 
-      expect(result.added, 0);
+      expect(result.added, 1);
       expect(result.merged.length, BackupImportMerge.maxHistory);
       expect(result.merged.first.ref, 'מקומי 0');
+      expect(result.merged.last.ref, 'מיובא');
+      expect(result.merged.any((item) => item.ref == 'מקומי 199'), isFalse);
     });
 
     test('מתחת לתקרה — המיובאות נוספות', () {

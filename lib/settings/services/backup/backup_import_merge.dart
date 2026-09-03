@@ -60,16 +60,21 @@ class BackupImportMerge {
   }
 
   /// היסטוריה: כמו הסימניות, עם גזירה ל-[maxHistory]. הרשומות המקומיות
-  /// עדכניות יותר ולכן קודמות — פריט מיובא שנדחק מעבר לתקרה נחתך.
+  /// קודמות, אבל מפנים בסוף הרשימה מקום לרשומות המיובאות כדי שייבוא ממכשיר
+  /// אחר לא יהפוך ללא-פעולה כשההיסטוריה המקומית כבר מלאה.
   static ({List<Bookmark> merged, int added}) mergeHistory(
     List<Bookmark> local,
     List<Bookmark> incoming,
   ) {
     final result = mergeBookmarks(local, incoming);
     if (result.merged.length <= maxHistory) return result;
-    final trimmed = result.merged.sublist(0, maxHistory);
-    final added = trimmed.length - local.length;
-    return (merged: trimmed, added: added < 0 ? 0 : added);
+
+    final imported = result.merged.skip(local.length).take(maxHistory).toList();
+    final localCapacity = maxHistory - imported.length;
+    return (
+      merged: [...local.take(localCapacity), ...imported],
+      added: imported.length,
+    );
   }
 
   /// שמור-וזכור: מחזירה את המפתחות שיש לכתוב בפועל.

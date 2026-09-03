@@ -39,7 +39,6 @@ import 'package:otzaria/utils/navigation/book_open_coordinator.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:otzaria/utils/file/file_picker_dialog_options.dart';
 import 'package:otzaria/plugins/bridge/plugin_save_target.dart';
-import 'package:otzaria/plugins/view/plugin_file_input_guard_script.dart';
 import 'package:otzaria/settings/services/safer_mode_guard.dart';
 import 'package:otzaria/widgets/dialogs/dialogs_exports.dart';
 import 'package:otzaria/widgets/misc/middle_click_autoscroll.dart';
@@ -369,32 +368,35 @@ class _PluginTabPageState extends State<PluginTabPage> {
         );
         return result?.path;
       },
-      pickSaveLocation: ({
-        required String suggestedName,
-        List<String>? allowedExtensions,
-        String? title,
-      }) async {
-        if (!mounted) return null;
-        if (!await verifySaferModePassword(context)) return null;
-        if (!mounted) return null;
-        final folder = await FilePicker.getDirectoryPath(
-          dialogTitle: title ?? 'בחירת תיקייה לשמירת הקובץ',
-          windowsOptions: kModalWindowsOptions,
-          linuxOptions: kModalLinuxOptions,
-        );
-        if (folder == null || !mounted) return null;
-        final typed = await showInputDialog(
-          context: context,
-          title: title ?? 'שמירת קובץ',
-          labelText: 'שם הקובץ',
-          initialValue: suggestedName,
-          confirmText: 'שמור',
-        );
-        if (typed == null) return null;
-        final fileName =
-            pluginSaveFileName(typed, allowedExtensions?.firstOrNull);
-        return pluginSaveTargetPath(folder: folder, fileName: fileName);
-      },
+      pickSaveLocation:
+          ({
+            required String suggestedName,
+            List<String>? allowedExtensions,
+            String? title,
+          }) async {
+            if (!mounted) return null;
+            if (!await verifySaferModePassword(context)) return null;
+            if (!mounted) return null;
+            final folder = await FilePicker.getDirectoryPath(
+              dialogTitle: title ?? 'בחירת תיקייה לשמירת הקובץ',
+              windowsOptions: kModalWindowsOptions,
+              linuxOptions: kModalLinuxOptions,
+            );
+            if (folder == null || !mounted) return null;
+            final typed = await showInputDialog(
+              context: context,
+              title: title ?? 'שמירת קובץ',
+              labelText: 'שם הקובץ',
+              initialValue: suggestedName,
+              confirmText: 'שמור',
+            );
+            if (typed == null) return null;
+            final fileName = pluginSaveFileName(
+              typed,
+              allowedExtensions?.firstOrNull,
+            );
+            return pluginSaveTargetPath(folder: folder, fileName: fileName);
+          },
     );
 
     _pluginRegistryRepository = pluginRegistryRepository;
@@ -492,7 +494,8 @@ class _PluginTabPageState extends State<PluginTabPage> {
       final exists = File(localHtmlPath).existsSync();
       if (!exists) {
         setState(
-          () => _devErrorMessage = 'קובץ נקודת הכניסה חסר בתיקייה: $localHtmlPath',
+          () => _devErrorMessage =
+              'קובץ נקודת הכניסה חסר בתיקייה: $localHtmlPath',
         );
         return;
       }
@@ -765,7 +768,6 @@ class _PluginTabPageState extends State<PluginTabPage> {
           injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
         ),
         buildPluginDropGuardScript(),
-        buildPluginFileInputGuardScript(),
         buildPluginLinkifyScript(auto: widget.plugin.manifest.autoLinkify),
       ]),
       onShowFileChooser: (controller, showFileChooserRequest) async {
@@ -806,13 +808,6 @@ class _PluginTabPageState extends State<PluginTabPage> {
             instanceId: widget.instanceId,
           );
           _bridge.register(controller);
-          controller.addJavaScriptHandler(
-            handlerName: 'otzaria_file_input_clicked',
-            callback: (_) async {
-              if (!mounted) return;
-              await verifySaferModePassword(context);
-            },
-          );
           controller.addJavaScriptHandler(
             handlerName: 'otzaria_escape_pressed',
             callback: (_) {
