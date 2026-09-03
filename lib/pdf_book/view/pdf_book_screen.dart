@@ -634,6 +634,10 @@ class _PdfBookScreenState extends State<PdfBookScreen>
 
   final ValueNotifier<int> _openPdfFilterNotifier = ValueNotifier<int>(0);
 
+  /// המקור היחיד שמדווח על החלפת עמוד. מאזיני ה-controller מקבלים רק שינוי
+  /// מטריצה, ו-pageNumber מתעדכן רק ב-build שאחריו — ולכן הם קוראים ערך ישן.
+  final ValueNotifier<int?> _pageNumberNotifier = ValueNotifier<int?>(null);
+
   // Named listeners for proper cleanup
   late final VoidCallback _leftPaneTabControllerListener;
   late final VoidCallback _showLeftPaneListener;
@@ -1506,6 +1510,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     }
 
     return PdfViewerParams(
+      onPageChanged: (pageNumber) => _pageNumberNotifier.value = pageNumber,
       layoutPages: layoutMode.isBookView
           ? (pages, params) => buildBookViewPageLayout(
               pageSizes: [
@@ -3898,6 +3903,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     _leftPaneTabController?.dispose();
     _searchHost.dispose();
     _openFilterRequest.dispose();
+    _pageNumberNotifier.dispose();
     _searchFieldFocusNode.dispose();
     _navigationFieldFocusNode.dispose();
     _pdfViewFocusNode.dispose();
@@ -5289,7 +5295,10 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       onNextMinor: _goNextPage,
       onNextMajor: () =>
           _goToPageWithSpreadLock(widget.tab.pdfViewerController.pageCount),
-      afterTitle: PageNumberDisplay(controller: widget.tab.pdfViewerController),
+      afterTitle: PageNumberDisplay(
+        controller: widget.tab.pdfViewerController,
+        pageNumberNotifier: _pageNumberNotifier,
+      ),
     );
   }
 
