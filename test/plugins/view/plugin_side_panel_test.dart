@@ -193,7 +193,7 @@ base class _FakePlatformFile extends PlatformFile {
   @override
   Future<int> length() async => 0;
 
-  @override
+  // ignore: annotate_overrides
   int? lengthSync() => 0;
 
   @override

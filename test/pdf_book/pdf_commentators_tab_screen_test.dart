@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/models/books.dart';
+import 'package:otzaria/models/links.dart';
 import 'package:otzaria/models/pdf_headings.dart';
 import 'package:otzaria/pdf_book/view/pdf_commentary_panel.dart';
 import 'package:otzaria/pdf_book/view/pdf_commentators_tab_screen.dart';
@@ -15,12 +17,15 @@ import 'package:otzaria/settings/engine/settings_state.dart';
 import 'package:otzaria/tabs/models/pdf_commentators_tab.dart';
 import 'package:otzaria/tabs/models/pdf_tab.dart';
 import 'package:otzaria/widgets/lists/nav_tree_tile.dart';
+import 'package:otzaria/widgets/feedback/scrollable_positioned_list_scrollbar.dart';
 import 'package:otzaria/widgets/navigation/nav_side_panel.dart';
+import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import '../helpers/memory_settings_cache.dart';
 
 class _FakeSettingsBloc extends Bloc<SettingsEvent, SettingsState>
     implements SettingsBloc {
-  _FakeSettingsBloc() : super(SettingsState.initial()) {
+  _FakeSettingsBloc([SettingsState? initial])
+    : super(initial ?? SettingsState.initial()) {
     on<SettingsEvent>((_, _) {});
   }
 
@@ -50,10 +55,10 @@ class _FakePersonalNotesBloc
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
-Widget _wrap(Widget child) => MaterialApp(
+Widget _wrap(Widget child, {SettingsState? settings}) => MaterialApp(
   home: MultiBlocProvider(
     providers: [
-      BlocProvider<SettingsBloc>.value(value: _FakeSettingsBloc()),
+      BlocProvider<SettingsBloc>.value(value: _FakeSettingsBloc(settings)),
       BlocProvider<PersonalNotesBloc>.value(
         value: _FakePersonalNotesBloc(),
       ),
@@ -315,5 +320,109 @@ void main() {
     // שורות העץ בעיצוב הספרייה: כרטיס מקובץ + שורת ניווט.
     expect(find.byType(NavTreeGroupCard), findsWidgets);
     expect(find.widgetWithText(NavTreeTile, 'פרק א'), findsOneWidget);
+  });
+
+  // issue #1112 — פערים מול כרטיסיית המפרשים של ספר טקסט.
+  group('התאמה לכרטיסיית המפרשים של טקסט (issue #1112)', () {
+    PdfBookTab sourceTab() {
+      final tab = PdfBookTab(
+        book: PdfBook(title: 'PDF בדיקה', path: '/tmp/book.pdf'),
+        pageNumber: 1,
+      );
+      tab.pdfHeadings = PdfHeadings(
+        bookTitle: 'PDF בדיקה',
+        headingsMap: {'פרק א': 1, 'פרק ב': 10},
+      );
+      tab.currentTitle.value = 'פרק א';
+      return tab;
+    }
+
+    testWidgets('גלילה במפרשים סוגרת את חלונית הניווט כשאינה נעוצה', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(1600, 900);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final source = sourceTab();
+      addTearDown(source.dispose);
+
+      await tester.pumpWidget(
+        _wrap(
+          PdfCommentatorsTabScreen(tab: PdfCommentatorsTab(sourceTab: source)),
+        ),
+      );
+      await tester.pump();
+
+      await tester.tap(find.byType(NavPanelToggleButton));
+      await tester.pumpAndSettle();
+      NavSidePanel panel() =>
+          tester.widget<NavSidePanel>(find.byType(NavSidePanel));
+      expect(panel().isOpen, isTrue);
+
+      // גלילת המשתמש ברשימת המפרשים, כפי שהיא עולה מהרשימה אל המסך.
+      final context = tester.element(find.byType(PdfCommentaryPanel));
+      UserScrollNotification(
+        metrics: FixedScrollMetrics(
+          minScrollExtent: 0,
+          maxScrollExtent: 1000,
+          pixels: 100,
+          viewportDimension: 500,
+          axisDirection: AxisDirection.down,
+          devicePixelRatio: 1,
+        ),
+        context: context,
+        direction: ScrollDirection.forward,
+      ).dispatch(context);
+      await tester.pumpAndSettle();
+
+      expect(
+        panel().isOpen,
+        isFalse,
+        reason: 'בכרטיסיית הטקסט חלונית לא-נעוצה נסגרת בגלילה — גם כאן',
+      );
+    });
+
+    testWidgets('הגדרת רוחב הטקסט חלה על רשימת המפרשים', (tester) async {
+      tester.view.physicalSize = const Size(1600, 900);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final source = sourceTab();
+      source.links = [
+        Link(
+          heRef: 'מפרש בדיקה',
+          index1: 1,
+          path2: '/tmp/commentary.txt',
+          index2: 0,
+          connectionType: 'COMMENTARY',
+        ),
+      ];
+      addTearDown(source.dispose);
+
+      await tester.pumpWidget(
+        _wrap(
+          PdfCommentatorsTabScreen(tab: PdfCommentatorsTab(sourceTab: source)),
+          settings: SettingsState.initial().copyWith(textMaxWidth: 600),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final list = find.descendant(
+        of: find.byType(PdfCommentaryPanel),
+        matching: find.byType(ScrollablePositionedList),
+      );
+      expect(
+        list,
+        findsOneWidget,
+      );
+      expect(tester.getSize(list).width, lessThanOrEqualTo(600.0));
+
+      final panelRect = tester.getRect(find.byType(PdfCommentaryPanel));
+      final scrollbarRect = tester.getRect(
+        find.byType(ScrollablePositionedListScrollbar),
+      );
+      expect(scrollbarRect.right, panelRect.right);
+    });
   });
 }
