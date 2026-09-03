@@ -659,9 +659,11 @@ Future<void> main() async {
     // כותרת ראשית מעל הרשימה — בעיצוב הכותרת של תוצאות החיפוש.
     expect(find.byType(NavTreeHeader), findsOneWidget);
     expect(find.byType(NavTreeGroupCard), findsWidgets);
-    // ערך עם ילדים = שורת קטגוריה; עלה = שורת פריט.
     expect(find.widgetWithText(NavTreeTile, 'שער'), findsOneWidget);
     expect(find.widgetWithText(NavTreeTile, 'סימן א'), findsOneWidget);
+    // כותרות TOC אינן תיקיות
+    expect(find.byIcon(FluentIcons.folder_24_regular), findsNothing);
+    expect(find.byIcon(FluentIcons.folder_open_24_regular), findsNothing);
   });
 
   testWidgets('שורת כותרת משתמשת בגליף המותאם-RTL', (tester) async {

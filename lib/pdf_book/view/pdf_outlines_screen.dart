@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:otzaria/widgets/lists/nav_tree_tile.dart';
-import 'package:otzaria_icons/otzaria_icons.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:pdfrx/pdfrx.dart';
 import 'package:otzaria/search/utils/find_match_utils.dart';
@@ -404,24 +403,33 @@ class _OutlineViewState extends State<OutlineView>
         widget.controller.isReady &&
         node.dest?.pageNumber == widget.controller.pageNumber;
 
-    if (node.children.isEmpty) {
+    final hasChildren = node.children.isNotEmpty;
+    final bool isExpanded = _expanded[node] ?? (level == 0 || isFirstChild);
+
+    final tile = NavTreeTile.heading(
+      title: node.title,
+      level: level,
+      isSelected: selected,
+      isExpanded: isExpanded,
+      hasChildren: hasChildren,
+      onTap: navigateToEntry,
+      onToggleExpand: hasChildren
+          ? () => setState(() {
+              _expanded[node] = !isExpanded;
+            })
+          : null,
+    );
+
+    if (!hasChildren) {
       return NavTreeGroupCard(
         isGroupStart: isGroupStart,
         isGroupEnd: isGroupEnd,
         child: KeyedSubtree(
           key: itemKey,
-          child: NavTreeTile.book(
-            title: node.title,
-            level: level,
-            isSelected: selected,
-            icon: OtzariaIcons.text_bullet_list_24_regular,
-            onTap: navigateToEntry,
-          ),
+          child: tile,
         ),
       );
     }
-
-    final bool isExpanded = _expanded[node] ?? (level == 0 || isFirstChild);
 
     return Column(
       key: itemKey,
@@ -429,17 +437,7 @@ class _OutlineViewState extends State<OutlineView>
         NavTreeGroupCard(
           isGroupStart: isGroupStart,
           isGroupEnd: isGroupEnd && !isExpanded,
-          child: NavTreeTile.category(
-            title: node.title,
-            level: level,
-            isSelected: selected,
-            isExpanded: isExpanded,
-            hasChildren: true,
-            onTap: navigateToEntry,
-            onToggleExpand: () => setState(() {
-              _expanded[node] = !isExpanded;
-            }),
-          ),
+          child: tile,
         ),
         if (isExpanded)
           ...node.children.asMap().entries.map(
