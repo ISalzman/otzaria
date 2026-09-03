@@ -235,6 +235,12 @@ Map<String, dynamic> hebrewBooksPathSettingsChangedPayload(String path) => {
 };
 
 /// אופן המעבר מהעמוד שה-PageController מציג כרגע אל עמוד היעד.
+/// האם למקד אוטומטית את שדה החיפוש בכניסה למסך הספרייה — במובייל המקלדת
+/// הייתה נפתחת בכל כניסה, כולל בחזרה מההגדרות, ומכסה חצי מסך.
+@visibleForTesting
+bool shouldAutofocusLibrarySearch(TargetPlatform platform) =>
+    platform != TargetPlatform.android && platform != TargetPlatform.iOS;
+
 enum PageTransitionKind { snap, slide, crossSlide }
 
 @visibleForTesting
@@ -1758,9 +1764,11 @@ class MainWindowScreenState extends State<MainWindowScreen>
     }
 
     if (state.currentScreen == Screen.library) {
-      context.read<FocusRepository>().requestLibrarySearchFocus(
-        selectAll: true,
-      );
+      if (shouldAutofocusLibrarySearch(defaultTargetPlatform)) {
+        context.read<FocusRepository>().requestLibrarySearchFocus(
+          selectAll: true,
+        );
+      }
     } else if (state.currentScreen == Screen.reading) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
@@ -3743,7 +3751,8 @@ class MainWindowScreenState extends State<MainWindowScreen>
       );
     }
 
-    if (screen == Screen.library) {
+    if (screen == Screen.library &&
+        shouldAutofocusLibrarySearch(defaultTargetPlatform)) {
       context.read<FocusRepository>().requestLibrarySearchFocus(
         selectAll: true,
       );
