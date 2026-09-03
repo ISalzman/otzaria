@@ -4,6 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/models/books.dart';
+import 'package:otzaria/models/links.dart';
 import 'package:otzaria/models/pdf_headings.dart';
 import 'package:otzaria/pdf_book/view/pdf_commentary_panel.dart';
 import 'package:otzaria/pdf_book/view/pdf_commentators_tab_screen.dart';
@@ -16,7 +17,9 @@ import 'package:otzaria/settings/engine/settings_state.dart';
 import 'package:otzaria/tabs/models/pdf_commentators_tab.dart';
 import 'package:otzaria/tabs/models/pdf_tab.dart';
 import 'package:otzaria/widgets/lists/nav_tree_tile.dart';
+import 'package:otzaria/widgets/feedback/scrollable_positioned_list_scrollbar.dart';
 import 'package:otzaria/widgets/navigation/nav_side_panel.dart';
+import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import '../helpers/memory_settings_cache.dart';
 
 class _FakeSettingsBloc extends Bloc<SettingsEvent, SettingsState>
@@ -386,6 +389,15 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
       final source = sourceTab();
+      source.links = [
+        Link(
+          heRef: 'מפרש בדיקה',
+          index1: 1,
+          path2: '/tmp/commentary.txt',
+          index2: 0,
+          connectionType: 'COMMENTARY',
+        ),
+      ];
       addTearDown(source.dispose);
 
       await tester.pumpWidget(
@@ -394,19 +406,23 @@ void main() {
           settings: SettingsState.initial().copyWith(textMaxWidth: 600),
         ),
       );
-      await tester.pump();
+      await tester.pumpAndSettle();
 
-      final constrained = find.descendant(
+      final list = find.descendant(
         of: find.byType(PdfCommentaryPanel),
-        matching: find.byWidgetPredicate(
-          (w) => w is ConstrainedBox && w.constraints.maxWidth == 600,
-        ),
+        matching: find.byType(ScrollablePositionedList),
       );
       expect(
-        constrained,
+        list,
         findsOneWidget,
-        reason: 'בכרטיסיית הטקסט הרשימה מוגבלת לרוחב הטקסט המוגדר — גם כאן',
       );
+      expect(tester.getSize(list).width, lessThanOrEqualTo(600.0));
+
+      final panelRect = tester.getRect(find.byType(PdfCommentaryPanel));
+      final scrollbarRect = tester.getRect(
+        find.byType(ScrollablePositionedListScrollbar),
+      );
+      expect(scrollbarRect.right, panelRect.right);
     });
   });
 }
