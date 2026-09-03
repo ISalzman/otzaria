@@ -25,6 +25,7 @@ class _FakeOwner {
   final SharedHiveStore store = SharedHiveStore.owner();
   int readCount = 0;
   int writeCount = 0;
+  int changedNotices = 0;
   late final ReceivePort _port;
 
   String get _name => '$_namespace.$slot';
@@ -44,6 +45,7 @@ class _FakeOwner {
       final body = Map<String, dynamic>.from(map['body'] as Map);
       if (body['type'] == SharedHiveStore.requestRead) readCount++;
       if (body['type'] == SharedHiveStore.requestWrite) writeCount++;
+      if (body['type'] == SharedHiveStore.requestChanged) changedNotices++;
       try {
         reply.send({'ok': true, 'result': await store.handleRequest(body)});
       } catch (e) {
@@ -239,6 +241,25 @@ void main() {
     // ⚠️ אין box בשם 'notes'. הוא הופיע ברשימה והצהיר על שיתוף שלא היה.
     expect(SharedHiveStore.isShared('notes'), isFalse);
     expect(SharedHiveStore.isShared('app_preferences'), isFalse);
+  });
+
+  test('שמירת כרטיסיות אינה משדרת — אין למפתח פר-חלון נמען', () async {
+    final owner = _FakeOwner(1)..register(asOwnerAlias: false);
+    addTearDown(owner.dispose);
+    await Hive.openBox<dynamic>('tabs');
+    await Hive.openBox<dynamic>('history');
+    WindowBus.instance.register(); // תופס 2, כלומר 1 הוא "חלון אחר"
+
+    // ⚠️ החלפת כרטיסיה היא הפעולה השכיחה בתוכנה. שידור עליה היה שולח
+    // הודעה לכל חלון על מפתח שאף אחד אינו מאזין לו.
+    await SharedHiveStore.instance.write('tabs', 'key-current-tab', 3);
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+    expect(owner.changedNotices, 0);
+
+    // ולהיפך — מאגר שכן משותף כן משדר.
+    await SharedHiveStore.instance.write('history', 'history', const []);
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+    expect(owner.changedNotices, 1);
   });
 
   test('מפתח הכרטיסיות ייחודי לכל חלון, והראשון שומר על המפתח ההיסטורי', () {

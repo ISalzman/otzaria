@@ -83,6 +83,7 @@ import 'package:otzaria/core/windowing/app_window_scope.dart';
 import 'package:otzaria/core/windowing/multi_window_service.dart';
 import 'package:otzaria/core/windowing/window_bus_host.dart';
 import 'package:otzaria/core/windowing/thread_contention_probe.dart';
+import 'package:otzaria/core/windowing/window_bus.dart';
 import 'package:otzaria/core/windowing/window_role.dart';
 import 'package:otzaria/core/windowing/window_manager_app_window_controller.dart';
 import 'package:otzaria/tools/shamor_zachor/providers/shamor_zachor_data_provider.dart';
@@ -496,6 +497,8 @@ Future<void> _runAppBootstrap() async {
     // ה-splash נייטיבי ב-runner והחלון הראשי נשאר מוסתר עד presentMainWindow,
     // שם הוא נחשף ישר בגבולותיו הסופיים — לכן אין כאן waitUntilReadyToShow.
   }
+
+  _claimWindowBusSlot();
 
   // ה-scope עוטף את כל העץ כדי שכל widget יוכל להגיע לחלון שהוא יושב בו
   // בלי לפנות ל-singleton גלובלי. היום יש חלון אחד, ולכן הבקר הוא של
@@ -1543,6 +1546,7 @@ void secondaryWindowMain(List<String> args) async {
     }
   }
 
+  _claimWindowBusSlot();
   _maybeMeasureThreadContention();
 
   runApp(
@@ -1572,6 +1576,29 @@ void _maybeScheduleDebugSecondWindow() {
     final opened = await const MultiWindowService().openWindow();
     debugPrint('[debug] openWindow -> $opened');
   });
+}
+
+/// תופס את משבצת החלון באפיק ההודעות, **לפני `runApp`**.
+///
+/// ⚠️ העיתוי אינו נוחות. התפיסה הייתה ב-`WindowBusHost.initState`, שהוא
+/// **צאצא** של `MultiBlocProvider` — כלומר ה-blocs נבנים לפניו, ושניים
+/// מהם ניגשים למצב שתלוי במשבצת עוד לפני שהיא קיימת:
+///
+/// * `TabsRepository.saveTabs` בחלון משני זקוק למשבצת כדי לדעת לאיזה מפתח
+///   סשן לכתוב, ובלעדיה הוא **מדלג על השמירה** במכוון (הנפילה למפתח של
+///   החלון הראשון הייתה דורסת את הכרטיסיות שלו). כלומר הכרטיסיה שהועברה
+///   לחלון החדש עלולה לא להישמר עד השינוי הבא.
+/// * הבעלים רושם כאן את הכינוי `otzaria.window.owner`, שדרכו כל חלון משני
+///   מאתר אותו.
+///
+/// הסדר בין `BlocProvider.create` ל-`initState` תלוי בעצלנות של הספק, ולכן
+/// הוא אינו משהו שאפשר להישען עליו. `register` אידמפוטנטי, ולכן הקריאה
+/// ב-`WindowBusHost` נשארת כרשת ביטחון.
+void _claimWindowBusSlot() {
+  final slot = WindowBus.instance.register(asOwner: !WindowRole.isSecondary);
+  if (slot == null) {
+    debugPrint('⚠️ כל משבצות האפיק תפוסות — החלון הזה לא יוכל לשתף מצב');
+  }
 }
 
 /// מריץ את בדיקה 10 של P-2 — תחרות thread בין חלונות.

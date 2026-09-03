@@ -166,6 +166,17 @@ class SharedHiveStore {
   static String tabsKeyForWindow(int? windowSlot, String baseKey) =>
       windowSlot == null ? baseKey : '$baseKey-window-$windowSlot';
 
+  /// מאגרים שאין טעם לשדר שינוי בהם.
+  ///
+  /// ⚠️ `tabs` מנותב לבעלים כדי שהכרטיסיות **יישמרו**, אבל כל חלון כותב
+  /// תחת מפתח משלו ואף אחד אינו מאזין למפתח של האחר. בלי החרגה כאן כל
+  /// החלפת כרטיסיה בחלון הראשי הייתה שולחת שלוש הודעות אפיק שאין להן
+  /// נמען — והחלפת כרטיסיה היא הפעולה השכיחה בתוכנה.
+  static const Set<String> _privateToWindow = {'tabs'};
+
+  static bool _notifiesPeers(String boxName) =>
+      !_privateToWindow.contains(boxName);
+
   /// גרסה נוכחית לכל מפתח — נשמרת אצל הבעלים.
   ///
   /// בזיכרון ולא בדיסק: היא צריכה להיות מונוטונית לאורך חיי התהליך בלבד,
@@ -325,6 +336,7 @@ class SharedHiveStore {
   /// הבאה שלו, ואין מה לעשות בכשל.
   void _broadcastChange(SharedHiveKey id, {required int? origin}) {
     if (WindowRole.isSecondary && !_forceOwner) return;
+    if (!_notifiesPeers(id.box)) return;
     WindowBus.instance.broadcast({
       'type': requestChanged,
       'box': id.box,
