@@ -37,7 +37,10 @@ class FlutterWindow : public Win32Window {
   // ⚠️ זה מה שהופך פתיחת חלון למיידית. המנוע כבר עלה, ה-blocs חיים,
   // הספרייה טעונה — נשאר רק להציג ולשלוח את הכרטיסיה. בלי זה כל פתיחה
   // משלמת שוב את מלוא האתחול, וכל מחזור פתיחה-סגירה מוסיף מנוע לזיכרון.
-  void ReviveWith(const std::string& payload, int width, int height);
+  // [drop_x]/[drop_y] הם נקודת השחרור בקואורדינטות מסך, או 0 כשאין —
+  // ואז המיקום נשאר כשהיה.
+  void ReviveWith(const std::string& payload, int width, int height,
+                  int drop_x = 0, int drop_y = 0);
 
  protected:
   // Win32Window:
@@ -84,6 +87,9 @@ class FlutterWindow : public Win32Window {
     std::string payload;
     int width = 0;
     int height = 0;
+    // נקודת השחרור בקואורדינטות מסך, או 0 כשהפתיחה לא באה מגרירה.
+    int drop_x = 0;
+    int drop_y = 0;
     std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result;
   };
   // נכתב בטיפול בערוץ ונקרא בלולאת ההודעות של אותו thread, ולכן אין כאן

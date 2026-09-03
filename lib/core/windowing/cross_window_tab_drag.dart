@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:otzaria/core/ui_snack.dart';
+import 'package:otzaria/core/windowing/drag_preview_colors.dart';
 import 'package:otzaria/core/windowing/multi_window_service.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/bloc/tabs_event.dart';
@@ -36,21 +37,26 @@ class CrossWindowTabDrag {
   int? _remoteDropIndex;
 
   /// מתחיל את תצוגת הגרירה הנייטיבית ואת המעקב אחרי החלון שתחת הסמן.
-  void begin(String title) {
+  ///
+  /// [colors] נלקחים מהערכה של החלון — ראו [DragPreviewColors].
+  void begin(String title, DragPreviewColors colors) {
     if (!MultiWindowService.isSupported) return;
     _draggedTitle = title;
-    // התצוגה מוצגת רק כשהסמן יוצא מהחלון, ולכן אין כפילות מול ה-feedback
-    // של `Draggable`.
-    unawaited(_service.beginTabDrag(title));
+    // התצוגה מוצגת רק כשהסמן יוצא מחלון המקור, ולכן אין כפילות מול
+    // ה-feedback של `Draggable`.
+    unawaited(_service.beginTabDrag(title, colors: colors));
     _timer?.cancel();
     _timer = Timer.periodic(_pollInterval, (_) => unawaited(_poll()));
   }
 
-  /// מסיים את הגרירה בכל מסלולי הסיום — כולל ביטול, אחרת התצוגה נשארת
-  /// תלויה על המסך.
+  /// מסיים את **המעקב**, ומשאיר את התצוגה קפואה במקום השחרור.
   ///
-  /// ⚠️ [_remoteDropIndex] **אינו** מתאפס כאן: הסיום נורה לפני השחרור,
-  /// והשחרור צריך את המיקום.
+  /// ⚠️ `freezeTabDrag` ולא `endTabDrag`, כי בשלב הזה עוד לא ידוע אם
+  /// ייפתח חלון: הסיום נורה **לפני** [handleDroppedOutside]. הסתרה מיידית
+  /// השאירה את המסך ריק בדיוק בפרק הזמן שבו המשתמש מחכה לראות תוצאה —
+  /// מאות מילישניות של פתיחת חלון. מי שאינו פותח חלון מסתיר במפורש.
+  ///
+  /// ⚠️ [_remoteDropIndex] **אינו** מתאפס כאן: השחרור צריך את המיקום.
   void end() {
     if (!MultiWindowService.isSupported) return;
     _timer?.cancel();
@@ -59,7 +65,7 @@ class CrossWindowTabDrag {
     if (last != null) _service.notifyDragLeave(last);
     _lastDragOverSlot = null;
     _draggedTitle = null;
-    unawaited(_service.endTabDrag());
+    unawaited(_service.freezeTabDrag());
   }
 
   /// ⚠️ חובה בסגירת החלון. הטיימר שולח בקשות אפיק כל 60ms, ולולאה שנשארה
@@ -103,35 +109,57 @@ class CrossWindowTabDrag {
   /// * מעל שולחן העבודה או תוכנה אחרת — נפתח חלון חדש, כמו בדפדפן.
   Future<void> handleDroppedOutside(OpenedTab tab, TabsBloc tabsBloc) async {
     final target = await _service.windowAtCursor();
-    if (target.isSelf) return;
+
+    // ⚠️ כל יציאה מוקדמת מכאן חייבת להסתיר את הרוח שהוקפאה ב-[end].
+    // רק המסלול שפותח חלון משאיר אותה, כדי שהיא תוחלף במשהו אמיתי.
+    if (target.isSelf) return _hidePreview();
 
     // ⚠️ שחרור מעל שורת המשימות אינו מחווה של "פתח חלון כאן". היא נגישה
     // גם בחלון ממוקסם, ולכן משתמש שאינו מכיר את הפיצ'ר יכול לפתוח חלון
     // שני בטעות — שינוי בהתנהגות קיימת, לא רק פיצ'ר חדש.
     if (target.isShellTray) {
       debugPrint('גרירה שוחררה מעל שורת המשימות — מבוטלת');
-      return;
+      return _hidePreview();
     }
 
     // ⚠️ נבדק לפני כל ניסיון העברה. כרטיסיה שאינה שורדת סריאליזציה הייתה
     // נעלמת מכאן ולא נפתחת שם.
     if (!MultiWindowService.canTransfer(tab)) {
+      _hidePreview();
       UiSnack.showError('לא ניתן להעביר את הכרטיסיה הזו לחלון אחר');
       return;
     }
 
     // כרטיסיה אחרונה בחלון: גרירתה החוצה הייתה משאירה חלון ריק ופותחת
     // חדש — תזוזה בלי תועלת.
-    if (target.slot == null && tabsBloc.state.tabs.length <= 1) return;
+    if (target.slot == null && tabsBloc.state.tabs.length <= 1) {
+      return _hidePreview();
+    }
 
     // מיקום ההכנסה שהחלון היעד דיווח עליו בזמן הגרירה — כך השחרור על
     // רצועת הכרטיסיות שלו ממזג למקום מדויק ולא רק מוסיף בסוף.
     final dropIndex = _remoteDropIndex;
     _remoteDropIndex = null;
 
-    final moved = target.slot != null
-        ? await _service.sendTabToWindow(target.slot!, tab, index: dropIndex)
-        : await _service.openWindow(tab: tab);
+    final bool moved;
+    if (target.slot != null) {
+      // הכרטיסיה נכנסת לחלון קיים — אין מה להחליף את הרוח, והיא מוסתרת
+      // מיד כדי שלא תרחף מעל היעד.
+      _hidePreview();
+      moved = await _service.sendTabToWindow(
+        target.slot!,
+        tab,
+        index: dropIndex,
+      );
+    } else {
+      // ⚠️ החלון נפתח **בנקודת השחרור**, והרוח נשארת שם עד שהוא נחשף.
+      // עד כה הוא נפתח בהיסט מדורג מהפינה, בלי קשר למקום שאליו גררו.
+      moved = await _service.openWindow(
+        tab: tab,
+        dropPoint: (x: target.x, y: target.y),
+      );
+      if (!moved) _hidePreview();
+    }
 
     if (moved) {
       tabsBloc.add(RemoveTab(tab));
@@ -146,4 +174,6 @@ class CrossWindowTabDrag {
       UiSnack.showError('העברת הכרטיסיה נכשלה');
     }
   }
+
+  void _hidePreview() => unawaited(_service.endTabDrag());
 }

@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:hive_ce/hive.dart';
+import 'package:otzaria/core/windowing/drag_preview_colors.dart';
 import 'package:otzaria/core/windowing/window_bus.dart';
 import 'package:otzaria/tabs/models/combined_tab.dart';
 import 'package:otzaria/tabs/models/tab.dart';
@@ -58,7 +59,13 @@ class MultiWindowService {
   /// ⚠️ קודם לכן הוא החזיר true מיד אחרי הכנסת הבקשה לתור, וערך ההחזרה של
   /// היצירה עצמה נזרק. שני אתרי הקריאה מוחקים את הכרטיסיה על סמך התשובה
   /// הזו — כלומר כרטיסיה נמחקה על סמך הצלחה שלא נבדקה.
-  Future<bool> openWindow({OpenedTab? tab}) async {
+  /// [dropPoint] הוא מיקום הסמן בקואורדינטות **מסך** ברגע השחרור, כשהפתיחה
+  /// באה מגרירה.
+  ///
+  /// ⚠️ בלעדיו החלון נפתח בהיסט מדורג מהפינה, בלי קשר למקום שאליו המשתמש
+  /// גרר — גררת לפינה התחתונה-ימנית והחלון קפץ למעלה-שמאלה. רשימת ה-QA של
+  /// הענף כן דרשה "חלון חדש במיקום הסמן", וזה פשוט לא מומש.
+  Future<bool> openWindow({OpenedTab? tab, ({int x, int y})? dropPoint}) async {
     if (!isSupported) return false;
     try {
       // המידות נשלחות ל-runner כדי שייצור את החלון בגודל הנכון מלכתחילה.
@@ -75,6 +82,8 @@ class MultiWindowService {
             'payload': _encodePayload(tab),
             if (inherited != null) 'width': inherited.width.round(),
             if (inherited != null) 'height': inherited.height.round(),
+            if (dropPoint != null) 'dropX': dropPoint.x,
+            if (dropPoint != null) 'dropY': dropPoint.y,
           })
           // ⚠️ רשת ביטחון. התשובה מגיעה מלולאת ההודעות של ה-runner,
           // ואם החלון הפותח נהרס לפני שההודעה טופלה — אין מי שיענה.
@@ -164,17 +173,45 @@ class MultiWindowService {
   /// בגבולותיו: ברגע שהסמן יוצא, הכרטיסיה נעלמת. המשתמש אינו רואה שהוא
   /// גורר משהו, ולכן גם אינו יכול לכוון לשורת המשימות או לחלון אחר.
   /// ה-runner מציג חלון layered שעוקב אחרי הסמן ומופיע רק בחוץ.
-  Future<void> beginTabDrag(String title) async {
+  /// [colors] הם צבעי הערכה, כ-ARGB.
+  ///
+  /// ⚠️ הם היו מקודדים קשיח בגוונים בהירים בצד הנייטיב. בערכה כהה זה
+  /// נראה כמו מלבן לבן זוהר על מסך כהה — הפוך בדיוק ממה שהמשתמש מצפה
+  /// שייגרר.
+  Future<void> beginTabDrag(
+    String title, {
+    required DragPreviewColors colors,
+  }) async {
     if (!isSupported) return;
     try {
-      await _channel.invokeMethod<void>('beginTabDrag', title);
+      await _channel.invokeMethod<void>('beginTabDrag', {
+        'title': title,
+        ...colors.toArgb(),
+      });
     } catch (e) {
       debugPrint('beginTabDrag failed: $e');
     }
   }
 
-  /// מסיים את תצוגת הגרירה. חייב להיקרא בכל מסלולי הסיום — גם בביטול,
-  /// אחרת התצוגה נשארת תלויה על המסך.
+  /// עוצר את המעקב ומשאיר את התצוגה **גלויה במקום השחרור**.
+  ///
+  /// ⚠️ נקרא בסיום הגרירה ולא [endTabDrag], כי בשלב הזה עוד לא ידוע אם
+  /// ייפתח חלון: `onDragFinishedAnywhere` נורה **לפני**
+  /// `onDroppedOutside`. פתיחת חלון לוקחת מאות מילישניות, ובלי ההקפאה
+  /// המסך ריק בדיוק בפרק הזמן שבו המשתמש מחכה לראות תוצאה.
+  ///
+  /// ה-runner מסתיר את התצוגה כשהחלון האמיתי נחשף, וגם ברשת ביטחון של
+  /// ארבע שניות.
+  Future<void> freezeTabDrag() async {
+    if (!isSupported) return;
+    try {
+      await _channel.invokeMethod<void>('freezeTabDrag');
+    } catch (e) {
+      debugPrint('freezeTabDrag failed: $e');
+    }
+  }
+
+  /// מסתיר את תצוגת הגרירה מיד. לכל מסלול סיום שאינו פותח חלון.
   Future<void> endTabDrag() async {
     if (!isSupported) return;
     try {

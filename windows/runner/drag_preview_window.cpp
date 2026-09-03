@@ -9,18 +9,33 @@ namespace {
 
 constexpr const wchar_t kClassName[] = L"OtzariaDragPreview";
 
-// מידות התצוגה. רוחב כרטיסיה טיפוסי, כדי שההרגשה תהיה של הכרטיסיה עצמה
-// ולא של תווית כללית.
-constexpr int kWidth = 190;
-constexpr int kHeight = 34;
+// מידות התצוגה — **חלון מוקטן, לא תווית**.
+//
+// ⚠️ הגרסה הראשונה הייתה מלבן 190×34 עם כותרת, והמשתמש תיאר אותה כ"ריבוע
+// מוזר" ולא ככרטיסיה. מה שהמשתמש עומד לקבל הוא **חלון**, ולכן זה מה
+// שהתצוגה מראה: רצועת כרטיסיות עם הכרטיסיה שנגררת, וגוף מתחתיה.
+constexpr int kWidth = 300;
+constexpr int kHeight = 196;
+constexpr int kStripHeight = 34;
+constexpr int kTabWidth = 176;
+constexpr int kTabRadius = 8;
+constexpr int kTabInset = 8;
 
-// מרחק הסמן מפינת התצוגה. הסמן "מחזיק" את הכרטיסיה קרוב לקצה שלה, כמו
-// בדפדפן, ולא במרכזה — אחרת התצוגה מסתירה את מה שמתחתיה.
-constexpr int kCursorOffsetX = 18;
-constexpr int kCursorOffsetY = 14;
+// מרחק הסמן מפינת התצוגה.
+//
+// ⚠️ הסמן מחזיק את **הכרטיסיה**, לא את פינת החלון — ולכן ההיסט מכוון כך
+// שהכרטיסיה תשב תחת הסמן, בדיוק כמו בדפדפן. ב-RTL הכרטיסיה בצד ימין,
+// ולכן ההיסט האופקי שלילי.
+constexpr int kCursorOffsetX = -(kWidth - kTabInset - kTabWidth / 2);
+constexpr int kCursorOffsetY = -kStripHeight / 2;
 
 constexpr UINT_PTR kFollowTimerId = 1;
 constexpr UINT kFollowIntervalMs = 16;
+
+// ⚠️ רשת ביטחון להקפאה. התצוגה נשארת גלויה עד שהחלון האמיתי נחשף, ואם
+// היצירה נכשלה בשקט היא הייתה נשארת תלויה על המסך לנצח.
+constexpr UINT_PTR kHoldTimerId = 2;
+constexpr UINT kHoldTimeoutMs = 4000;
 
 std::mutex g_mutex;
 HWND g_window = nullptr;
@@ -29,6 +44,19 @@ std::atomic<bool> g_active{false};
 
 // החלון שממנו הגרירה התחילה. התצוגה מוסתרת רק מעליו.
 std::atomic<HWND> g_source{nullptr};
+
+// צבעי הערכה הנוכחית, שמגיעים מ-Dart.
+//
+// ⚠️ קודם הם היו מקודדים קשיח בגוונים בהירים. בערכה כהה זה נראה כמו
+// מלבן לבן זוהר על מסך כהה — הפוך בדיוק ממה שהמשתמש מצפה שייגרר.
+struct Palette {
+  COLORREF strip = RGB(0xF2, 0xEB, 0xE0);
+  COLORREF tab = RGB(0xF7, 0xF2, 0xEA);
+  COLORREF body = RGB(0xFD, 0xFB, 0xF7);
+  COLORREF border = RGB(0xC9, 0xBA, 0xA4);
+  COLORREF text = RGB(0x3A, 0x2E, 0x1E);
+};
+Palette g_palette;
 
 // האם הנקודה נמצאת מעל חלון המקור.
 //
@@ -43,22 +71,57 @@ bool IsOverSourceWindow(POINT pt) {
   return ::GetAncestor(under, GA_ROOT) == source;
 }
 
+void FillRoundedTop(HDC hdc, RECT rect, COLORREF color, int radius) {
+  const HBRUSH brush = ::CreateSolidBrush(color);
+  const HGDIOBJ old_brush = ::SelectObject(hdc, brush);
+  const HPEN pen = ::CreatePen(PS_SOLID, 1, color);
+  const HGDIOBJ old_pen = ::SelectObject(hdc, pen);
+  // פינות עליונות מעוגלות ותחתונות מרובעות: ה-`RoundRect` מעגל את
+  // ארבעתן, והמלבן שאחריו מרבע את התחתונות — כך הכרטיסיה מתמזגת בגוף
+  // בלי תפר, וזה בדיוק מה שהופך אותה לכרטיסיה ולא לכפתור.
+  ::RoundRect(hdc, rect.left, rect.top, rect.right, rect.bottom + radius,
+              radius * 2, radius * 2);
+  ::Rectangle(hdc, rect.left, rect.bottom - radius, rect.right, rect.bottom);
+  ::SelectObject(hdc, old_pen);
+  ::DeleteObject(pen);
+  ::SelectObject(hdc, old_brush);
+  ::DeleteObject(brush);
+}
+
 void Paint(HWND hwnd) {
   PAINTSTRUCT ps;
   const HDC hdc = ::BeginPaint(hwnd, &ps);
 
-  RECT rect{0, 0, kWidth, kHeight};
+  Palette palette;
+  std::wstring title;
+  {
+    std::lock_guard<std::mutex> lock(g_mutex);
+    palette = g_palette;
+    title = g_title;
+  }
 
-  // רקע בצבע כרטיסיה, עם מסגרת עדינה. GDI ולא Direct2D: התצוגה קטנה,
-  // קצרת-חיים, ואינה מצדיקה תלות נוספת ב-runner.
-  const HBRUSH background = ::CreateSolidBrush(RGB(0xF7, 0xF2, 0xEA));
-  ::FillRect(hdc, &rect, background);
-  ::DeleteObject(background);
+  // גוף החלון.
+  RECT body{0, kStripHeight, kWidth, kHeight};
+  const HBRUSH body_brush = ::CreateSolidBrush(palette.body);
+  ::FillRect(hdc, &body, body_brush);
+  ::DeleteObject(body_brush);
 
-  const HPEN border = ::CreatePen(PS_SOLID, 1, RGB(0xC9, 0xBA, 0xA4));
+  // רצועת הכרטיסיות.
+  RECT strip{0, 0, kWidth, kStripHeight};
+  const HBRUSH strip_brush = ::CreateSolidBrush(palette.strip);
+  ::FillRect(hdc, &strip, strip_brush);
+  ::DeleteObject(strip_brush);
+
+  // הכרטיסיה עצמה, בצד ימין — RTL.
+  RECT tab{kWidth - kTabInset - kTabWidth, 4, kWidth - kTabInset,
+           kStripHeight};
+  FillRoundedTop(hdc, tab, palette.tab, kTabRadius);
+
+  // מסגרת חיצונית.
+  const HPEN border = ::CreatePen(PS_SOLID, 1, palette.border);
   const HGDIOBJ old_pen = ::SelectObject(hdc, border);
   const HGDIOBJ old_brush = ::SelectObject(hdc, ::GetStockObject(NULL_BRUSH));
-  ::RoundRect(hdc, 0, 0, kWidth, kHeight, 8, 8);
+  ::Rectangle(hdc, 0, 0, kWidth, kHeight);
   ::SelectObject(hdc, old_brush);
   ::SelectObject(hdc, old_pen);
   ::DeleteObject(border);
@@ -66,19 +129,14 @@ void Paint(HWND hwnd) {
   // ⚠️ `DT_RTLREADING` — הכותרות בעברית, ובלעדיו סימני פיסוק ומספרים
   // מופיעים בצד הלא נכון.
   const HFONT font = ::CreateFontW(
-      16, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
+      15, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
       OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
       DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
   const HGDIOBJ old_font = ::SelectObject(hdc, font);
   ::SetBkMode(hdc, TRANSPARENT);
-  ::SetTextColor(hdc, RGB(0x3A, 0x2E, 0x1E));
+  ::SetTextColor(hdc, palette.text);
 
-  RECT text_rect{10, 0, kWidth - 10, kHeight};
-  std::wstring title;
-  {
-    std::lock_guard<std::mutex> lock(g_mutex);
-    title = g_title;
-  }
+  RECT text_rect{tab.left + 9, tab.top, tab.right - 9, tab.bottom};
   ::DrawTextW(hdc, title.c_str(), -1, &text_rect,
               DT_SINGLELINE | DT_VCENTER | DT_RIGHT | DT_END_ELLIPSIS |
                   DT_RTLREADING | DT_NOPREFIX);
@@ -88,6 +146,13 @@ void Paint(HWND hwnd) {
   ::EndPaint(hwnd, &ps);
 }
 
+void MoveToCursor(HWND hwnd) {
+  POINT pt{};
+  ::GetCursorPos(&pt);
+  ::SetWindowPos(hwnd, HWND_TOPMOST, pt.x + kCursorOffsetX,
+                 pt.y + kCursorOffsetY, 0, 0, SWP_NOSIZE | SWP_NOACTIVATE);
+}
+
 LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wparam,
                          LPARAM lparam) {
   switch (message) {
@@ -95,6 +160,12 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wparam,
       Paint(hwnd);
       return 0;
     case WM_TIMER: {
+      if (wparam == kHoldTimerId) {
+        // החלון האמיתי לא נחשף בזמן. עדיף להסתיר מלהשאיר תלוי.
+        ::KillTimer(hwnd, kHoldTimerId);
+        End();
+        return 0;
+      }
       if (wparam != kFollowTimerId) break;
       POINT pt{};
       ::GetCursorPos(&pt);
@@ -143,10 +214,17 @@ std::wstring Utf16FromUtf8(const std::string& utf8) {
   return result;
 }
 
-void Begin(const std::wstring& title, HWND source) {
+void Begin(const std::wstring& title, HWND source, const Colors& colors) {
   {
     std::lock_guard<std::mutex> lock(g_mutex);
     g_title = title;
+    if (colors.valid) {
+      g_palette.strip = colors.strip;
+      g_palette.tab = colors.tab;
+      g_palette.body = colors.body;
+      g_palette.border = colors.border;
+      g_palette.text = colors.text;
+    }
   }
   g_source.store(source);
   EnsureClass();
@@ -161,18 +239,29 @@ void Begin(const std::wstring& title, HWND source) {
         kClassName, L"", WS_POPUP, 0, 0, kWidth, kHeight, nullptr, nullptr,
         ::GetModuleHandle(nullptr), nullptr);
     if (!g_window) return;
-    ::SetLayeredWindowAttributes(g_window, 0, 235, LWA_ALPHA);
+    ::SetLayeredWindowAttributes(g_window, 0, 225, LWA_ALPHA);
   }
 
+  ::KillTimer(g_window, kHoldTimerId);
   ::InvalidateRect(g_window, nullptr, TRUE);
   ::SetTimer(g_window, kFollowTimerId, kFollowIntervalMs, nullptr);
   g_active.store(true);
 
   // מיקום ראשוני מיידי, כדי שהתצוגה לא תקפוץ מהפינה בפעימה הראשונה.
-  POINT pt{};
-  ::GetCursorPos(&pt);
-  ::SetWindowPos(g_window, HWND_TOPMOST, pt.x + kCursorOffsetX,
-                 pt.y + kCursorOffsetY, 0, 0, SWP_NOSIZE | SWP_NOACTIVATE);
+  MoveToCursor(g_window);
+}
+
+void Freeze() {
+  if (!g_window || !g_active.load()) return;
+  // מפסיק לעקוב אחרי הסמן, אבל **נשאר גלוי במקום שבו שוחרר**.
+  //
+  // ⚠️ זה מה שמכסה את הפער שהמשתמש תיאר: פתיחת חלון לוקחת מאות
+  // מילישניות, ובלי ההקפאה המסך ריק בדיוק בפרק הזמן שבו המשתמש מחכה
+  // לראות תוצאה. עכשיו הרוח נשארת במקום שגררו אליו, והחלון האמיתי מחליף
+  // אותה במקום להופיע אחרי כלום.
+  ::KillTimer(g_window, kFollowTimerId);
+  ::ShowWindow(g_window, SW_SHOWNOACTIVATE);
+  ::SetTimer(g_window, kHoldTimerId, kHoldTimeoutMs, nullptr);
 }
 
 void End() {
@@ -180,6 +269,7 @@ void End() {
   g_source.store(nullptr);
   if (!g_window) return;
   ::KillTimer(g_window, kFollowTimerId);
+  ::KillTimer(g_window, kHoldTimerId);
   ::ShowWindow(g_window, SW_HIDE);
 }
 

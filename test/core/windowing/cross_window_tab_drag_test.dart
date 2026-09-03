@@ -97,6 +97,65 @@ void main() {
     expect(tabsBloc.events.whereType<RemoveTab>(), hasLength(1));
   });
 
+  test('החלון נפתח בנקודת השחרור ולא בהיסט מהפינה', () async {
+    // ⚠️ עד כה החלון נפתח בהיסט מדורג מהפינה, בלי קשר למקום שאליו גררו —
+    // גררת לפינה התחתונה-ימנית והחלון קפץ למעלה-שמאלה. רשימת ה-QA של
+    // הענף כן דרשה "חלון חדש במיקום הסמן".
+    runner.cursorTarget = (slot: null, isSelf: false, isShellTray: false);
+
+    await drag.handleDroppedOutside(firstTab(), tabsBloc);
+
+    expect(runner.lastOpenArgs?['dropX'], 100);
+    expect(runner.lastOpenArgs?['dropY'], 200);
+  });
+
+  group('הרוח שהוקפאה במקום השחרור', () {
+    test('סיום גרירה מקפיא ואינו מסתיר', () async {
+      // ⚠️ `onDragFinishedAnywhere` נורה **לפני** השחרור, ולכן בשלב הזה
+      // עוד לא ידוע אם ייפתח חלון. הסתרה מיידית השאירה את המסך ריק בדיוק
+      // בפרק הזמן שבו המשתמש מחכה לראות תוצאה.
+      drag.end();
+      await Future<void>.delayed(Duration.zero);
+
+      expect(runner.freezeCalls, 1);
+      expect(runner.endCalls, 0);
+    });
+
+    test('פתיחת חלון משאירה אותה — היא תוחלף בחלון האמיתי', () async {
+      runner.cursorTarget = (slot: null, isSelf: false, isShellTray: false);
+
+      await drag.handleDroppedOutside(firstTab(), tabsBloc);
+
+      expect(runner.endCalls, 0);
+    });
+
+    test('שחרור לחלון קיים מסתיר מיד — אין מה להחליף', () async {
+      final peer = _FakePeer(2, accept: true)..register();
+      addTearDown(peer.dispose);
+      runner.cursorTarget = (slot: 2, isSelf: false, isShellTray: false);
+
+      await drag.handleDroppedOutside(firstTab(), tabsBloc);
+
+      expect(runner.endCalls, 1);
+    });
+
+    test('כל מסלול שאינו פותח חלון מסתיר', () async {
+      // ⚠️ ההפך היה משאיר רוח מרחפת על המסך אחרי גרירה שהתבטלה.
+      runner.cursorTarget = (slot: 1, isSelf: true, isShellTray: false);
+      await drag.handleDroppedOutside(firstTab(), tabsBloc);
+      expect(runner.endCalls, 1);
+
+      runner.cursorTarget = (slot: null, isSelf: false, isShellTray: true);
+      await drag.handleDroppedOutside(firstTab(), tabsBloc);
+      expect(runner.endCalls, 2);
+
+      tabsBloc.emitState(TabsState(tabs: [firstTab()], currentTabIndex: 0));
+      runner.cursorTarget = (slot: null, isSelf: false, isShellTray: false);
+      await drag.handleDroppedOutside(firstTab(), tabsBloc);
+      expect(runner.endCalls, 3);
+    });
+  });
+
   test('כשל פתיחה משאיר את הכרטיסיה במקומה', () async {
     // ⚠️ זו כל הנקודה בכך ש-`openWindow` ממתין ליצירה בפועל: מחיקה על סמך
     // "הצלחה" שלא נבדקה הייתה מאבדת את הכרטיסיה.
@@ -169,6 +228,12 @@ class _FakeRunner {
   );
   bool openWindowResult = true;
   int openWindowCalls = 0;
+  Map<Object?, Object?>? lastOpenArgs;
+
+  /// ⚠️ שני מונים נפרדים, כי ההבחנה ביניהם היא כל התיקון: `freeze` משאיר
+  /// את הרוח במקום השחרור עד שהחלון האמיתי מחליף אותה, ו-`end` מסתיר.
+  int freezeCalls = 0;
+  int endCalls = 0;
 
   void install() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
@@ -184,9 +249,16 @@ class _FakeRunner {
               };
             case 'openWindow':
               openWindowCalls++;
+              lastOpenArgs = call.arguments as Map<Object?, Object?>?;
               return openWindowResult;
+            case 'freezeTabDrag':
+              freezeCalls++;
+              return null;
+            case 'endTabDrag':
+              endCalls++;
+              return null;
             case 'windowCount':
-              return {'count': 1, 'max': 4};
+              return {'count': 1, 'max': 4, 'engines': 1};
             default:
               return null;
           }

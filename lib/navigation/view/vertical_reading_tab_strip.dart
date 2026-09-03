@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:otzaria/core/windowing/cross_window_tab_drag.dart';
+import 'package:otzaria/core/windowing/drag_preview_colors.dart';
 import 'package:otzaria/core/windowing/multi_window_service.dart';
 import 'package:otzaria/navigation/view/reading_tab_strip.dart';
 import 'package:otzaria/navigation/view/tab_context_menu.dart';
@@ -113,8 +114,10 @@ class _VerticalReadingTabStripState extends State<VerticalReadingTabStrip> {
           onExternalDrop: (tab, insertIndex) => context.read<TabsBloc>().add(
             DetachPane(tab, insertIndex: insertIndex),
           ),
-          onDragStarted: (draggedTab) =>
-              _crossWindowDrag.begin(draggedTab.title),
+          onDragStarted: (draggedTab) => _crossWindowDrag.begin(
+            draggedTab.title,
+            DragPreviewColors.of(context),
+          ),
           onDragFinishedAnywhere: _crossWindowDrag.end,
           onDroppedOutside: MultiWindowService.isSupported
               ? (tab) => _crossWindowDrag.handleDroppedOutside(

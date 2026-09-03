@@ -29,6 +29,7 @@ import 'package:otzaria/tabs/models/pdf_tab.dart';
 import 'package:otzaria/tabs/models/combined_tab.dart';
 import 'package:otzaria/tabs/models/searching_tab.dart';
 import 'package:otzaria/core/windowing/cross_window_tab_drag.dart';
+import 'package:otzaria/core/windowing/drag_preview_colors.dart';
 import 'package:otzaria/core/windowing/multi_window_service.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/tabs/models/tool_tab.dart';
@@ -592,7 +593,10 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
       // רק אם הוא משתהה מעל כרטיסיה אחרת.
       onDragStarted: (draggedTab) {
         _pendingTabSelection = null;
-        _crossWindowDrag.begin(draggedTab.title);
+        _crossWindowDrag.begin(
+          draggedTab.title,
+          DragPreviewColors.of(context),
+        );
       },
       onDragFinishedAnywhere: _crossWindowDrag.end,
       onDroppedOutside: MultiWindowService.isSupported

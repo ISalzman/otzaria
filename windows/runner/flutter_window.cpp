@@ -236,10 +236,42 @@ std::atomic<int> g_live_engine_count{0};
 // המחיר ידוע ומדוד: ה-platform thread וה-UI thread ממוזגים ב-3.47, ולכן
 // כל המנועים חולקים scheduler אחד — חלון עסוק מקפיא את השני
 // (docs/P-0-stage3-result.md §2). זה חוב פתוח, לא פתרון סופי.
+// מיקום החלון החדש לפי נקודת השחרור.
+//
+// ⚠️ הכרטיסיה נפתחה עד כה בהיסט מדורג מהפינה, בלי קשר למקום שאליו
+// המשתמש גרר — כלומר גררת לפינה התחתונה-ימנית והחלון קפץ למעלה-שמאלה.
+// רשימת ה-QA של הענף כן דרשה "חלון חדש **במיקום הסמן**", וזה פשוט לא
+// מומש.
+//
+// הסמן ממוקם על **הכרטיסיה** ולא על פינת החלון, בדיוק כמו התצוגה
+// שקדמה לה — אחרת החלון האמיתי קופץ ביחס לרוח שהמשתמש ראה.
+Win32Window::Point OriginForDrop(int drop_x, int drop_y, int width,
+                                 int height) {
+  // ההיסט זהה ל-`kCursorOffsetX/Y` של התצוגה, מותאם לרוחב האמיתי.
+  int left = drop_x - width + 100;
+  int top = drop_y - 17;
+
+  // ⚠️ הידוק לאזור העבודה של המסך שתחת הסמן, ולא של המסך הראשי: שחרור
+  // בקצה מסך שני היה יוצר חלון שחלקו מחוץ לתחום.
+  POINT pt{drop_x, drop_y};
+  const HMONITOR monitor = ::MonitorFromPoint(pt, MONITOR_DEFAULTTONEAREST);
+  MONITORINFO info{};
+  info.cbSize = sizeof(info);
+  if (::GetMonitorInfoW(monitor, &info)) {
+    const RECT& work = info.rcWork;
+    if (left + width > work.right) left = work.right - width;
+    if (left < work.left) left = work.left;
+    if (top + height > work.bottom) top = work.bottom - height;
+    if (top < work.top) top = work.top;
+  }
+  return Win32Window::Point(left, top);
+}
+
 bool CreateSecondaryWindowOnThisThread(const flutter::DartProject& base,
                                        const std::string& payload,
                                        int inherited_width,
-                                       int inherited_height) {
+                                       int inherited_height, int drop_x,
+                                       int drop_y) {
   // ניקוי חלונות שנסגרו, כדי שהרשימה לא תגדל בלי גבול.
   auto& windows = SecondaryWindowsOnThisThread();
   windows.erase(
@@ -259,7 +291,8 @@ bool CreateSecondaryWindowOnThisThread(const flutter::DartProject& base,
     if (existing->GetHandle() == nullptr || !existing->IsClosedByUser()) {
       continue;
     }
-    existing->ReviveWith(payload, inherited_width, inherited_height);
+    existing->ReviveWith(payload, inherited_width, inherited_height, drop_x,
+                         drop_y);
     return true;
   }
 
@@ -272,15 +305,22 @@ bool CreateSecondaryWindowOnThisThread(const flutter::DartProject& base,
   project.set_dart_entrypoint_arguments({payload});
 
   auto window = std::make_unique<FlutterWindow>(project);
-  static int spawn_index = 0;
-  const int offset = 40 + (spawn_index++ % 6) * 32;
-  Win32Window::Point origin(offset, offset);
   // ⚠️ יורש את מידות החלון שפתח אותו. חלון בגודל קבוע נראה שרירותי —
   // המשתמש שהגדיל את החלון שלו מצפה שהחדש יהיה דומה. נופלים לברירת מחדל
   // רק כשהמידות לא הגיעו (מסלול ישן, או קריאה בלי ארגומנטים).
-  Win32Window::Size size(
-      inherited_width > 400 ? inherited_width : 1100,
-      inherited_height > 300 ? inherited_height : 760);
+  const int width = inherited_width > 400 ? inherited_width : 1100;
+  const int height = inherited_height > 300 ? inherited_height : 760;
+  Win32Window::Size size(width, height);
+
+  // נקודת השחרור קובעת את המיקום; בהיעדרה — היסט מדורג, כמו קודם.
+  Win32Window::Point origin(0, 0);
+  if (drop_x != 0 || drop_y != 0) {
+    origin = OriginForDrop(drop_x, drop_y, width, height);
+  } else {
+    static int spawn_index = 0;
+    const int offset = 40 + (spawn_index++ % 6) * 32;
+    origin = Win32Window::Point(offset, offset);
+  }
   if (!window->Create(L"אוצריא", origin, size)) {
     return false;
   }
@@ -622,12 +662,47 @@ bool FlutterWindow::OnCreate() {
 
         // תצוגת הגרירה הנייטיבית — הכרטיסיה שנראית מחוץ לחלון.
         if (call.method_name() == "beginTabDrag") {
-          if (const auto* title = std::get_if<std::string>(call.arguments())) {
-            // חלון המקור מועבר במפורש: התצוגה מוסתרת רק מעליו, ולא מעל
-            // חלונות אוצריא אחרים. ראו ההערה ב-`drag_preview::Begin`.
-            drag_preview::Begin(drag_preview::Utf16FromUtf8(*title),
-                                GetHandle());
+          std::string title;
+          drag_preview::Colors colors;
+          if (const auto* args =
+                  std::get_if<flutter::EncodableMap>(call.arguments())) {
+            const auto title_it = args->find(flutter::EncodableValue("title"));
+            if (title_it != args->end()) {
+              if (const auto* v = std::get_if<std::string>(&title_it->second)) {
+                title = *v;
+              }
+            }
+            // הצבעים מגיעים כ-ARGB מ-`colorScheme`; GDI רוצה BGR.
+            const auto read = [&](const char* key, COLORREF* out) -> bool {
+              const auto it = args->find(flutter::EncodableValue(key));
+              if (it == args->end()) return false;
+              const auto* v = std::get_if<int>(&it->second);
+              if (!v) return false;
+              const unsigned argb = static_cast<unsigned>(*v);
+              *out = RGB((argb >> 16) & 0xFF, (argb >> 8) & 0xFF, argb & 0xFF);
+              return true;
+            };
+            colors.valid = read("strip", &colors.strip) &&
+                           read("tab", &colors.tab) &&
+                           read("body", &colors.body) &&
+                           read("border", &colors.border) &&
+                           read("text", &colors.text);
+          } else if (const auto* legacy =
+                         std::get_if<std::string>(call.arguments())) {
+            // מסלול תאימות: הערוץ קיבל מחרוזת בלבד עד שהצבעים נוספו.
+            title = *legacy;
           }
+          // חלון המקור מועבר במפורש: התצוגה מוסתרת רק מעליו, ולא מעל
+          // חלונות אוצריא אחרים. ראו ההערה ב-`drag_preview::Begin`.
+          drag_preview::Begin(drag_preview::Utf16FromUtf8(title), GetHandle(),
+                              colors);
+          result->Success();
+          return;
+        }
+        // עוצר את המעקב ומשאיר את התצוגה במקום השחרור, עד שהחלון האמיתי
+        // נחשף. ראו `drag_preview::Freeze`.
+        if (call.method_name() == "freezeTabDrag") {
+          drag_preview::Freeze();
           result->Success();
           return;
         }
@@ -731,6 +806,19 @@ bool FlutterWindow::OnCreate() {
           if (h_it != args->end()) {
             if (const auto* v = std::get_if<int>(&h_it->second)) {
               pending.height = *v;
+            }
+          }
+          // נקודת השחרור — החלון ייפתח שם ולא בהיסט מדורג מהפינה.
+          const auto dx_it = args->find(flutter::EncodableValue("dropX"));
+          if (dx_it != args->end()) {
+            if (const auto* v = std::get_if<int>(&dx_it->second)) {
+              pending.drop_x = *v;
+            }
+          }
+          const auto dy_it = args->find(flutter::EncodableValue("dropY"));
+          if (dy_it != args->end()) {
+            if (const auto* v = std::get_if<int>(&dy_it->second)) {
+              pending.drop_y = *v;
             }
           }
         }
@@ -1005,7 +1093,7 @@ bool RestoreLastHiddenWindow() {
 }  // namespace
 
 void FlutterWindow::ReviveWith(const std::string& payload, int width,
-                               int height) {
+                               int height, int drop_x, int drop_y) {
   const HWND self = GetHandle();
   if (!self) return;
 
@@ -1017,13 +1105,27 @@ void FlutterWindow::ReviveWith(const std::string& payload, int width,
   }
   hidden_flag_->store(false);
 
-  if (width > 400 && height > 300) {
-    ::SetWindowPos(self, nullptr, 0, 0, width, height,
+  const int final_width = width > 400 ? width : 0;
+  const int final_height = height > 300 ? height : 0;
+  if (drop_x != 0 || drop_y != 0) {
+    // נקודת שחרור: מזיזים **וגם** משנים גודל בקריאה אחת, כדי שלא ייראה
+    // קפיצה בשני שלבים.
+    RECT current{};
+    ::GetWindowRect(self, &current);
+    const int w = final_width > 0 ? final_width : current.right - current.left;
+    const int h = final_height > 0 ? final_height : current.bottom - current.top;
+    const auto origin = OriginForDrop(drop_x, drop_y, w, h);
+    ::SetWindowPos(self, nullptr, origin.x, origin.y, w, h,
+                   SWP_NOZORDER | SWP_NOACTIVATE);
+  } else if (final_width > 0 && final_height > 0) {
+    ::SetWindowPos(self, nullptr, 0, 0, final_width, final_height,
                    SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
   }
   ::ShowWindow(self, SW_SHOW);
   ::BringWindowToTop(self);
   ::SetForegroundWindow(self);
+  // החלון האמיתי כאן — הרוח שהוקפאה במקום השחרור סיימה את תפקידה.
+  drag_preview::End();
 
   // המטען מועבר ל-Dart בערוץ ולא כארגומנט לנקודת כניסה: המנוע כבר רץ,
   // ונקודת הכניסה שלו הורצה מזמן.
@@ -1053,6 +1155,9 @@ void FlutterWindow::RevealOnFirstFrame() {
     ::ShowWindow(hwnd, SW_SHOW);
     ::BringWindowToTop(hwnd);
     ::SetForegroundWindow(hwnd);
+    // החלון האמיתי על המסך — הרוח שהוקפאה במקום השחרור מוסתרת בדיוק
+    // ברגע שיש מה להחליף אותה.
+    drag_preview::End();
     // הזמן שהמשתמש באמת מרגיש: מהלחיצה ועד שמשהו מופיע על המסך.
     printf("[window] נראה למשתמש אחרי %lums\n", ::GetTickCount() - started);
     fflush(stdout);
@@ -1087,7 +1192,10 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
         std::move(pending_secondary_windows_.front());
     pending_secondary_windows_.pop();
     const bool created = CreateSecondaryWindowOnThisThread(
-        project_, pending.payload, pending.width, pending.height);
+        project_, pending.payload, pending.width, pending.height,
+        pending.drop_x, pending.drop_y);
+    // יצירה שנכשלה — אין מה להחליף את הרוח, והיא לא יכולה להישאר תלויה.
+    if (!created) drag_preview::End();
     // ⚠️ **כאן** נענה Dart, ולא בטיפול בערוץ. זו התשובה שעל פיה הוא מוחק
     // את הכרטיסיה מהחלון המקורי.
     if (pending.result) {
