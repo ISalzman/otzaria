@@ -1001,6 +1001,13 @@ void FlutterWindow::ReviveWith(const std::string& payload, int width,
   }
 }
 
+// ⚠️ **הקולבק כאן רץ על ה-platform thread, ולא על thread הרסטר.**
+//
+// זו הייתה השערה שנבדקה ונשללה בחיפוש אחר מרוץ ההתנעה (~1% קריסה
+// חוצת-threads בפתיחת חלון): קריאות Win32 מתוך קולבק של המנוע נראו כמו
+// החשוד המובן מאליו. `flutter_windows.h` מפורש —
+// *"The callback is executed only once on the platform thread"* — ולכן
+// `ShowWindow`/`SetForegroundWindow` כאן תקינים, ואין טעם לחפש כאן שוב.
 void FlutterWindow::RevealOnFirstFrame() {
   if (!flutter_controller_ || !flutter_controller_->engine()) {
     ::ShowWindow(GetHandle(), SW_SHOW);

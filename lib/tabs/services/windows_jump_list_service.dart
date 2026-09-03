@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:otzaria/core/windowing/window_role.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 
 /// מסנכרן את רשימת הטאבים הפתוחים ל-Jump List של שורת המשימות ב-Windows.
@@ -19,7 +20,17 @@ class WindowsJumpListService {
   List<String>? _sendingTitles;
   List<String>? _queuedTitles;
 
-  bool get _isSupported => !kIsWeb && Platform.isWindows;
+  /// ⚠️ ה-Jump List הוא משאב **פר-תהליך**, ולכן רק החלון הראשון מעדכן אותו.
+  ///
+  /// בלי הגידור כל חלון דרס את הרשימה בכרטיסיות שלו, והמצב שנשאר היה של מי
+  /// שעדכן אחרון. וזה לא רק בלבול תצוגה: כל פריט מריץ
+  /// `otzaria://open/tab/<index>`, והקישור נפתר מול רשימת הכרטיסיות של
+  /// המופע החי — כלומר **לחיצה על פריט פתחה ספר אחר** מזה שהפריט הראה.
+  ///
+  /// זו אותה הבחנה שלפיה בדיקת עדכוני הספרייה, שירות ההתראות ושטיפת דיווחי
+  /// השגיאות מגודרים: פר-תהליך ולא פר-חלון.
+  bool get _isSupported =>
+      !kIsWeb && Platform.isWindows && !WindowRole.isSecondary;
 
   /// מעדכן את ה-Jump List לרשימת הטאבים הנתונה (לפי הסדר). שולח רק כאשר
   /// הכותרות או סדרן שונים מהמצב שאליו ה-Jump List מתקדם.

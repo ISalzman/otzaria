@@ -23,6 +23,7 @@ import 'package:otzaria/indexing/bloc/indexing_event.dart';
 import 'package:otzaria/indexing/bloc/indexing_state.dart';
 import 'package:otzaria/indexing/indexing_work_status.dart';
 import 'package:otzaria/indexing/repository/indexing_repository.dart';
+import 'package:otzaria/core/windowing/window_title_sync.dart';
 import 'package:otzaria/core/windowing/window_role.dart';
 import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
 import 'package:otzaria/navigation/bloc/navigation_event.dart';
@@ -2908,6 +2909,22 @@ class MainWindowScreenState extends State<MainWindowScreen>
             listenWhen: (previous, current) =>
                 !identical(previous.tabs, current.tabs),
             listener: (context, state) => _jumpListService.sync(state.tabs),
+          ),
+          // כותרת החלון עוקבת אחרי הכרטיסיה הפעילה, כמו בדפדפן.
+          //
+          // ⚠️ גם על החלפת כרטיסיה ולא רק על שינוי הרשימה: הכותרת מתארת את
+          // הכרטיסיה **הפעילה**, וזו משתנה בלי שהרשימה תיגע.
+          BlocListener<TabsBloc, TabsState>(
+            listenWhen: (previous, current) =>
+                !identical(previous.tabs, current.tabs) ||
+                previous.currentTabIndex != current.currentTabIndex ||
+                previous.currentTab?.title != current.currentTab?.title,
+            listener: (context, state) => unawaited(
+              WindowTitleSync.update(
+                state.currentTab?.title,
+                tabCount: state.tabs.length,
+              ),
+            ),
           ),
           // settings.changed עבור selectedCity ו-calendarType —
           // שדות אלה נמצאים ב-CalendarState ולא ב-SettingsState
