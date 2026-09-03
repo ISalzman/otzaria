@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:otzaria/theme/app_surfaces.dart';
 import 'package:otzaria/theme/app_tokens.dart';
 import 'package:flutter/foundation.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
@@ -549,9 +550,7 @@ class PersonalNotesSidebarState extends State<PersonalNotesSidebar>
       margin: const EdgeInsets.all(8),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Theme.of(
-          context,
-        ).colorScheme.primaryContainer.withValues(alpha: 0.3),
+        color: AppSurfaces.noteEditorBackground(context),
         borderRadius: AppTokens.borderRadiusAll,
         border: Border.all(
           color: Theme.of(context).colorScheme.primary,
