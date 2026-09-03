@@ -725,6 +725,37 @@ class _PluginTabPageState extends State<PluginTabPage> {
     registry: _pluginRegistryRepository,
   );
 
+  /// בקשה לשרת הקבצים שמותרת לתוסף הזה: נתיב קובץ שלו (`/f/`), או נתיב
+  /// ההעלאה (`/w/<token>`) של העלאה פתוחה שלו.
+  bool _isOwnFileServerRequest(Uri uri) =>
+      PluginFileServer.isUriForPlugin(uri, widget.plugin.pluginId) ||
+      PluginFileServer.instance.isUploadUriForPlugin(
+        uri,
+        widget.plugin.pluginId,
+      );
+
+  /// רושם חסימה של בקשה לשרת הקבצים.
+  ///
+  /// תשובת ה-403 שאנחנו מייצרים אינה נושאת כותרות CORS, ולכן היא מגיעה ל-JS
+  /// כ-TypeError אטום ("Failed to fetch") ולא כסטטוס. בלי הרישום כאן אין שום
+  /// עקבה של *מה* נחסם — אבחון החסימה של נתיב ההעלאה דרש בקשת בדיקה שהתוסף
+  /// שולח לשרת בעצמו. ה-token אינו נרשם: הוא סוד.
+  void _logFileServerDenial(Uri uri) {
+    final kind = uri.pathSegments.isEmpty
+        ? uri.path
+        : '/${uri.pathSegments.first}/…';
+    final message = 'בקשת התוסף לשרת הקבצים נחסמה בשער ה-WebView: $kind';
+    debugPrint('Plugin [${widget.plugin.pluginId}]: $message');
+    // fire-and-forget, כמו כל כתיבה ללוג הריצה.
+    unawaited(
+      PluginSystemDatabase.instance.writeLog(
+        widget.plugin.pluginId,
+        'warn',
+        message,
+      ),
+    );
+  }
+
   Widget _buildWebView() {
     if (_creationFailure != null) {
       return PluginWebViewFailedView(
@@ -884,16 +915,11 @@ class _PluginTabPageState extends State<PluginTabPage> {
           if (uri.scheme == 'http' &&
               PluginFileServer.instance.isServerUri(uri)) {
             // גם נתיבי קבצים (/f/) וגם נתיב ההעלאה (/w/) של התוסף הזה.
-            return PluginFileServer.isUriForPlugin(
-                      uri,
-                      widget.plugin.pluginId,
-                    ) ||
-                    PluginFileServer.instance.isUploadUriForPlugin(
-                      uri,
-                      widget.plugin.pluginId,
-                    )
-                ? NavigationActionPolicy.ALLOW
-                : NavigationActionPolicy.CANCEL;
+            if (_isOwnFileServerRequest(uri)) {
+              return NavigationActionPolicy.ALLOW;
+            }
+            _logFileServerDenial(uri);
+            return NavigationActionPolicy.CANCEL;
           }
 
           if (uri.scheme == 'http' || uri.scheme == 'https') {
@@ -939,13 +965,8 @@ class _PluginTabPageState extends State<PluginTabPage> {
             // ההחרגה השנייה ה-PUT של fs.beginBinaryWrite נחסם כאן, וכל
             // שמירה בינארית נופלת ב-"Failed to fetch" (נמדד בווינדוס, שבו
             // ה-fork של אוצריא כן מפעיל shouldInterceptRequest).
-            if (PluginFileServer.isUriForPlugin(uri, widget.plugin.pluginId) ||
-                PluginFileServer.instance.isUploadUriForPlugin(
-                  uri,
-                  widget.plugin.pluginId,
-                )) {
-              return null;
-            }
+            if (_isOwnFileServerRequest(uri)) return null;
+            _logFileServerDenial(uri);
             return WebResourceResponse(
               statusCode: 403,
               reasonPhrase: 'Forbidden',

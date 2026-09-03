@@ -541,6 +541,44 @@ class _BackgroundPluginRunnerState extends State<_BackgroundPluginRunner> {
       uri.pathSegments.length == 3 &&
       uri.pathSegments[1] == widget.plugin.pluginId;
 
+  /// בקשה לשרת הקבצים שמותרת למופע הרקע: נתיב קובץ שלו, או נתיב ההעלאה
+  /// (`/w/<token>`) של העלאה פתוחה שלו.
+  ///
+  /// בלי הענף השני ה-PUT של `fs.beginBinaryWrite` נחסם כאן, וכל שמירה בינארית
+  /// נופלת ב-"Failed to fetch" — אותו כשל שתוקן בשער של `plugin_tab_page.dart`
+  /// ונשאר כאן. הפער אינו תיאורטי: מניפסט שאינו מצהיר `backgroundEntrypoint`
+  /// מקבל את ה-entrypoint של הדף המלא גם ברקע (ראו
+  /// `InstalledPlugin.backgroundEntrypointPath`), כלומר אותו קוד שמירה בדיוק
+  /// רץ בשני המופעים.
+  bool _isOwnFileServerRequest(Uri uri) =>
+      _isOwnFileServerPath(uri) ||
+      PluginFileServer.instance.isUploadUriForPlugin(
+        uri,
+        widget.plugin.pluginId,
+      );
+
+  /// רושם חסימה של בקשה לשרת הקבצים.
+  ///
+  /// תשובת ה-403 שאנחנו מייצרים אינה נושאת כותרות CORS, ולכן היא מגיעה ל-JS
+  /// כ-TypeError אטום ("Failed to fetch") ולא כסטטוס. בלי הרישום כאן אין שום
+  /// עקבה של *מה* נחסם — התוסף נאלץ לנחש (הבאג הזה אובחן בתוסף „וורד לאוצריא”
+  /// דרך בקשת בדיקה שהוא שולח לשרת בעצמו). ה-token אינו נרשם: הוא סוד.
+  void _logFileServerDenial(Uri uri) {
+    final kind = uri.pathSegments.isEmpty
+        ? uri.path
+        : '/${uri.pathSegments.first}/…';
+    final message = 'בקשת התוסף לשרת הקבצים נחסמה בשער ה-WebView: $kind';
+    debugPrint('Background plugin [${widget.plugin.pluginId}]: $message');
+    // fire-and-forget, כמו כל כתיבה ללוג הריצה.
+    unawaited(
+      PluginSystemDatabase.instance.writeLog(
+        widget.plugin.pluginId,
+        'warn',
+        message,
+      ),
+    );
+  }
+
   Future<bool> _isNetworkUriAllowed(Uri uri) => isPluginNetworkAccessAllowed(
     uri: uri,
     pluginId: widget.plugin.pluginId,
@@ -940,9 +978,11 @@ class _BackgroundPluginRunnerState extends State<_BackgroundPluginRunner> {
           // להצהרה ב-allowlist; מאשרים רק נתיב של התוסף עצמו.
           if (uri.scheme == 'http' &&
               PluginFileServer.instance.isServerUri(uri)) {
-            return _isOwnFileServerPath(uri)
-                ? NavigationActionPolicy.ALLOW
-                : NavigationActionPolicy.CANCEL;
+            if (_isOwnFileServerRequest(uri)) {
+              return NavigationActionPolicy.ALLOW;
+            }
+            _logFileServerDenial(uri);
+            return NavigationActionPolicy.CANCEL;
           }
           if (uri.scheme == 'http' || uri.scheme == 'https') {
             if (await _isNetworkUriAllowed(uri)) {
@@ -981,9 +1021,12 @@ class _BackgroundPluginRunnerState extends State<_BackgroundPluginRunner> {
               _isDevServerUri(uri, widget.plugin.devRootPath)) {
             return null; // allow dev server + HMR requests
           }
+          // שרת הקבצים הפנימי (loopback): נתיב קובץ של התוסף, או נתיב ההעלאה
+          // (/w/) של העלאה פתוחה שלו — ראו [_isOwnFileServerRequest].
           if (uri.scheme == 'http' &&
               PluginFileServer.instance.isServerUri(uri)) {
-            if (_isOwnFileServerPath(uri)) return null;
+            if (_isOwnFileServerRequest(uri)) return null;
+            _logFileServerDenial(uri);
             return WebResourceResponse(
               statusCode: 403,
               reasonPhrase: 'Forbidden',
