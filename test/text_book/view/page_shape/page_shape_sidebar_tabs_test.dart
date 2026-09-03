@@ -25,6 +25,8 @@ import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/text_book/models/commentator_group.dart';
 import 'package:otzaria/text_book/view/page_shape/page_shape_screen.dart';
+import 'package:otzaria/text_book/view/page_shape/utils/page_shape_commentary_selection.dart';
+import 'package:otzaria/text_book/view/page_shape/utils/page_shape_settings_manager.dart';
 import 'package:otzaria/text_book/view/tabbed_commentary_panel.dart';
 import 'package:otzaria/widgets/navigation/panel_tab_header.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
@@ -210,6 +212,57 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(PanelOpenHandle), findsOneWidget);
   });
+
+  testWidgets(
+    'נראות זמנית של מפרש ימני אינה משנה את בחירת המשתמש וניתנת לשחזור',
+    (tester) async {
+      final selection = encodePageShapeCommentatorsSelection(
+        const ['מפרש א', 'מפרש ב'],
+        forceMultipleMode: true,
+      );
+      await PageShapeSettingsManager.saveConfiguration(bookTitle, {
+        'left': null,
+        'right': selection,
+        'bottom': null,
+        'bottomRight': null,
+      });
+      await Settings.setValue<bool>('page_shape_global_visibility_right', true);
+
+      final tab = await pumpScreen(
+        tester,
+        availableCommentators: const ['מפרש א', 'מפרש ב'],
+      );
+
+      expect(
+        tab.pageShapePluginController.layout?.right.map(
+          (entry) => entry.visible,
+        ),
+        [true, true],
+      );
+
+      final hidden = tab.pageShapePluginController.setCommentatorVisibility(
+        'מפרש א',
+        false,
+      );
+      await tester.pump();
+      expect(hidden?.right.map((entry) => entry.visible), [false, true]);
+      expect(
+        PageShapeSettingsManager.loadConfiguration(bookTitle)?['right'],
+        selection,
+      );
+
+      final restored = tab.pageShapePluginController.setCommentatorVisibility(
+        'מפרש א',
+        true,
+      );
+      await tester.pump();
+      expect(restored?.right.map((entry) => entry.visible), [true, true]);
+      expect(
+        PageShapeSettingsManager.loadConfiguration(bookTitle)?['right'],
+        selection,
+      );
+    },
+  );
 }
 
 TextBookLoaded _loadedState(

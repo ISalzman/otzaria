@@ -19,6 +19,7 @@ import 'package:otzaria/tabs/bloc/tabs_state.dart';
 import 'package:otzaria/tabs/models/pdf_tab.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
+import 'package:otzaria/text_book/view/page_shape/utils/page_shape_plugin_api.dart';
 import 'package:otzaria/tools/calendar/utils/calendar_cubit.dart';
 import 'package:otzaria/utils/navigation/book_open_coordinator.dart';
 import 'package:otzaria/workspaces/bloc/workspace_bloc.dart';
@@ -224,6 +225,106 @@ void main() {
               as Map<String, dynamic>;
       expect(data['surface'], isNull);
       expect(data['highlights'], isFalse);
+    });
+  });
+
+  group('reader page-shape layout', () {
+    PageShapeLayoutSnapshot layout() => const PageShapeLayoutSnapshot(
+      available: ['ביאור הלכה', 'רש"י'],
+      left: PageShapeCommentatorState(
+        commentator: 'ביאור הלכה',
+        visible: false,
+      ),
+      right: [
+        PageShapeCommentatorState(commentator: 'רש"י', visible: true),
+      ],
+      bottom: null,
+      bottomRight: null,
+    );
+
+    void attachLayout(TextBookTab tab, PageShapeLayoutSnapshot initial) {
+      var current = initial;
+      tab.pageShapePluginController.attach(
+        readLayout: () => current,
+        setVisibility: (commentator, visible) {
+          current = current.withCommentatorVisibility(commentator, visible);
+          return current;
+        },
+      );
+    }
+
+    test('getPageShapeLayout מחזיר null בלי מסך צורת הדף פעיל', () async {
+      final tab = _loadedTextTab(pageShape: true);
+      tabsBloc.currentState = TabsState(tabs: [tab], currentTabIndex: 0);
+
+      expect(
+        await buildAdapter().execute('reader', 'getPageShapeLayout', {}),
+        isNull,
+      );
+    });
+
+    test('getPageShapeLayout מחזיר נראות נפרדת לכל מפרש', () async {
+      final tab = _loadedTextTab(
+        pageShape: true,
+        available: const ['ביאור הלכה', 'רש"י'],
+      );
+      attachLayout(tab, layout());
+      tabsBloc.currentState = TabsState(tabs: [tab], currentTabIndex: 0);
+
+      final data =
+          await buildAdapter().execute('reader', 'getPageShapeLayout', {})
+              as Map<String, dynamic>;
+
+      expect(data['left'], {'commentator': 'ביאור הלכה', 'visible': false});
+      expect(data['right'], [
+        {'commentator': 'רש"י', 'visible': true},
+      ]);
+    });
+
+    test(
+      'setPageShapeCommentatorVisibility מחזיר את הנראות המעודכנת',
+      () async {
+        final tab = _loadedTextTab(pageShape: true);
+        attachLayout(tab, layout());
+        tabsBloc.currentState = TabsState(tabs: [tab], currentTabIndex: 0);
+
+        final hidden =
+            await buildAdapter().execute(
+                  'reader',
+                  'setPageShapeCommentatorVisibility',
+                  {'commentator': 'רש"י', 'visible': false},
+                )
+                as Map<String, dynamic>;
+        expect(hidden['right'], [
+          {'commentator': 'רש"י', 'visible': false},
+        ]);
+
+        final restored =
+            await buildAdapter().execute(
+                  'reader',
+                  'setPageShapeCommentatorVisibility',
+                  {'commentator': 'רש"י', 'visible': true},
+                )
+                as Map<String, dynamic>;
+        expect(restored['right'], [
+          {'commentator': 'רש"י', 'visible': true},
+        ]);
+      },
+    );
+
+    test('setPageShapeCommentatorVisibility דוחה מפרש שאינו משובץ', () async {
+      final tab = _loadedTextTab(pageShape: true);
+      attachLayout(tab, layout());
+      tabsBloc.currentState = TabsState(tabs: [tab], currentTabIndex: 0);
+
+      expect(
+        () => buildAdapter().execute(
+          'reader',
+          'setPageShapeCommentatorVisibility',
+          {'commentator': 'מפרש אחר', 'visible': true},
+        ),
+        _codedError('error.not_found'),
+      );
     });
   });
 

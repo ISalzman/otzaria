@@ -9,6 +9,7 @@ import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/tabs/models/reading_tab_search_state.dart';
 import 'package:otzaria/tabs/models/tab.dart';
+import 'package:otzaria/text_book/view/page_shape/utils/page_shape_plugin_api.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:flutter/foundation.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
@@ -121,6 +122,9 @@ class TextBookTab extends OpenedTab {
   /// בקשת העתקה מקיצור דינמי; המסך שמחזיק את הבחירה מבצע ומאפס ל-null.
   final ValueNotifier<DynamicCopyRequest?> dynamicCopyRequestNotifier =
       ValueNotifier<DynamicCopyRequest?>(null);
+
+  final PageShapePluginController pageShapePluginController =
+      PageShapePluginController();
 
   List<String>? commentators;
   bool _lastSplitView = false;
@@ -242,6 +246,7 @@ class TextBookTab extends OpenedTab {
     navPreviousTocNotifier.dispose();
     navNextTocNotifier.dispose();
     dynamicCopyRequestNotifier.dispose();
+    pageShapePluginController.detach();
     bloc.close();
     super.dispose();
   }

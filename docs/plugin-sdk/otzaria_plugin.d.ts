@@ -502,6 +502,27 @@ export interface SetActiveCommentatorsArgs {
   remove?: string[];
 }
 
+/** מפרש המשובץ בצורת הדף והנראות הזמנית שלו. */
+export interface PageShapeCommentatorState {
+  commentator: string;
+  visible: boolean;
+}
+
+/** פריסת המפרשים של צורת הדף בטאב הקריאה הנוכחי. */
+export interface PageShapeLayout {
+  available: string[];
+  left: PageShapeCommentatorState | null;
+  right: PageShapeCommentatorState[];
+  bottom: PageShapeCommentatorState | null;
+  bottomRight: PageShapeCommentatorState | null;
+}
+
+/** ארגומנטים ל-`reader.setPageShapeCommentatorVisibility`. */
+export interface SetPageShapeCommentatorVisibilityArgs {
+  commentator: string;
+  visible: boolean;
+}
+
 /** ארגומנטים ל-`reader.scrollToSection`. */
 export interface ScrollToSectionArgs {
   /** בטקסט — אינדקס שורה (מבוסס-0); ב-PDF — מספר עמוד (מבוסס-1). */
@@ -1705,6 +1726,8 @@ export type OtzariaMethod =
   | 'reader.getSelection'
   | 'reader.getActiveCommentators'
   | 'reader.setActiveCommentators'
+  | 'reader.getPageShapeLayout'
+  | 'reader.setPageShapeCommentatorVisibility'
   | 'reader.scrollToSection'
   | 'reader.getHighlightCapabilities'
   | 'reader.findTextOccurrences'

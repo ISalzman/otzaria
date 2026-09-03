@@ -118,6 +118,7 @@ class CommentaryListBase extends StatefulWidget {
   final bool shrinkWrap;
   final ItemPositionsListener? itemPositionsListener;
   final List<String>? selectedCommentatorsOverride;
+  final Set<String> hiddenCommentators;
   final List<CommentatorGroup>? commentatorGroupsOverride;
   final String? bookTitleOverride;
   final ValueChanged<List<String>>? onSelectedCommentatorsOverrideChanged;
@@ -180,6 +181,7 @@ class CommentaryListBase extends StatefulWidget {
     this.shrinkWrap = true,
     this.itemPositionsListener,
     this.selectedCommentatorsOverride,
+    this.hiddenCommentators = const {},
     this.commentatorGroupsOverride,
     this.bookTitleOverride,
     this.onSelectedCommentatorsOverrideChanged,
@@ -321,7 +323,13 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
 
   List<String> _selectedCommentators(TextBookLoaded state) {
     final selected = _allSelectedCommentators(state);
-    return selected.where((title) => title != kNotesCommentatorTitle).toList();
+    return selected
+        .where(
+          (title) =>
+              title != kNotesCommentatorTitle &&
+              !widget.hiddenCommentators.contains(title),
+        )
+        .toList();
   }
 
   String _buildGroupingSignature(List<Link> links) {

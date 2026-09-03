@@ -167,6 +167,8 @@ if (response.success) {
 | `reader.getSelection` | 0.9.89 |
 | `reader.getActiveCommentators` | 0.9.97 |
 | `reader.setActiveCommentators` | 0.9.97 |
+| `reader.getPageShapeLayout` | 0.9.97 |
+| `reader.setPageShapeCommentatorVisibility` | 0.9.97 |
 | `reader.scrollToSection` | 0.9.97 |
 | `reader.getHighlightCapabilities` | 0.9.97 |
 | `reader.findTextOccurrences` | 0.9.95 |
@@ -1726,6 +1728,39 @@ const { data } = await Otzaria.call('reader.getActiveCommentators');
 await Otzaria.call('reader.setActiveCommentators', {
   add: ['רש״י על בראשית'],
   remove: ['רמב״ן על בראשית']
+});
+```
+
+### `reader.getPageShapeLayout`
+**הרשאה:** `reader.open` · **מגרסה:** 0.9.97
+
+מחזיר את מפרשי תצוגת "צורת הדף" הפעילה ואת נראותו הנוכחית של כל מפרש.
+`null` כשאין טאב טקסט בצורת הדף, או כשהמסך עדיין טוען את ההגדרות. בטור הימני
+יכולים להיות כמה מפרשים, ולכן הוא מערך. הנראות שמדווחת כאן כוללת גם שינוי
+זמני שביצע תוסף.
+
+```javascript
+const { data } = await Otzaria.call('reader.getPageShapeLayout');
+// {
+//   available: ["ביאור הלכה", "רש״י על בראשית"],
+//   left: { commentator: "ביאור הלכה", visible: false },
+//   right: [{ commentator: "רש״י על בראשית", visible: true }],
+//   bottom: null,
+//   bottomRight: null
+// }
+```
+
+### `reader.setPageShapeCommentatorVisibility`
+**הרשאה:** `reader.open` · **מגרסה:** 0.9.97
+
+מציג או מסתיר זמנית מפרש שכבר משובץ בצורת הדף. השינוי אינו משנה את שיבוץ
+המפרשים ואינו נשמר בהגדרות המשתמש; קריאה עם `visible: true` מחזירה גם מפרש
+שהוסתר קודם. מפרש שאינו משובץ נדחה ב-`error.not_found`.
+
+```javascript
+await Otzaria.call('reader.setPageShapeCommentatorVisibility', {
+  commentator: 'ביאור הלכה',
+  visible: true
 });
 ```
 

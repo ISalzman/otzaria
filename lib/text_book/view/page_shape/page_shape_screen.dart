@@ -17,6 +17,7 @@ import 'package:otzaria/text_book/models/commentator_group.dart';
 import 'package:otzaria/text_book/view/page_shape/simple_text_viewer.dart';
 import 'package:otzaria/text_book/view/page_shape/utils/commentary_anchor_links.dart';
 import 'package:otzaria/text_book/view/page_shape/utils/page_shape_commentary_selection.dart';
+import 'package:otzaria/text_book/view/page_shape/utils/page_shape_plugin_api.dart';
 import 'package:otzaria/text_book/view/page_shape/utils/commentary_sync_helper.dart';
 import 'package:otzaria/text_book/view/page_shape/utils/page_shape_workspace_scope.dart';
 import 'package:otzaria/text_book/view/page_shape/page_shape_settings_panel.dart';
@@ -150,6 +151,7 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
     'bottom': true,
     'bottomRight': true,
   };
+  final Map<String, bool> _pluginVisibilityOverrides = {};
 
   String? get _activeWorkspaceId => activePageShapeWorkspaceId(context);
 
@@ -477,6 +479,90 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
     );
   }
 
+  bool _isCommentatorVisible(String column, String? commentator) {
+    if (commentator == null) return _columnVisibility[column] == true;
+    return _pluginVisibilityOverrides[commentator] ??
+        (_columnVisibility[column] == true);
+  }
+
+  bool _shouldShowRightPane(TextBookLoaded state) {
+    final commentators = _selectedRightPaneCommentators(state);
+    if (commentators.isEmpty) return _columnVisibility['right'] == true;
+    return commentators.any(
+      (commentator) => _isCommentatorVisible('right', commentator),
+    );
+  }
+
+  Set<String> _hiddenRightPaneCommentators(TextBookLoaded state) {
+    return _selectedRightPaneCommentators(state)
+        .where((commentator) => !_isCommentatorVisible('right', commentator))
+        .toSet();
+  }
+
+  PageShapeLayoutSnapshot? _pluginLayout() {
+    final state = context.read<TextBookBloc>().state;
+    if (_isLoadingConfig || state is! TextBookLoaded) return null;
+
+    PageShapeCommentatorState? entry(String column, String? commentator) {
+      if (commentator == null) return null;
+      return PageShapeCommentatorState(
+        commentator: commentator,
+        visible: _isCommentatorVisible(column, commentator),
+      );
+    }
+
+    return PageShapeLayoutSnapshot(
+      available: List<String>.from(state.availableCommentators),
+      left: entry('left', _leftCommentator),
+      right: _selectedRightPaneCommentators(state)
+          .map(
+            (commentator) => PageShapeCommentatorState(
+              commentator: commentator,
+              visible: _isCommentatorVisible('right', commentator),
+            ),
+          )
+          .toList(),
+      bottom: entry('bottom', _bottomCommentator),
+      bottomRight: entry('bottomRight', _bottomRightCommentator),
+    );
+  }
+
+  String? _columnForCommentator(String commentator, TextBookLoaded state) {
+    if (_leftCommentator == commentator) return 'left';
+    if (_bottomCommentator == commentator) return 'bottom';
+    if (_bottomRightCommentator == commentator) return 'bottomRight';
+    if (_selectedRightPaneCommentators(state).contains(commentator)) {
+      return 'right';
+    }
+    return null;
+  }
+
+  PageShapeLayoutSnapshot? _setPluginCommentatorVisibility(
+    String commentator,
+    bool visible,
+  ) {
+    final state = context.read<TextBookBloc>().state;
+    if (_isLoadingConfig || state is! TextBookLoaded) return null;
+    final column = _columnForCommentator(commentator, state);
+    if (column == null) return _pluginLayout();
+
+    setState(() {
+      if (visible == (_columnVisibility[column] == true)) {
+        _pluginVisibilityOverrides.remove(commentator);
+      } else {
+        _pluginVisibilityOverrides[commentator] = visible;
+      }
+    });
+    return _pluginLayout();
+  }
+
+  void _attachPluginController() {
+    widget.tab?.pageShapePluginController.attach(
+      readLayout: _pluginLayout,
+      setVisibility: _setPluginCommentatorVisibility,
+    );
+  }
+
   bool _isRightPaneMultipleMode() {
     return isPageShapeMultipleCommentatorsMode(_rightCommentator);
   }
@@ -635,6 +721,7 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
       selectionSyncController: _selectionSyncController,
       shrinkWrap: false,
       selectedCommentatorsOverride: commentators,
+      hiddenCommentators: _hiddenRightPaneCommentators(state),
       commentatorGroupsOverride: _rightPaneCommentatorGroups(state),
       bookTitleOverride: state.book.title,
       personalNotesLoader: loadStoredPersonalNotes,
@@ -920,6 +1007,7 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
     widget.tab?.toggleCommentatorsPaneNotifier.addListener(
       _onToggleCommentatorsPaneRequest,
     );
+    _attachPluginController();
   }
 
   @override
@@ -942,6 +1030,8 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
       widget.tab?.toggleCommentatorsPaneNotifier.addListener(
         _onToggleCommentatorsPaneRequest,
       );
+      oldWidget.tab?.pageShapePluginController.detach();
+      _attachPluginController();
     }
   }
 
@@ -952,6 +1042,7 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
     widget.tab?.toggleCommentatorsPaneNotifier.removeListener(
       _onToggleCommentatorsPaneRequest,
     );
+    widget.tab?.pageShapePluginController.detach();
     _selectionSyncController.dispose();
     _openCommentatorsFilterNotifier.dispose();
     _closeCommentatorsFilterNotifier.dispose();
@@ -1026,10 +1117,13 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
                 // נראות כל פאנל תחתון נשלטת בנפרד; האזור התחתון מוצג רק אם
                 // לפחות אחד מהם גלוי ובעל מפרש.
                 final showBottom =
-                    _columnVisibility['bottom'] == true &&
+                    _isCommentatorVisible('bottom', _bottomCommentator) &&
                     _bottomCommentator != null;
                 final showBottomRight =
-                    _columnVisibility['bottomRight'] == true &&
+                    _isCommentatorVisible(
+                      'bottomRight',
+                      _bottomRightCommentator,
+                    ) &&
                     _bottomRightCommentator != null;
                 return Scaffold(
                   body: Stack(
@@ -1088,8 +1182,10 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
                                           Expanded(
                                             child: Row(
                                               children: [
-                                                if (_columnVisibility['left'] ==
-                                                    true) ...[
+                                                if (_isCommentatorVisible(
+                                                  'left',
+                                                  _leftCommentator,
+                                                )) ...[
                                                   if (_leftCommentator !=
                                                       null) ...[
                                                     SizedBox(
@@ -1258,8 +1354,9 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
                                                     ),
                                                   ),
                                                 ),
-                                                if (_columnVisibility['right'] ==
-                                                    true) ...[
+                                                if (_shouldShowRightPane(
+                                                  state,
+                                                )) ...[
                                                   SizedBox(
                                                     width: 8,
                                                     child: Stack(

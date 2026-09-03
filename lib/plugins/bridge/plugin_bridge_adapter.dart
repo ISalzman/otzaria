@@ -2383,6 +2383,10 @@ class PluginBridgeAdapter {
       case 'setActiveCommentators':
         // spec: setActiveCommentators({ add?, remove? })
         return _setActiveCommentators(args);
+      case 'getPageShapeLayout':
+        return _getPageShapeLayout();
+      case 'setPageShapeCommentatorVisibility':
+        return _setPageShapeCommentatorVisibility(args);
       case 'getHighlightCapabilities':
         // spec: getHighlightCapabilities() -> { surface, highlights,
         //   selection, contextMenu }
@@ -5453,6 +5457,44 @@ class PluginBridgeAdapter {
       'rare': state.rareCommentators.toList()..sort(),
       'groups': _commentatorGroupsToJson(state.commentatorGroups),
     };
+  }
+
+  Map<String, dynamic>? _getPageShapeLayout() {
+    final pane = _dependencies.tabsBloc.state.readingPane;
+    if (pane is! TextBookTab) return null;
+    final state = pane.bloc.state;
+    if (state is! TextBookLoaded || !state.showPageShapeView) return null;
+    return pane.pageShapePluginController.layout?.toJson();
+  }
+
+  Map<String, dynamic>? _setPageShapeCommentatorVisibility(
+    Map<String, dynamic> args,
+  ) {
+    final rawCommentator = args['commentator'];
+    if (rawCommentator is! String || rawCommentator.trim().isEmpty) {
+      throw Exception('error.invalid_params: commentator is required');
+    }
+    final visible = args['visible'];
+    if (visible is! bool) {
+      throw Exception('error.invalid_params: visible must be a boolean');
+    }
+
+    final pane = _dependencies.tabsBloc.state.readingPane;
+    if (pane is! TextBookTab) return null;
+    final state = pane.bloc.state;
+    if (state is! TextBookLoaded || !state.showPageShapeView) return null;
+
+    final commentator = rawCommentator.trim();
+    final layout = pane.pageShapePluginController.layout;
+    if (layout == null) return null;
+    if (!layout.contains(commentator)) {
+      throw Exception(
+        'error.not_found: commentator is not assigned to a page-shape column',
+      );
+    }
+    return pane.pageShapePluginController
+        .setCommentatorVisibility(commentator, visible)
+        ?.toJson();
   }
 
   List<String> _commentatorNames(Object? raw) {
