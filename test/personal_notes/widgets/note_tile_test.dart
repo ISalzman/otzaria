@@ -179,4 +179,43 @@ void main() {
     expect(find.text('עריכת הערה - שורה 7'), findsNothing);
     expect(find.byTooltip('עריכה'), findsOneWidget);
   });
+
+  testWidgets('ביטול מכותרת העורך מוחק טיוטה קיימת', (tester) async {
+    final draftService = PersonalNoteDraftService();
+    final note = buildNote();
+    await draftService.saveDraft(
+      bookId: note.bookId,
+      noteId: note.id,
+      draft: PersonalNoteDraft(
+        content: 'טיוטה לביטול',
+        contentPlain: 'טיוטה לביטול',
+        contentFormat: PersonalNoteContentFormat.plain,
+        updatedAt: DateTime(2026, 1, 5),
+        noteId: note.id,
+      ),
+    );
+
+    await tester.pumpWidget(
+      wrap(
+        NoteTile(
+          note: note,
+          defaultExpanded: false,
+          bookId: note.bookId,
+          linkableNotes: const [],
+          onSave: (_) {},
+          onDelete: () {},
+          onLinkTap: (_) {},
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('ביטול'));
+    await tester.pumpAndSettle();
+
+    expect(
+      await draftService.loadDraft(bookId: note.bookId, noteId: note.id),
+      isNull,
+    );
+  });
 }

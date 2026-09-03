@@ -54,6 +54,7 @@ class _NoteTileState extends State<NoteTile> {
   String? _draftContent;
   PersonalNoteContentFormat? _draftFormat;
   final PersonalNoteDraftService _draftService = PersonalNoteDraftService();
+  final ValueNotifier<int> _cancelRequest = ValueNotifier(0);
 
   @override
   void initState() {
@@ -112,6 +113,10 @@ class _NoteTileState extends State<NoteTile> {
     });
   }
 
+  void _requestInlineEditCancellation() {
+    _cancelRequest.value++;
+  }
+
   void _handleSave(PersonalNoteEditorResult result) {
     widget.onSave(result);
     _cancelInlineEdit();
@@ -163,7 +168,7 @@ class _NoteTileState extends State<NoteTile> {
                 IconButton(
                   tooltip: 'ביטול',
                   icon: const Icon(FluentIcons.dismiss_24_regular),
-                  onPressed: _cancelInlineEdit,
+                  onPressed: _requestInlineEditCancellation,
                   iconSize: 20,
                 ),
               ],
@@ -180,6 +185,7 @@ class _NoteTileState extends State<NoteTile> {
               linkableNotes: widget.linkableNotes,
               onSave: _handleSave,
               onCancel: _cancelInlineEdit,
+              cancelRequest: _cancelRequest,
             ),
           ],
         ),
@@ -265,6 +271,12 @@ class _NoteTileState extends State<NoteTile> {
         ),
       ],
     );
+  }
+
+  @override
+  void dispose() {
+    _cancelRequest.dispose();
+    super.dispose();
   }
 }
 

@@ -153,6 +153,7 @@ CommentaryKeyAction resolveCommentaryKeyAction({
   required bool hasSelectedIndex,
   required String addNoteShortcut,
   String reportErrorShortcut = '',
+  bool isReportBookUserBook = false,
   bool? isControlPressed,
   bool? isShiftPressed,
   bool? isAltPressed,
@@ -181,7 +182,8 @@ CommentaryKeyAction resolveCommentaryKeyAction({
     return CommentaryKeyAction.addNote;
   }
 
-  if (reportErrorShortcut.isNotEmpty &&
+  if (!isReportBookUserBook &&
+      reportErrorShortcut.isNotEmpty &&
       ShortcutHelper.matchesShortcut(
         event,
         reportErrorShortcut,
@@ -984,6 +986,10 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
     final reportErrorShortcut =
         ShortcutValidator.getShortcutValue(ShortcutValidator.reportErrorKey) ??
         '';
+    final state = context.read<TextBookBloc>().state;
+    final isReportBookUserBook =
+        widget.reportBook?.isUserBook ??
+        (state is TextBookLoaded && state.book.isUserBook);
     final action = resolveCommentaryKeyAction(
       event: event,
       isActiveCommentary: _lastActiveCommentary == this,
@@ -992,7 +998,14 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
       hasSelectedIndex: _savedSelectedIndex != null,
       addNoteShortcut: addNoteShortcut,
       reportErrorShortcut: reportErrorShortcut,
+      isReportBookUserBook: isReportBookUserBook,
     );
+
+    if (isReportBookUserBook &&
+        reportErrorShortcut.isNotEmpty &&
+        ShortcutHelper.matchesShortcut(event, reportErrorShortcut)) {
+      return true;
+    }
 
     switch (action) {
       case CommentaryKeyAction.copy:

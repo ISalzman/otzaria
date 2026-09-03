@@ -1154,6 +1154,23 @@ void main() {
       );
     });
 
+    test('דיווח-טעות במפרש של ספר משתמש → none', () {
+      expect(
+        resolveCommentaryKeyAction(
+          event: keyDown(PhysicalKeyboardKey.keyR, LogicalKeyboardKey.keyR),
+          isActiveCommentary: true,
+          hasSelection: true,
+          hasSelectedIndex: true,
+          addNoteShortcut: 'ctrl+n',
+          reportErrorShortcut: 'ctrl+shift+r',
+          isReportBookUserBook: true,
+          isControlPressed: true,
+          isShiftPressed: true,
+        ),
+        CommentaryKeyAction.none,
+      );
+    });
+
     test('דיווח-טעות כשהקיצור לא הוגדר → none', () {
       expect(
         resolveCommentaryKeyAction(
