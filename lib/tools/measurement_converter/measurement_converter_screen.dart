@@ -497,7 +497,8 @@ class _MeasurementConverterScreenState
                   final singleRow = barConstraints.maxWidth >= 560;
                   final isWideBar = barConstraints.maxWidth >= 700;
                   final isCompact = settingsState.compactMenuMode;
-                  final fieldHeight = AppInputTokens.height(isCompact);
+                  final fieldHeight =
+                      isCompact ? AppInputTokens.compactHeight : 40.0;
                   final fieldFontSize = AppInputTokens.fontSize(isCompact);
 
                   // סטטוס הסרגל: רחב=_sidebarVisible, צר=_narrowShowCategories
@@ -729,10 +730,18 @@ class _MeasurementConverterScreenState
                                           isCompact: isCompact,
                                         ).copyWith(
                                           isDense: true,
-                                          contentPadding:
-                                              const EdgeInsets.symmetric(
-                                                horizontal: 12,
-                                              ),
+                                          contentPadding: EdgeInsets.symmetric(
+                                            horizontal: 12,
+                                            vertical:
+                                                (fieldHeight - fieldFontSize) /
+                                                2,
+                                          ),
+                                          suffixIconConstraints: BoxConstraints(
+                                            minWidth: 32,
+                                            minHeight: fieldHeight,
+                                            maxWidth: 32,
+                                            maxHeight: fieldHeight,
+                                          ),
                                           suffixIcon:
                                               _inputController.text.isNotEmpty
                                               ? IconButton(
