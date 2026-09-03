@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:bloc/bloc.dart';
 import 'package:otzaria/core/app_paths.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:otzaria/utils/text/byte_size_text.dart';
 import 'package:otzaria/utils/file/file_picker_dialog_options.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
@@ -695,13 +696,13 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
         // בדיקת מקום פנוי לפני ניסיון ההעתקה
         // (גם "העבר" לא יעזור — הוא מעתיק לפנימי לפני מחיקת החיצוני)
         if (freeSpace > 0 && dbSize > freeSpace) {
-          final needed = (dbSize / 1024 / 1024).toStringAsFixed(1);
-          final free = (freeSpace / 1024 / 1024).toStringAsFixed(1);
+          final needed = formatMegabytesLtr(dbSize);
+          final free = formatMegabytesLtr(freeSpace);
           emit(
             _error(
               errorMessage:
                   'אין מספיק מקום פנוי באחסון הפנימי.\n'
-                  'נדרש: $needed MB, פנוי: $free MB.\n'
+                  'נדרש: $needed, פנוי: $free.\n'
                   'יש לפנות מקום ידנית ולנסות שוב.',
               selectedPath: directoryPath,
             ),
@@ -1339,23 +1340,21 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
         return;
       }
       final cumulative = cumulativeBase + downloadedBytes;
-      final mb = (cumulative / 1024 / 1024).toStringAsFixed(1);
-      final totalMb = (grandTotal / 1024 / 1024).toStringAsFixed(1);
       final eta = estimator.update(
         downloadedBytes: cumulative,
         totalBytes: grandTotal,
         now: DateTime.now(),
       );
       final etaLine = eta != null ? '\n${formatRemainingTimeHebrew(eta)}' : '';
-      final resumeMb = (resumeFromBytes / 1024 / 1024).toStringAsFixed(1);
       final resumeLine = resumeFromBytes > 0
-          ? '\nממשיך הורדה מ-$resumeMb MB'
+          ? '\nממשיך הורדה מ-${formatMegabytesLtr(resumeFromBytes)}'
           : '';
       emit(
         EmptyLibraryDownloading(
           progress: (cumulative / grandTotal).clamp(0.0, 1.0),
           message:
-              '${asset.downloadTitle}$resumeLine\n$mb MB מתוך $totalMb MB$etaLine',
+              '${asset.downloadTitle}$resumeLine\n'
+              '${formatMegabytesProgressHebrew(cumulative, grandTotal)}$etaLine',
         ),
       );
     }
