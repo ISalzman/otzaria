@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/core/windowing/external_tab_drag.dart';
 import 'package:otzaria/core/windowing/multi_window_service.dart';
-import 'package:otzaria/core/windowing/shared_list_store.dart';
+import 'package:otzaria/core/windowing/shared_hive_store.dart';
 import 'package:otzaria/core/windowing/window_bus.dart';
 import 'package:otzaria/core/windowing/window_role.dart';
 import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
@@ -38,7 +38,10 @@ class _WindowBusHostState extends State<WindowBusHost> {
   @override
   void initState() {
     super.initState();
-    final slot = WindowBus.instance.register();
+    // ⚠️ החלון הראשון רושם גם את כינוי הבעלים. בלעדיו איתור מחזיק המאגרים
+    // המשותפים היה סריקת `describe` עם timeout — והבעלים דווקא עסוק בזמן
+    // שנפתח חלון שני, כלומר הסריקה פקעה בדיוק כשהיא נחוצה.
+    final slot = WindowBus.instance.register(asOwner: !WindowRole.isSecondary);
     WindowBus.instance.onRequest = _handleRequest;
     // ה-runner צריך את המיפוי כדי לתרגם "החלון שתחת הסמן" למשבצת בגרירה.
     if (slot != null) {
@@ -112,7 +115,7 @@ class _WindowBusHostState extends State<WindowBusHost> {
         return true;
       default:
         // המאגרים המשותפים מנותבים לחלון הראשון; הבקשות שלהם מטופלות שם.
-        return SharedListStore.instance.handleRequest(request);
+        return SharedHiveStore.instance.handleRequest(request);
     }
   }
 

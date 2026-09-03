@@ -4,6 +4,12 @@ import 'dart:ui';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/core/windowing/window_bus.dart';
 
+/// ⚠️ קידומת ייחודית לסוויטה. [IsolateNameServer] גלובלי לתהליך — בדיוק
+/// הסיבה שהאפיק עובד — ושתי סוויטות שרצות תחת אותו `flutter test` תפסו את
+/// אותן המשבצות והפילו זו את זו. בהרצה קרה 4 מתוך 6 נכשלו, ואז עברו
+/// בהרצה חוזרת; סוויטה שנכשלת פעם בשש בלי סיבה נראית לעין מושתקת.
+const String _namespace = 'otzaria.test.windowbus';
+
 /// חלון מדומה שתופס משבצת ועונה לבקשות.
 ///
 /// [WindowBus] הוא סינגלטון פר-isolate, ולכן בדיקה שצריכה **שני** חלונות
@@ -20,7 +26,7 @@ class _FakePeer {
     _port = ReceivePort();
     final ok = IsolateNameServer.registerPortWithName(
       _port.sendPort,
-      'otzaria.window.$slot',
+      '$_namespace.$slot',
     );
     if (!ok) {
       _port.close();
@@ -40,7 +46,7 @@ class _FakePeer {
   }
 
   void dispose() {
-    IsolateNameServer.removePortNameMapping('otzaria.window.$slot');
+    IsolateNameServer.removePortNameMapping('$_namespace.$slot');
     _port.close();
   }
 }
@@ -56,24 +62,28 @@ class _DeadSlot {
     _port = ReceivePort();
     IsolateNameServer.registerPortWithName(
       _port.sendPort,
-      'otzaria.window.$slot',
+      '$_namespace.$slot',
     );
     // נסגר מיד: השם נשאר רשום, אך אין מי שיענה.
     _port.close();
   }
 
   void dispose() {
-    IsolateNameServer.removePortNameMapping('otzaria.window.$slot');
+    IsolateNameServer.removePortNameMapping('$_namespace.$slot');
   }
 }
 
 void main() {
+  setUp(() => WindowBus.namespace = _namespace);
+
   tearDown(() {
     WindowBus.instance.onRequest = null;
     WindowBus.instance.unregister();
     for (var i = 1; i <= WindowBus.slotCount; i++) {
-      IsolateNameServer.removePortNameMapping('otzaria.window.$i');
+      IsolateNameServer.removePortNameMapping('$_namespace.$i');
     }
+    IsolateNameServer.removePortNameMapping('$_namespace.owner');
+    WindowBus.namespace = 'otzaria.window';
   });
 
   test('register תופס את המשבצת הפנויה הראשונה', () {
@@ -94,7 +104,7 @@ void main() {
     expect(WindowBus.instance.register(), 1);
     // המשבצת השנייה נשארה פנויה.
     expect(
-      IsolateNameServer.lookupPortByName('otzaria.window.2'),
+      IsolateNameServer.lookupPortByName('$_namespace.2'),
       isNull,
     );
   });

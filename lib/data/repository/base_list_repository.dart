@@ -17,8 +17,18 @@ abstract class BaseListRepository<T> {
        );
 
   Future<List<T>> load() async => _repo.load();
-  Future<void> save(List<T> items) async => _repo.save(items);
+
+  /// נתיב הכתיבה. ראו [HiveListRepository.mutate] — [apply] חייב להיות טהור.
+  Future<List<T>> mutate(List<T> Function(List<T> current) apply) async =>
+      _repo.mutate(apply);
+
+  /// דריסה מוחלטת, בלי מיזוג ובלי בדיקת גרסה. שחזור מגיבוי בלבד.
+  Future<void> overwrite(List<T> items) async => _repo.overwrite(items);
+
   Future<void> clear() async => _repo.clear();
   Future<void> addItem(T item) async => _repo.addItem(item);
   Future<void> removeAt(int index) async => _repo.removeAt(index);
+
+  /// אות שהרשימה שונתה בחלון אחר.
+  Stream<void> get remoteChanges => _repo.remoteChanges;
 }

@@ -172,7 +172,7 @@ class DirectErrorReportService {
   Future<void> deleteSentReport(String reportId) async {
     final reports = await _sentRepository.load();
     reports.removeWhere((report) => report.id == reportId);
-    await _sentRepository.save(reports);
+    await _sentRepository.overwrite(reports);
   }
 
   Future<void> clearSentReports() async {
@@ -187,13 +187,13 @@ class DirectErrorReportService {
     }
 
     reports[index] = report;
-    await _queueRepository.save(reports);
+    await _queueRepository.overwrite(reports);
   }
 
   Future<void> deletePendingReport(String reportId) async {
     final reports = await _queueRepository.load();
     reports.removeWhere((report) => report.id == reportId);
-    await _queueRepository.save(reports);
+    await _queueRepository.overwrite(reports);
   }
 
   /// מסמן דיווח מהתור כנשלח ידנית: מעביר אותו להיסטוריית הנשלחים
@@ -358,7 +358,7 @@ class DirectErrorReportService {
         break;
       }
 
-      await _queueRepository.save(remainingReports);
+      await _queueRepository.overwrite(remainingReports);
       return sentCount;
     } finally {
       _isFlushing = false;
@@ -398,7 +398,7 @@ class DirectErrorReportService {
     }
 
     pendingReports.add(report.copyWith(queueType: queueType));
-    await _queueRepository.save(pendingReports);
+    await _queueRepository.overwrite(pendingReports);
   }
 
   Future<void> _saveSentReport(DirectErrorReport report) async {
@@ -408,7 +408,7 @@ class DirectErrorReportService {
     if (sentReports.length > maxSentReportsToKeep) {
       sentReports.removeRange(maxSentReportsToKeep, sentReports.length);
     }
-    await _sentRepository.save(sentReports);
+    await _sentRepository.overwrite(sentReports);
   }
 
   Future<_SendAttemptResult> _trySend(DirectErrorReport report) async {

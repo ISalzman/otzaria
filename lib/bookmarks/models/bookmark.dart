@@ -103,6 +103,15 @@ class Bookmark {
       ? 'search:$ref'
       : '${targetKind.name}:${bookIdentity(book)}:$index:$ref';
 
+  /// מזהה יציב של סימנייה בתוך רשימת הסימניות.
+  ///
+  /// ⚠️ אינדקס ברשימה **אינו** מזהה: חלון אחר יכול להוסיף סימנייה ולהזיז
+  /// את כל מה שאחריה, ואז מחיקה לפי אינדקס מוחקת את הסימנייה הלא נכונה.
+  /// ההרכב כאן הוא בדיוק מה ש-`addBookmark` מונע כפילות עליו — זיהוי הספר,
+  /// המיקום וסוג היעד — ולכן שתי סימניות אינן יכולות לחלוק אותו.
+  String get bookmarkIdentity =>
+      '${bookIdentity(book)}|$index|${targetKind.name}';
+
   Bookmark({
     required this.ref,
     required this.book,

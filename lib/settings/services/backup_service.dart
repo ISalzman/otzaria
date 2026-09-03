@@ -556,7 +556,7 @@ class BackupService {
   /// Backup workspaces
   static Future<Map<String, dynamic>> _backupWorkspaces() async {
     final repo = WorkspaceRepository();
-    final (workspaces, currentWorkspace) = repo.loadWorkspaces();
+    final (workspaces, currentWorkspace) = await repo.loadWorkspaces();
     return {
       'workspaces': workspaces.map((w) => w.toJson()).toList(),
       'currentWorkspace': currentWorkspace,
@@ -993,7 +993,7 @@ class BackupService {
         .map((data) => Bookmark.fromJson(data))
         .toList();
     if (counts == null) {
-      await repo.saveBookmarks(bookmarks);
+      await repo.replaceBookmarks(bookmarks);
       return;
     }
     final result = BackupImportMerge.mergeBookmarks(
@@ -1001,7 +1001,7 @@ class BackupService {
       bookmarks,
     );
     counts.bookmarks += result.added;
-    await repo.saveBookmarks(result.merged);
+    await repo.replaceBookmarks(result.merged);
   }
 
   /// Restore history. [counts] לא ריק = ייבוא ממזג, והרשומות מתווספות.
@@ -1012,7 +1012,7 @@ class BackupService {
     final repo = HistoryRepository();
     final history = historyData.map((data) => Bookmark.fromJson(data)).toList();
     if (counts == null) {
-      await repo.saveHistory(history);
+      await repo.replaceHistory(history);
       return;
     }
     final result = BackupImportMerge.mergeHistory(
@@ -1020,7 +1020,7 @@ class BackupService {
       history,
     );
     counts.history += result.added;
-    await repo.saveHistory(result.merged);
+    await repo.replaceHistory(result.merged);
   }
 
   /// מפתח העיגון שנוכחותו מעידה שהגיבוי יודע לבטא עיגון להערה.
@@ -1301,7 +1301,7 @@ class BackupService {
       workspaces: workspaces,
       currentWorkspace: currentWorkspace,
     );
-    await repo.saveWorkspaces(workspaces, currentId);
+    await repo.replaceWorkspaces(workspaces, currentId);
   }
 
   /// שחזור הטאבים הפתוחים (ראה [_backupOpenTabs]). גיבוי בלעדיהם משאיר את
@@ -1539,7 +1539,7 @@ class BackupService {
     if (_hasSettingsChanges(backupData)) return true;
 
     // Always recommend: workspace added
-    if (_hasWorkspaceAdded(backupData)) return true;
+    if (await _hasWorkspaceAdded(backupData)) return true;
 
     // Always recommend: plugin added
     if (await _hasPluginAdded(backupData)) return true;
@@ -1569,10 +1569,12 @@ class BackupService {
     return false;
   }
 
-  static bool _hasWorkspaceAdded(Map<String, dynamic> backupData) {
+  static Future<bool> _hasWorkspaceAdded(
+    Map<String, dynamic> backupData,
+  ) async {
     final backedUpWorkspaces = backupData['workspaces'] as List?;
     if (backedUpWorkspaces == null) return false;
-    final (workspaces, _) = WorkspaceRepository().loadWorkspaces();
+    final (workspaces, _) = await WorkspaceRepository().loadWorkspaces();
     return workspaces.length > backedUpWorkspaces.length;
   }
 

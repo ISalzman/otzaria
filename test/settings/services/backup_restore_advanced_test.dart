@@ -273,11 +273,11 @@ void main() {
     });
 
     test('סימניות והיסטוריה: שתי הרשימות משוחזרות במלואן', () async {
-      await BookmarkRepository().saveBookmarks([
+      await BookmarkRepository().replaceBookmarks([
         buildBookmark('בראשית'),
         buildBookmark('שמות', index: 4),
       ]);
-      await HistoryRepository().saveHistory([buildBookmark('ויקרא', index: 7)]);
+      await HistoryRepository().replaceHistory([buildBookmark('ויקרא', index: 7)]);
 
       final backup = await createBackup(bookmarks: true, history: true);
 
@@ -296,20 +296,20 @@ void main() {
 
     test('שולחנות עבודה: שולחן נוסף שנוצר לאחר הגיבוי נמחק בשחזור', () async {
       final repo = WorkspaceRepository();
-      await repo.saveWorkspaces([
+      await repo.replaceWorkspaces([
         Workspace(id: 'ws-1', name: 'ראשון', tabs: []),
       ], 'ws-1');
 
       final backup = await createBackup(workspaces: true);
 
-      await repo.saveWorkspaces([
+      await repo.replaceWorkspaces([
         Workspace(id: 'ws-1', name: 'ראשון', tabs: []),
         Workspace(id: 'ws-2', name: 'שני', tabs: []),
       ], 'ws-2');
 
       await BackupService.restoreFromBackup(backup.path);
 
-      final (workspaces, current) = repo.loadWorkspaces();
+      final (workspaces, current) = await repo.loadWorkspaces();
       expect(workspaces.map((w) => w.id), ['ws-1']);
       expect(current, 'ws-1');
     });
@@ -394,7 +394,7 @@ void main() {
 
   group('בחירת מקטעים', () {
     test('מקטע שלא נבחר אינו נכתב לקובץ ואינו מסומן ב-includes', () async {
-      await BookmarkRepository().saveBookmarks([buildBookmark('בראשית')]);
+      await BookmarkRepository().replaceBookmarks([buildBookmark('בראשית')]);
       final backup = await createBackup(bookmarks: false, history: true);
       final manifest = await readManifest(backup.path);
 
@@ -404,7 +404,7 @@ void main() {
     });
 
     test('includes=false חוסם שחזור גם כשהנתונים קיימים בקובץ', () async {
-      await BookmarkRepository().saveBookmarks([buildBookmark('בראשית')]);
+      await BookmarkRepository().replaceBookmarks([buildBookmark('בראשית')]);
       final backup = await createBackup(bookmarks: true);
 
       final manifest = await readManifest(backup.path);

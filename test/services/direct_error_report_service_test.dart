@@ -184,7 +184,7 @@ void main() {
       final repository = InMemoryDirectErrorReportRepository();
       final sentRepository = InMemoryDirectErrorReportRepository();
 
-      await repository.save([
+      await repository.overwrite([
         _buildReport(
           id: 'manual-report',
           queueType: DirectErrorReportQueueType.manual,
@@ -226,7 +226,7 @@ void main() {
         final repository = InMemoryDirectErrorReportRepository();
         final sentRepository = InMemoryDirectErrorReportRepository();
 
-        await repository.save([
+        await repository.overwrite([
           _buildReport(
             id: 'invalid-report',
             queueType: DirectErrorReportQueueType.automaticRetry,
@@ -278,7 +278,7 @@ void main() {
     test('ממתינה לשליחה שבאמצע, כדי שכתיבה חיצונית לא תדרוס אותה', () async {
       final repository = InMemoryDirectErrorReportRepository();
       final sentRepository = InMemoryDirectErrorReportRepository();
-      await repository.save([
+      await repository.overwrite([
         _buildReport(
           id: 'r-1',
           queueType: DirectErrorReportQueueType.automaticRetry,
@@ -399,7 +399,7 @@ void main() {
       final repository = InMemoryDirectErrorReportRepository();
       final sentRepository = InMemoryDirectErrorReportRepository();
       final report = _buildReport(id: 'pending-report');
-      await repository.save([report]);
+      await repository.overwrite([report]);
       final service = DirectErrorReportService(
         client: MockClient((request) async => http.Response('', 200)),
         queueRepository: repository,
@@ -416,7 +416,7 @@ void main() {
     test('updatePendingReport edits a saved queued report', () async {
       final repository = InMemoryDirectErrorReportRepository();
       final report = _buildReport(id: 'editable-report');
-      await repository.save([report]);
+      await repository.overwrite([report]);
       final service = DirectErrorReportService(
         queueRepository: repository,
       );
@@ -435,7 +435,7 @@ void main() {
         final repository = InMemoryDirectErrorReportRepository();
         final sentRepository = InMemoryDirectErrorReportRepository();
         final report = _buildReport(id: 'manual-sent-report');
-        await repository.save([
+        await repository.overwrite([
           report,
           _buildReport(id: 'other-report'),
         ]);
@@ -456,7 +456,7 @@ void main() {
 
     test('deleteSentReport removes a report from sent history', () async {
       final sentRepository = InMemoryDirectErrorReportRepository();
-      await sentRepository.save([
+      await sentRepository.overwrite([
         _buildReport(id: 'sent-a'),
         _buildReport(id: 'sent-b'),
       ]);
@@ -474,7 +474,7 @@ void main() {
 
     test('clearSentReports clears sent history', () async {
       final sentRepository = InMemoryDirectErrorReportRepository();
-      await sentRepository.save([
+      await sentRepository.overwrite([
         _buildReport(id: 'sent-a'),
         _buildReport(id: 'sent-b'),
       ]);
@@ -601,7 +601,7 @@ class InMemoryDirectErrorReportRepository
   }
 
   @override
-  Future<void> save(List<DirectErrorReport> items) async {
+  Future<void> overwrite(List<DirectErrorReport> items) async {
     _items = List<DirectErrorReport>.from(items);
   }
 

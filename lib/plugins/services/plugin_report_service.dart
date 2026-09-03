@@ -202,7 +202,7 @@ class PluginReportService {
   Future<void> deletePendingReport(String reportId) async {
     final records = await _queueRepository.load();
     records.removeWhere((record) => record.reportId == reportId);
-    await _queueRepository.save(records);
+    await _queueRepository.overwrite(records);
   }
 
   Future<void> clearPendingReports() async {
@@ -212,7 +212,7 @@ class PluginReportService {
   Future<void> deleteSentReport(String reportId) async {
     final records = await _sentRepository.load();
     records.removeWhere((record) => record.reportId == reportId);
-    await _sentRepository.save(records);
+    await _sentRepository.overwrite(records);
   }
 
   Future<void> clearSentReports() async {
@@ -266,7 +266,7 @@ class PluginReportService {
         break;
       }
 
-      await _queueRepository.save(remainingRecords);
+      await _queueRepository.overwrite(remainingRecords);
       return sentCount;
     } finally {
       _isFlushing = false;
@@ -311,7 +311,7 @@ class PluginReportService {
     }
 
     pendingRecords.add(record);
-    await _queueRepository.save(pendingRecords);
+    await _queueRepository.overwrite(pendingRecords);
   }
 
   Future<void> _saveSentReport(PluginReportRecord record) async {
@@ -321,7 +321,7 @@ class PluginReportService {
     if (sentRecords.length > maxSentReportsToKeep) {
       sentRecords.removeRange(maxSentReportsToKeep, sentRecords.length);
     }
-    await _sentRepository.save(sentRecords);
+    await _sentRepository.overwrite(sentRecords);
   }
 
   Future<_SendAttemptResult> _trySend(PluginReportRecord record) async {

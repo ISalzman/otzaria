@@ -1,66 +1,53 @@
 import 'dart:async';
 import 'dart:developer' as developer;
 import 'package:hive_ce/hive.dart';
+import 'package:otzaria/data/repository/hive_list_repository.dart';
 import 'package:otzaria/utils/file/hive_utils.dart';
 import 'package:otzaria/workspaces/workspace.dart';
 
 /// Repository for persisting and loading workspaces.
 ///
-/// Uses Hive for local storage. Now stores active workspace by ID
-/// instead of index for safer identification.
+/// ## מה משותף בין החלונות ומה לא
+///
+/// **רשימת השולחנות משותפת** — שולחן שנשמר בחלון אחד צריך להיות פתיח מכל
+/// חלון, ולכן היא עוברת דרך [HiveListRepository] אל הבעלים.
+///
+/// **השולחן הפעיל הוא מצב פר-חלון**, ונשמר מקומית. "על איזה שולחן אני עובד
+/// עכשיו" הוא בדיוק כמו "אילו כרטיסיות פתוחות לי": ניתוב שלו לבעלים היה
+/// גורם למעבר שולחן בחלון אחד להחליף את התוכן של השני.
 class WorkspaceRepository {
-  static const String _boxName = 'workspaces';
-  static const String _workspacesKey = 'key-workspaces';
+  static const String boxName = 'workspaces';
+  static const String workspacesKey = 'key-workspaces';
   static const String _currentWorkspaceIdKey = 'key-current-workspace-id';
   // Legacy key - kept for migration
   static const String _legacyCurrentWorkspaceKey = 'key-current-workspace';
 
-  Box _getBox() {
-    return Hive.box(_boxName);
-  }
+  final HiveListRepository<Workspace> _list = HiveListRepository<Workspace>(
+    boxName: boxName,
+    key: workspacesKey,
+    fromJson: Workspace.fromJson,
+    toJson: (workspace) => workspace.toJson(),
+  );
+
+  /// אות שרשימת השולחנות שונתה בחלון אחר.
+  Stream<void> get remoteChanges => _list.remoteChanges;
+
+  Box _getBox() => Hive.box(boxName);
 
   /// Loads all workspaces and returns tuple of (workspaces, activeWorkspaceId).
   ///
   /// Handles migration from old index-based storage to new ID-based storage.
-  (List<Workspace>, String?) loadWorkspaces() {
+  Future<(List<Workspace>, String?)> loadWorkspaces() async {
     try {
-      final box = _getBox();
-      final rawWorkspaces = box.get(_workspacesKey, defaultValue: []) as List;
-
-      // Decode each workspace independently so one bad entry doesn't lose all.
-      // Keep the full decoded list (with nulls) so legacy-index migration can
-      // map directly into the original positions — not into the filtered list.
-      final decoded = rawWorkspaces.map((e) {
-        try {
-          return Workspace.fromJson(castMap(e));
-        } catch (wsErr, wsSt) {
-          developer.log(
-            'Skipping corrupted workspace entry',
-            error: wsErr,
-            stackTrace: wsSt,
-            name: 'WorkspaceRepository',
-          );
-          return null;
-        }
-      }).toList();
-
-      final workspaces = decoded.whereType<Workspace>().toList();
+      // רשומה פגומה מדולגת ואינה מוחקת את השאר — [HiveListRepository.load].
+      final workspaces = await _list.load();
 
       // Try new ID-based key first
-      String? currentId = box.get(_currentWorkspaceIdKey) as String?;
+      String? currentId = _readLocal(_currentWorkspaceIdKey) as String?;
 
       // If no ID stored, try to migrate from old index-based storage.
-      // Use `decoded` (original positions) so corrupted entries before the
-      // active workspace don't shift the index.
       if (currentId == null && workspaces.isNotEmpty) {
-        final legacyIndex =
-            box.get(_legacyCurrentWorkspaceKey, defaultValue: 0) as int;
-        final workspaceAtLegacy =
-            (legacyIndex >= 0 && legacyIndex < decoded.length)
-            ? decoded[legacyIndex]
-            : null;
-        currentId = (workspaceAtLegacy ?? workspaces.first).id;
-        unawaited(box.put(_currentWorkspaceIdKey, currentId));
+        currentId = _migrateLegacyActiveIndex(workspaces);
       }
 
       // Validate that the ID exists in the list
@@ -81,27 +68,71 @@ class WorkspaceRepository {
     }
   }
 
-  /// Saves workspaces and the active workspace ID.
-  Future<void> saveWorkspaces(
-    List<Workspace> workspaces,
-    String? currentWorkspaceId,
-  ) async {
-    try {
-      final box = _getBox();
-      await box.put(
-        _workspacesKey,
-        workspaces.map((workspace) => workspace.toJson()).toList(),
-      );
-      if (currentWorkspaceId != null) {
-        await box.put(_currentWorkspaceIdKey, currentWorkspaceId);
+  /// מיגרציה מהמפתח הישן, שהחזיק **אינדקס** ולא מזהה.
+  ///
+  /// ⚠️ קוראת את הרשימה הגולמית מה-box המקומי ולא את הרשימה המפוענחת:
+  /// האינדקס הישן מתייחס למקומות המקוריים, ורשומה פגומה שקדמה לשולחן
+  /// הפעיל הייתה מזיזה אותו.
+  String? _migrateLegacyActiveIndex(List<Workspace> workspaces) {
+    final legacyIndex = _readLocal(_legacyCurrentWorkspaceKey) as int?;
+    Workspace? atLegacy;
+    if (legacyIndex != null) {
+      final raw = _readLocal(workspacesKey);
+      if (raw is List && legacyIndex >= 0 && legacyIndex < raw.length) {
+        try {
+          atLegacy = Workspace.fromJson(castMap(raw[legacyIndex]));
+        } catch (_) {
+          // רשומה פגומה במקום הישן — נופלים לראשון.
+        }
       }
+    }
+    final resolved = (atLegacy ?? workspaces.first).id;
+    unawaited(saveActiveWorkspaceId(resolved));
+    return resolved;
+  }
+
+  Object? _readLocal(String key) {
+    try {
+      return _getBox().get(key);
+    } catch (e) {
+      developer.log(
+        'Error reading $key',
+        error: e,
+        name: 'WorkspaceRepository',
+      );
+      return null;
+    }
+  }
+
+  /// מחיל [apply] על רשימת השולחנות **הטרייה** ושומר. מחזיר את מה שנשמר.
+  ///
+  /// ⚠️ [apply] חייב להיות טהור — הוא עשוי לרוץ שוב אם חלון אחר כתב
+  /// בינתיים. חישוב מ-`state` בתוכו מחזיר בדיוק את הבאג שהוא בא למנוע.
+  Future<List<Workspace>> mutateWorkspaces(
+    List<Workspace> Function(List<Workspace> current) apply,
+  ) => _list.mutate(apply);
+
+  /// שומר את מזהה השולחן הפעיל **של החלון הזה**. מקומי, לא מנותב.
+  Future<void> saveActiveWorkspaceId(String? id) async {
+    if (id == null) return;
+    try {
+      await _getBox().put(_currentWorkspaceIdKey, id);
     } catch (e, stackTrace) {
       developer.log(
-        'Error saving workspaces to disk',
+        'Error saving active workspace id',
         error: e,
         stackTrace: stackTrace,
         name: 'WorkspaceRepository',
       );
     }
+  }
+
+  /// דריסה מוחלטת של רשימת השולחנות. שחזור מגיבוי בלבד.
+  Future<void> replaceWorkspaces(
+    List<Workspace> workspaces,
+    String? currentWorkspaceId,
+  ) async {
+    await _list.overwrite(workspaces);
+    await saveActiveWorkspaceId(currentWorkspaceId);
   }
 }

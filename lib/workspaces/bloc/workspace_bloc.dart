@@ -61,7 +61,7 @@ class WorkspaceBloc extends Bloc<WorkspaceEvent, WorkspaceState> {
   ) async {
     emit(state.copyWith(isLoading: true));
     try {
-      final (workspaces, activeId) = _repository.loadWorkspaces();
+      final (workspaces, activeId) = await _repository.loadWorkspaces();
 
       List<Workspace> finalWorkspaces = List.from(workspaces);
       String? finalActiveId = activeId;
@@ -73,9 +73,13 @@ class WorkspaceBloc extends Bloc<WorkspaceEvent, WorkspaceState> {
           tabs: [],
           activeTabIndex: 0,
         );
-        finalWorkspaces.add(defaultWorkspace);
-        finalActiveId = defaultWorkspace.id;
-        await _repository.saveWorkspaces(finalWorkspaces, finalActiveId);
+        // ⚠️ נוצר רק אם הרשימה עדיין ריקה אצל הבעלים. בלי התנאי, חלון
+        // שני שנפתח בזמן שהראשון עוד טוען היה מוסיף "שולחן עבודה 1" שני.
+        finalWorkspaces = await _repository.mutateWorkspaces(
+          (current) => current.isEmpty ? [defaultWorkspace] : current,
+        );
+        finalActiveId = finalWorkspaces.first.id;
+        await _repository.saveActiveWorkspaceId(finalActiveId);
       }
 
       // Ensure the active ID exists in the list
@@ -113,14 +117,11 @@ class WorkspaceBloc extends Bloc<WorkspaceEvent, WorkspaceState> {
         activePane: event.activePane,
       );
 
-      final updatedWorkspaces = [...state.workspaces, newWorkspace];
-
-      await _repository.saveWorkspaces(
-        updatedWorkspaces,
-        state.activeWorkspaceId,
+      final saved = await _repository.mutateWorkspaces(
+        (current) => [...current, newWorkspace],
       );
 
-      emit(state.copyWith(workspaces: updatedWorkspaces));
+      emit(state.copyWith(workspaces: saved));
     } catch (e) {
       emit(state.copyWith(error: 'Failed to add workspace: $e'));
     }
@@ -137,16 +138,11 @@ class WorkspaceBloc extends Bloc<WorkspaceEvent, WorkspaceState> {
         return;
       }
 
-      final updatedWorkspaces = state.workspaces
-          .where((w) => w.id != event.workspaceId)
-          .toList();
-
-      await _repository.saveWorkspaces(
-        updatedWorkspaces,
-        state.activeWorkspaceId,
+      final saved = await _repository.mutateWorkspaces(
+        (current) => current.where((w) => w.id != event.workspaceId).toList(),
       );
 
-      emit(state.copyWith(workspaces: updatedWorkspaces));
+      emit(state.copyWith(workspaces: saved));
     } catch (e) {
       emit(state.copyWith(error: 'Failed to remove workspace: $e'));
     }
@@ -159,7 +155,7 @@ class WorkspaceBloc extends Bloc<WorkspaceEvent, WorkspaceState> {
     try {
       // 1. Save current tabs to the currently active workspace
       final currentId = state.activeWorkspaceId;
-      List<Workspace> updatedWorkspaces = state.workspaces.map((w) {
+      List<Workspace> stash(List<Workspace> current) => current.map((w) {
         if (w.id == currentId) {
           return w.withTabs(
             tabs: _cloneTabs(event.currentTabsToSave),
@@ -169,6 +165,8 @@ class WorkspaceBloc extends Bloc<WorkspaceEvent, WorkspaceState> {
         }
         return w;
       }).toList();
+
+      final updatedWorkspaces = stash(state.workspaces);
 
       // 2. Get the target workspace
       final targetWorkspace = updatedWorkspaces.firstWhere(
@@ -204,10 +202,11 @@ class WorkspaceBloc extends Bloc<WorkspaceEvent, WorkspaceState> {
       );
 
       // 5. Save to repository
-      await _repository.saveWorkspaces(
-        updatedWorkspaces,
-        event.targetWorkspaceId,
-      );
+      final saved = await _repository.mutateWorkspaces(stash);
+      await _repository.saveActiveWorkspaceId(event.targetWorkspaceId);
+      // התצוגה מיושרת לרשימה המוסמכת, אבל השולחן הפעיל נשאר זה שנבחר כאן —
+      // הוא מצב של החלון הזה.
+      emit(state.copyWith(workspaces: saved));
     } catch (e) {
       emit(state.copyWith(error: 'Failed to switch workspace: $e'));
     }
@@ -218,19 +217,17 @@ class WorkspaceBloc extends Bloc<WorkspaceEvent, WorkspaceState> {
     Emitter<WorkspaceState> emit,
   ) async {
     try {
-      final updatedWorkspaces = state.workspaces.map((w) {
-        if (w.id == event.workspaceId) {
-          return w.copyWith(name: event.newName);
-        }
-        return w;
-      }).toList();
-
-      await _repository.saveWorkspaces(
-        updatedWorkspaces,
-        state.activeWorkspaceId,
+      final saved = await _repository.mutateWorkspaces(
+        (current) => current
+            .map(
+              (w) => w.id == event.workspaceId
+                  ? w.copyWith(name: event.newName)
+                  : w,
+            )
+            .toList(),
       );
 
-      emit(state.copyWith(workspaces: updatedWorkspaces));
+      emit(state.copyWith(workspaces: saved));
     } catch (e) {
       emit(state.copyWith(error: 'Failed to rename workspace: $e'));
     }
@@ -248,11 +245,15 @@ class WorkspaceBloc extends Bloc<WorkspaceEvent, WorkspaceState> {
         activePane: event.activePane,
       );
 
-      await _repository.saveWorkspaces([defaultWorkspace], defaultWorkspace.id);
+      // "מחק את כל השולחנות" פירושו הכול, גם מה שחלון אחר הוסיף.
+      final saved = await _repository.mutateWorkspaces(
+        (_) => [defaultWorkspace],
+      );
+      await _repository.saveActiveWorkspaceId(defaultWorkspace.id);
 
       emit(
         state.copyWith(
-          workspaces: [defaultWorkspace],
+          workspaces: saved,
           activeWorkspaceId: defaultWorkspace.id,
         ),
       );
@@ -269,19 +270,19 @@ class WorkspaceBloc extends Bloc<WorkspaceEvent, WorkspaceState> {
       final currentId = state.activeWorkspaceId;
       if (currentId == null) return;
 
-      final updatedWorkspaces = state.workspaces.map((w) {
-        if (w.id == currentId) {
-          return w.withTabs(
-            tabs: _cloneTabs(event.tabs),
-            activeTabIndex: event.activeTabIndex,
-            activePane: event.activePane,
-          );
-        }
-        return w;
-      }).toList();
-
-      await _repository.saveWorkspaces(updatedWorkspaces, currentId);
-      emit(state.copyWith(workspaces: updatedWorkspaces));
+      final saved = await _repository.mutateWorkspaces(
+        (current) => current.map((w) {
+          if (w.id == currentId) {
+            return w.withTabs(
+              tabs: _cloneTabs(event.tabs),
+              activeTabIndex: event.activeTabIndex,
+              activePane: event.activePane,
+            );
+          }
+          return w;
+        }).toList(),
+      );
+      emit(state.copyWith(workspaces: saved));
     } catch (e) {
       emit(state.copyWith(error: 'Failed to update workspace tabs: $e'));
     }
@@ -298,25 +299,25 @@ class WorkspaceBloc extends Bloc<WorkspaceEvent, WorkspaceState> {
       // מעדכן את שני שולחנות העבודה:
       // 1. מסיר את הטאב משולחן העבודה הנוכחי
       // 2. מוסיף את הטאב לשולחן העבודה היעד
-      final updatedWorkspaces = state.workspaces.map((w) {
-        if (w.id == currentId) {
-          // מסיר את הטאב משולחן העבודה הנוכחי
-          return w.withTabs(
-            tabs: _cloneTabs(event.currentTabs),
-            activeTabIndex: event.currentTabIndex,
-            activePane: event.currentActivePane,
-          );
-        } else if (w.id == event.targetWorkspaceId) {
-          // מוסיף את הטאב לשולחן העבודה היעד
-          return w.copyWith(
-            tabs: [..._cloneTabs(w.tabs), OpenedTab.from(event.tab)],
-          );
-        }
-        return w;
-      }).toList();
-
-      await _repository.saveWorkspaces(updatedWorkspaces, currentId);
-      emit(state.copyWith(workspaces: updatedWorkspaces));
+      final saved = await _repository.mutateWorkspaces(
+        (current) => current.map((w) {
+          if (w.id == currentId) {
+            // מסיר את הטאב משולחן העבודה הנוכחי
+            return w.withTabs(
+              tabs: _cloneTabs(event.currentTabs),
+              activeTabIndex: event.currentTabIndex,
+              activePane: event.currentActivePane,
+            );
+          } else if (w.id == event.targetWorkspaceId) {
+            // מוסיף את הטאב לשולחן העבודה היעד
+            return w.copyWith(
+              tabs: [..._cloneTabs(w.tabs), OpenedTab.from(event.tab)],
+            );
+          }
+          return w;
+        }).toList(),
+      );
+      emit(state.copyWith(workspaces: saved));
     } catch (e) {
       emit(state.copyWith(error: 'Failed to move tab to workspace: $e'));
     }

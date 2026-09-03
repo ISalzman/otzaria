@@ -18,7 +18,9 @@ class _FakeGroupsRepository implements BookmarkRepository {
   Future<List<Bookmark>> loadBookmarks() async => [];
 
   @override
-  Future<void> saveBookmarks(List<Bookmark> bookmarks) async {}
+  Future<List<Bookmark>> mutateBookmarks(
+    List<Bookmark> Function(List<Bookmark> current) apply,
+  ) async => apply(const []);
 
   @override
   Future<void> clearBookmarks() async {}
@@ -27,10 +29,19 @@ class _FakeGroupsRepository implements BookmarkRepository {
   Future<List<BookmarkGroup>> loadGroups() async => List.from(groups);
 
   @override
-  Future<void> saveGroups(List<BookmarkGroup> newGroups) async {
-    groups = List.from(newGroups);
+  Future<List<BookmarkGroup>> mutateGroups(
+    List<BookmarkGroup> Function(List<BookmarkGroup> current) apply,
+  ) async {
+    groups = List.from(apply(List.from(groups)));
     saveGroupsCallCount++;
+    return List.from(groups);
   }
+
+  @override
+  Stream<void> get remoteChanges => const Stream<void>.empty();
+
+  @override
+  Stream<void> get groupsRemoteChanges => const Stream<void>.empty();
 
   @override
   dynamic noSuchMethod(Invocation i) => super.noSuchMethod(i);

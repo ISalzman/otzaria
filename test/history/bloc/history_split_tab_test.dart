@@ -23,8 +23,11 @@ class _MemoryHistoryRepository extends HistoryRepository {
   Future<List<Bookmark>> load() async => stored;
 
   @override
-  Future<void> save(List<Bookmark> items) async {
-    stored = List<Bookmark>.from(items);
+  Future<List<Bookmark>> mutate(
+    List<Bookmark> Function(List<Bookmark> current) apply,
+  ) async {
+    stored = List<Bookmark>.from(apply(List<Bookmark>.from(stored)));
+    return List<Bookmark>.from(stored);
   }
 }
 

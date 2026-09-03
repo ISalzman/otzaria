@@ -10,41 +10,93 @@ import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/core/messages/notes_messages.dart';
 import 'package:otzaria/models/books.dart';
 
+/// ⚠️ כל שינוי עובר דרך `mutate*` ולא דרך "חשב מה-state וכתוב הכול".
+///
+/// הסימניות משותפות לכל חלונות אוצריא, וה-state כאן הוא עותק בזיכרון של
+/// חלון אחד. כתיבה של הרשימה השלמה מתוכו מוחקת כל סימנייה שחלון אחר הוסיף
+/// מאז הטעינה — לא במרוץ, אלא בכל פעם. `mutate` מחיל את השינוי על הרשימה
+/// הטרייה אצל הבעלים ומחזיר את התוצאה המוסמכת.
 class BookmarkBloc extends Cubit<BookmarkState> {
   final BookmarkRepository _repository;
+  StreamSubscription<void>? _bookmarksChanged;
+  StreamSubscription<void>? _groupsChanged;
 
   BookmarkBloc(this._repository) : super(BookmarkState.initial()) {
     _loadBookmarks();
+    // חלון אחר כתב — העותק שבזיכרון התיישן.
+    _bookmarksChanged = _repository.remoteChanges.listen(
+      (_) => unawaited(_reloadBookmarks()),
+    );
+    _groupsChanged = _repository.groupsRemoteChanges.listen(
+      (_) => unawaited(_reloadGroups()),
+    );
+  }
+
+  @override
+  Future<void> close() {
+    _bookmarksChanged?.cancel();
+    _groupsChanged?.cancel();
+    return super.close();
   }
 
   Future<void> _loadBookmarks() async {
+    await _reloadBookmarks();
+    await _reloadGroups();
+  }
+
+  Future<void> _reloadBookmarks() async {
     try {
       final bookmarks = await _repository.loadBookmarks();
-      if (!isClosed) {
-        emit(state.copyWith(bookmarks: bookmarks));
-      }
+      if (!isClosed) emit(state.copyWith(bookmarks: bookmarks));
     } catch (e, stackTrace) {
       debugPrint('שגיאה בטעינת סימניות: $e\n$stackTrace');
     }
+  }
+
+  Future<void> _reloadGroups() async {
     try {
       final groups = await _repository.loadGroups();
-      if (!isClosed) {
-        emit(state.copyWith(groups: groups));
-      }
+      if (!isClosed) emit(state.copyWith(groups: groups));
     } catch (e, stackTrace) {
       debugPrint('שגיאה בטעינת סימניות מרוכזות: $e\n$stackTrace');
     }
   }
 
-  /// שומר ומדווח שגיאה למשתמש. מחזיר האם השמירה לדיסק הצליחה, כדי שקורא
-  /// שצריך תשובה אמיתית (הגשר לתוספים) יוכל להמתין; מסלול ה-UI לא ממתין.
-  Future<bool> _persistBookmarks(List<Bookmark> bookmarks) async {
+  /// מציג מיד את [optimistic], מחיל את [apply] על הרשימה הטרייה, ומיישר
+  /// את התצוגה לתוצאה המוסמכת.
+  ///
+  /// בכשל התצוגה **חוזרת למה שבאמת שמור**: סימנייה שנראית קיימת ואיננה היא
+  /// בדיוק התלונה "הוספתי סימנייה ולמחרת היא נעלמה".
+  Future<bool> _applyBookmarks(
+    List<Bookmark> Function(List<Bookmark> current) apply, {
+    required List<Bookmark> optimistic,
+  }) async {
+    emit(state.copyWith(bookmarks: optimistic));
     try {
-      await _repository.saveBookmarks(bookmarks);
+      final saved = await _repository.mutateBookmarks(apply);
+      if (!isClosed) emit(state.copyWith(bookmarks: saved));
       return true;
     } catch (e) {
       debugPrint('שגיאה בשמירת סימניות: $e');
       UiSnack.showError(NotesMessages.bookmarkSaveError);
+      await _reloadBookmarks();
+      return false;
+    }
+  }
+
+  Future<bool> _applyGroups(
+    List<BookmarkGroup> Function(List<BookmarkGroup> current) apply, {
+    required List<BookmarkGroup> optimistic,
+  }) async {
+    emit(state.copyWith(groups: optimistic));
+    try {
+      final saved = await _repository.mutateGroups(apply);
+      if (!isClosed) emit(state.copyWith(groups: saved));
+      return true;
+    } catch (e) {
+      debugPrint('שגיאה בשמירת סימניות מרוכזות: $e');
+      UiSnack.showError(NotesMessages.bookmarkSaveError);
+      await _reloadGroups();
       return false;
     }
   }
@@ -115,20 +167,21 @@ class BookmarkBloc extends Cubit<BookmarkState> {
     // פרק יקבלו ref זהה (כותרת הפרק), וב-TextBook מספר מיקומים באותו סעיף.
     // משתמשים בזהות חזקה לספר (id/path/category) ולא בכותרת בלבד, כדי
     // ששתי מהדורות שונות עם אותה כותרת לא ייחשבו לאותו ספר.
-    final newIdentity = bookIdentity(bookmark.book);
-    if (state.bookmarks.any(
-      (b) =>
-          b.index == bookmark.index &&
-          bookIdentity(b.book) == newIdentity &&
-          b.targetKind == bookmark.targetKind,
-    )) {
+    //
+    // ⚠️ נבדק פעמיים: כאן מול ה-state כדי להחזיר תשובה סינכרונית לקורא,
+    // ושוב בתוך `apply` מול הרשימה הטרייה — כי חלון אחר יכול היה להוסיף
+    // בדיוק את אותה סימנייה מאז שנטענה.
+    final identity = bookmark.bookmarkIdentity;
+    if (state.bookmarks.any((b) => b.bookmarkIdentity == identity)) {
       return null;
     }
 
-    final newBookmarks = [...state.bookmarks, bookmark];
-    final save = _persistBookmarks(newBookmarks);
-    emit(state.copyWith(bookmarks: newBookmarks));
-    return save;
+    return _applyBookmarks(
+      (current) => current.any((b) => b.bookmarkIdentity == identity)
+          ? current
+          : [...current, bookmark],
+      optimistic: [...state.bookmarks, bookmark],
+    );
   }
 
   /// מעדכן את טקסט התיאור המוצג של סימניה. [label] ריק מאפס לברירת המחדל
@@ -137,13 +190,19 @@ class BookmarkBloc extends Cubit<BookmarkState> {
     if (index < 0 || index >= state.bookmarks.length) return;
     final trimmed = label?.trim();
     final hasLabel = trimmed != null && trimmed.isNotEmpty;
-    final updated = [...state.bookmarks];
-    updated[index] = updated[index].copyWith(
-      label: hasLabel ? trimmed : null,
-      clearLabel: !hasLabel,
+    final identity = state.bookmarks[index].bookmarkIdentity;
+
+    List<Bookmark> relabel(List<Bookmark> current) => [
+      for (final b in current)
+        if (b.bookmarkIdentity == identity)
+          b.copyWith(label: hasLabel ? trimmed : null, clearLabel: !hasLabel)
+        else
+          b,
+    ];
+
+    unawaited(
+      _applyBookmarks(relabel, optimistic: relabel(state.bookmarks)),
     );
-    unawaited(_persistBookmarks(updated));
-    emit(state.copyWith(bookmarks: updated));
   }
 
   /// מחזיר false אם [index] מחוץ לתחום ולכן לא נמחקה סימניה.
@@ -163,13 +222,19 @@ class BookmarkBloc extends Cubit<BookmarkState> {
 
   Future<bool>? _removeBookmark(int index) {
     if (index < 0 || index >= state.bookmarks.length) return null;
-    final newBookmarks = [...state.bookmarks]..removeAt(index);
-    final save = _persistBookmarks(newBookmarks);
-    emit(state.copyWith(bookmarks: newBookmarks));
-    return save;
+    // ⚠️ האינדקס מתורגם לזהות **כאן**, מול ה-state שממנו ה-UI חישב אותו.
+    // מחיקה לפי אינדקס אצל הבעלים הייתה מוחקת סימנייה אחרת אם חלון אחר
+    // הוסיף בינתיים.
+    final identity = state.bookmarks[index].bookmarkIdentity;
+    return _applyBookmarks(
+      (current) =>
+          current.where((b) => b.bookmarkIdentity != identity).toList(),
+      optimistic: [...state.bookmarks]..removeAt(index),
+    );
   }
 
   void clearBookmarks() {
+    // דריסה מכוונת: "מחק את כל הסימניות" פירושו הכול.
     _repository.clearBookmarks().catchError((Object e) {
       debugPrint('שגיאה במחיקת סימניות: $e');
       UiSnack.showError(NotesMessages.bookmarkClearError);
@@ -196,53 +261,56 @@ class BookmarkBloc extends Cubit<BookmarkState> {
     return best;
   }
 
-  void _persistGroups(List<BookmarkGroup> groups) {
-    unawaited(
-      _repository.saveGroups(groups).catchError((Object e) {
-        debugPrint('שגיאה בשמירת סימניות מרוכזות: $e');
-        UiSnack.showError(NotesMessages.bookmarkSaveError);
-      }),
-    );
-  }
-
   void addGroup(BookmarkGroup group) {
-    final newGroups = [...state.groups, group];
-    _persistGroups(newGroups);
-    emit(state.copyWith(groups: newGroups));
+    unawaited(
+      _applyGroups(
+        (current) => current.any((g) => g.id == group.id)
+            ? current
+            : [...current, group],
+        optimistic: [...state.groups, group],
+      ),
+    );
   }
 
   /// מחליף קבוצה קיימת בתוכן חדש תוך שמירת המזהה שלה.
   /// מחזיר false אם [id] לא נמצא.
   bool replaceGroup(String id, BookmarkGroup replacement) {
-    final index = state.groups.indexWhere((g) => g.id == id);
-    if (index < 0) return false;
-    final newGroups = [...state.groups];
-    newGroups[index] = newGroups[index].copyWith(
-      name: replacement.name,
-      items: replacement.items,
-    );
-    _persistGroups(newGroups);
-    emit(state.copyWith(groups: newGroups));
+    if (!state.groups.any((g) => g.id == id)) return false;
+
+    List<BookmarkGroup> replaced(List<BookmarkGroup> current) => [
+      for (final g in current)
+        if (g.id == id)
+          g.copyWith(name: replacement.name, items: replacement.items)
+        else
+          g,
+    ];
+
+    unawaited(_applyGroups(replaced, optimistic: replaced(state.groups)));
     return true;
   }
 
   bool removeGroup(String id) {
-    final newGroups = state.groups.where((g) => g.id != id).toList();
-    if (newGroups.length == state.groups.length) return false;
-    _persistGroups(newGroups);
-    emit(state.copyWith(groups: newGroups));
+    if (!state.groups.any((g) => g.id == id)) return false;
+    unawaited(
+      _applyGroups(
+        (current) => current.where((g) => g.id != id).toList(),
+        optimistic: state.groups.where((g) => g.id != id).toList(),
+      ),
+    );
     return true;
   }
 
   void renameGroup(String id, String name) {
     final trimmed = name.trim();
     if (trimmed.isEmpty) return;
-    final index = state.groups.indexWhere((g) => g.id == id);
-    if (index < 0) return;
-    final newGroups = [...state.groups];
-    newGroups[index] = newGroups[index].copyWith(name: trimmed);
-    _persistGroups(newGroups);
-    emit(state.copyWith(groups: newGroups));
+    if (!state.groups.any((g) => g.id == id)) return;
+
+    List<BookmarkGroup> renamed(List<BookmarkGroup> current) => [
+      for (final g in current)
+        if (g.id == id) g.copyWith(name: trimmed) else g,
+    ];
+
+    unawaited(_applyGroups(renamed, optimistic: renamed(state.groups)));
   }
 
   /// מוחק את כל הסימניות של ספר ספציפי (לפי זהות חזקה - id/path/category),
@@ -256,8 +324,14 @@ class BookmarkBloc extends Cubit<BookmarkState> {
         .where((b) => bookIdentity(b.book) != targetIdentity)
         .toList();
     if (remaining.length == state.bookmarks.length) return false;
-    unawaited(_persistBookmarks(remaining));
-    emit(state.copyWith(bookmarks: remaining));
+    unawaited(
+      _applyBookmarks(
+        (current) => current
+            .where((b) => bookIdentity(b.book) != targetIdentity)
+            .toList(),
+        optimistic: remaining,
+      ),
+    );
     return true;
   }
 }

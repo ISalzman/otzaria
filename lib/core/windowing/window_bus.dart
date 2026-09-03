@@ -23,13 +23,32 @@ class WindowBus {
   /// מספר המשבצות. חייב להתאים ל-`kMaxWindows` ב-`windows/runner`.
   static const int slotCount = 4;
 
-  static String _slotName(int slot) => 'otzaria.window.$slot';
+  /// קידומת שמות המשבצות. ניתנת להחלפה **בבדיקות בלבד**.
+  ///
+  /// ⚠️ [IsolateNameServer] הוא רישום גלובלי לתהליך — בדיוק הסיבה שהאפיק
+  /// עובד — ולכן שתי סוויטות בדיקה שרצות באותו תהליך תופסות את אותן
+  /// המשבצות ומפילות זו את זו. עם קידומת ייחודית לסוויטה הן מבודדות.
+  @visibleForTesting
+  static String namespace = 'otzaria.window';
+
+  static String _slotName(int slot) => '$namespace.$slot';
+
+  /// שם המשבצת של הבעלים — החלון שמחזיק את המאגרים המשותפים.
+  ///
+  /// ⚠️ כינוי ולא סריקה. איתור הבעלים בשאילתת `describe` לכל משבצת עלה
+  /// timeout, והבעלים דווקא **עסוק** בזמן שנפתח חלון שני (נמדד 2,092ms
+  /// בטעינת קטלוג הספרייה) — כלומר הסריקה פקעה בדיוק כשהיא נחוצה, והקורא
+  /// קיבל "אין בעלים". `lookupPortByName` סינכרוני ואינו יכול לפקוע.
+  static String get _ownerName => '$namespace.owner';
 
   ReceivePort? _port;
   int? _slot;
 
   /// המשבצת שהחלון הזה תפס, או null אם טרם נרשם.
   int? get slot => _slot;
+
+  /// ה-port של הבעלים, או null אם אינו רשום.
+  SendPort? get ownerPort => IsolateNameServer.lookupPortByName(_ownerName);
 
   /// מטפל בבקשות נכנסות. נקבע פעם אחת על ידי החלון.
   ///
@@ -39,10 +58,13 @@ class WindowBus {
 
   /// תופס משבצת פנויה ומתחיל להאזין.
   ///
+  /// [asOwner] רושם בנוסף את כינוי הבעלים, כך שכל חלון יוכל למצוא את
+  /// מחזיק המאגרים המשותפים בקריאה סינכרונית אחת.
+  ///
   /// מחזיר את מספר המשבצת, או null אם כולן תפוסות — מצב שאמור להיות בלתי
   /// אפשרי כי ה-runner אוכף את אותה תקרה, אבל עדיף להיכשל בשקט מאשר לדרוס
   /// רישום של חלון אחר.
-  int? register() {
+  int? register({bool asOwner = false}) {
     if (_slot != null) return _slot;
     final port = ReceivePort();
     for (var candidate = 1; candidate <= slotCount; candidate++) {
@@ -53,6 +75,12 @@ class WindowBus {
         _slot = candidate;
         _port = port;
         port.listen(_handleMessage);
+        if (asOwner) {
+          _ownsOwnerName = IsolateNameServer.registerPortWithName(
+            port.sendPort,
+            _ownerName,
+          );
+        }
         return candidate;
       }
     }
@@ -60,12 +88,23 @@ class WindowBus {
     return null;
   }
 
-  /// משחרר את המשבצת. חובה בסגירת חלון, אחרת המשבצת נשארת "תפוסה" בלי
-  /// מאזין וחלון חדש לא יוכל לתפוס אותה.
+  bool _ownsOwnerName = false;
+
+  /// משחרר את המשבצת.
+  ///
+  /// ⚠️ **אינו** נקרא בסגירת חלון, במכוון. חלון סגור מוסתר ולא נהרס,
+  /// ה-isolate שלו חי, וקובצי ה-Hive שלו נשארים פתוחים — כלומר הבעלים
+  /// ממשיך לשרת את המאגרים המשותפים גם אחרי שהמשתמש סגר אותו, וזו התנהגות
+  /// נדרשת. מה שכן צריך להיפסק בסגירה הוא היכולת **לקבל כרטיסיה**, וזה
+  /// נקבע לפי נראות החלון ([WindowPeer.isVisible]) ולא לפי הרישום באפיק.
   void unregister() {
     final slot = _slot;
     if (slot != null) {
       IsolateNameServer.removePortNameMapping(_slotName(slot));
+    }
+    if (_ownsOwnerName) {
+      IsolateNameServer.removePortNameMapping(_ownerName);
+      _ownsOwnerName = false;
     }
     _port?.close();
     _port = null;
@@ -99,10 +138,22 @@ class WindowBus {
     int slot,
     Map<String, dynamic> body, {
     Duration timeout = const Duration(seconds: 3),
-  }) async {
+  }) {
     final target = IsolateNameServer.lookupPortByName(_slotName(slot));
-    if (target == null) return null;
+    if (target == null) return Future.value();
+    return requestPort(target, body, timeout: timeout, label: 'slot $slot');
+  }
 
+  /// כמו [request], אבל אל port שכבר בידינו.
+  ///
+  /// קיים כי הבעלים מאותר דרך כינוי ולא דרך מספר משבצת — ואין טעם לתרגם
+  /// port חזרה למשבצת רק כדי לחפש אותו שוב.
+  Future<Object?> requestPort(
+    SendPort target,
+    Map<String, dynamic> body, {
+    Duration timeout = const Duration(seconds: 3),
+    String label = 'port',
+  }) async {
     final reply = ReceivePort();
     try {
       target.send({'reply': reply.sendPort, 'body': body});
@@ -111,17 +162,42 @@ class WindowBus {
         return response['result'];
       }
       if (response is Map) {
-        debugPrint('WindowBus slot $slot returned error: ${response['error']}');
+        debugPrint('WindowBus $label returned error: ${response['error']}');
       }
       return null;
     } on TimeoutException {
-      debugPrint('WindowBus slot $slot timed out');
+      debugPrint(
+        'WindowBus $label timed out after ${timeout.inMilliseconds}ms',
+      );
       return null;
     } catch (e) {
-      debugPrint('WindowBus slot $slot request failed: $e');
+      debugPrint('WindowBus $label request failed: $e');
       return null;
     } finally {
       reply.close();
+    }
+  }
+
+  /// שולח הודעה לכל המשבצות התפוסות חוץ מזו שלנו, בלי להמתין לתשובה.
+  ///
+  /// ⚠️ אין ערך החזרה ואין timeout — הקורא אינו יכול לעשות דבר בכשל.
+  /// המשתמשת היחידה היא הודעת "מפתח משותף השתנה", שכל תפקידה למנוע
+  /// התיישנות; חלון שלא קיבל אותה יקבל את הערך הנכון בקריאה הבאה שלו.
+  void broadcast(Map<String, dynamic> body) {
+    for (var candidate = 1; candidate <= slotCount; candidate++) {
+      if (candidate == _slot) continue;
+      final target = IsolateNameServer.lookupPortByName(_slotName(candidate));
+      if (target == null) continue;
+      final reply = ReceivePort();
+      target.send({'reply': reply.sendPort, 'body': body});
+      // התשובה נזרקת, אבל ה-port חייב להיסגר אחרי שהיא תגיע — סגירה
+      // מיידית הייתה מפילה את השולח כשהיעד מנסה לענות. הטיימר סוגר גם
+      // כשהיעד אינו עונה כלל, אחרת כל שידור לחלון שקרס היה משאיר port פתוח.
+      final closer = Timer(const Duration(seconds: 1), reply.close);
+      reply.listen((_) {
+        closer.cancel();
+        reply.close();
+      });
     }
   }
 
@@ -163,7 +239,16 @@ class WindowPeer {
     required this.title,
     required this.tabCount,
     this.isOwner = false,
+    this.isVisible = true,
   });
+
+  WindowPeer copyWith({bool? isVisible}) => WindowPeer(
+    slot: slot,
+    title: title,
+    tabCount: tabCount,
+    isOwner: isOwner,
+    isVisible: isVisible ?? this.isVisible,
+  );
 
   final int slot;
 
@@ -178,14 +263,23 @@ class WindowPeer {
   /// תלוי בסדר הפתיחה, ואין קשר מובטח בין "משבצת 1" ל"החלון הראשון".
   final bool isOwner;
 
+  /// האם החלון מוצג על המסך כרגע.
+  ///
+  /// ⚠️ חלון שהמשתמש סגר **מוסתר ולא נהרס**, וה-isolate שלו ממשיך לענות
+  /// על האפיק. לכן "עונה" אינו "פתוח": חלון סגור המשיך להופיע ב"העבר
+  /// לחלון קיים", אישר קבלת כרטיסיה, והמקור מחק אותה. הנראות נמדדת בנייטיב
+  /// (`IsWindowVisible`) ולא בתשובת החלון — חלון מוסתר אינו יודע שהוסתר.
+  final bool isVisible;
+
   @override
   bool operator ==(Object other) =>
       other is WindowPeer &&
       other.slot == slot &&
       other.title == title &&
       other.tabCount == tabCount &&
-      other.isOwner == isOwner;
+      other.isOwner == isOwner &&
+      other.isVisible == isVisible;
 
   @override
-  int get hashCode => Object.hash(slot, title, tabCount, isOwner);
+  int get hashCode => Object.hash(slot, title, tabCount, isOwner, isVisible);
 }
