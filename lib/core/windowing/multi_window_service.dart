@@ -77,19 +77,21 @@ class MultiWindowService {
   /// ⚠️ קודם לכן הוא החזיר true מיד אחרי הכנסת הבקשה לתור, וערך ההחזרה של
   /// היצירה עצמה נזרק. שני אתרי הקריאה מוחקים את הכרטיסיה על סמך התשובה
   /// הזו — כלומר כרטיסיה נמחקה על סמך הצלחה שלא נבדקה.
-  /// [dropPoint] הוא מיקום הסמן בקואורדינטות **מסך** ברגע השחרור, כשהפתיחה
-  /// באה מגרירה.
+  /// [origin] היא **הפינה** שבה החלון ייפתח, בקואורדינטות מסך.
   ///
-  /// ⚠️ בלעדיו החלון נפתח בהיסט מדורג מהפינה, בלי קשר למקום שאליו המשתמש
-  /// גרר — גררת לפינה התחתונה-ימנית והחלון קפץ למעלה-שמאלה. רשימת ה-QA של
-  /// הענף כן דרשה "חלון חדש במיקום הסמן", וזה פשוט לא מומש.
+  /// ⚠️ פינה, ולא "נקודת השחרור" שסביבה מחשבים. הגרסה הקודמת קיבלה את
+  /// מיקום הסמן והזיזה את החלון `-width + 100` — היסט שנועד לתצוגה ברוחב
+  /// 300, ועם חלון ברוחב 1400 הוא 1,300 פיקסלים שמאלה. אחרי ההידוק לקצה
+  /// המסך התוצאה הייתה קבועה: חלון שנגרר ימינה נפתח בשמאל.
   ///
-  /// [bounds] היא מסגרת מדויקת שדוחה את [dropPoint] — כך חלון שהמשתמש
+  /// בלעדיה החלון נפתח בהיסט מדורג מהפינה, בלי קשר למקום שאליו גררו.
+  ///
+  /// [bounds] היא מסגרת מדויקת שדוחה את [origin] — כך חלון שהמשתמש
   /// **הצמיד** בגרירה נוצר בדיוק במסגרת שההצמדה נתנה. בלעדיה ההצמדה
   /// שהמשתמש ראה נעלמת ברגע שהחלון האמיתי מופיע.
   Future<bool> openWindow({
     OpenedTab? tab,
-    ({int x, int y})? dropPoint,
+    ({int x, int y})? origin,
     ({int left, int top, int width, int height})? bounds,
   }) async {
     if (!isSupported) return false;
@@ -108,8 +110,8 @@ class MultiWindowService {
             'payload': _encodePayload(tab),
             if (inherited != null) 'width': inherited.width.round(),
             if (inherited != null) 'height': inherited.height.round(),
-            if (dropPoint != null) 'dropX': dropPoint.x,
-            if (dropPoint != null) 'dropY': dropPoint.y,
+            if (origin != null) 'originX': origin.x,
+            if (origin != null) 'originY': origin.y,
             if (bounds != null)
               'bounds': {
                 'left': bounds.left,

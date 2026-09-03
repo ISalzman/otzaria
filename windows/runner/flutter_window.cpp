@@ -240,24 +240,24 @@ std::atomic<int> g_live_engine_count{0};
 // המחיר ידוע ומדוד: ה-platform thread וה-UI thread ממוזגים ב-3.47, ולכן
 // כל המנועים חולקים scheduler אחד — חלון עסוק מקפיא את השני
 // (docs/P-0-stage3-result.md §2). זה חוב פתוח, לא פתרון סופי.
-// מיקום החלון החדש לפי נקודת השחרור.
+// מיקום החלון החדש: פינתו **בנקודה שנמסרה**, מהודקת למסך שתחתיה.
 //
-// ⚠️ הכרטיסיה נפתחה עד כה בהיסט מדורג מהפינה, בלי קשר למקום שאליו
-// המשתמש גרר — כלומר גררת לפינה התחתונה-ימנית והחלון קפץ למעלה-שמאלה.
-// רשימת ה-QA של הענף כן דרשה "חלון חדש **במיקום הסמן**", וזה פשוט לא
-// מומש.
+// ⚠️ הפינה, ולא חישוב סביבה. הגרסה הקודמת הזיזה את החלון
+// `-width + 100` פיקסלים כדי שהכרטיסיה תשב תחת הסמן — היסט שנועד לתצוגה
+// ברוחב 300, ועם חלון ברוחב 1400 הוא 1,300 פיקסלים שמאלה. אחרי ההידוק
+// לקצה המסך התוצאה הייתה קבועה: חלון שנגרר ימינה נפתח **בשמאל**, טיפה
+// מתחת למקור. בדיוק מה שהמשתמש דיווח.
 //
-// הסמן ממוקם על **הכרטיסיה** ולא על פינת החלון, בדיוק כמו התצוגה
-// שקדמה לה — אחרת החלון האמיתי קופץ ביחס לרוח שהמשתמש ראה.
-Win32Window::Point OriginForDrop(int drop_x, int drop_y, int width,
+// הנקודה שמגיעה לכאן היא הפינה שבה **התצוגה** נעצרה, כלומר המקום שבו
+// המשתמש ראה את הכרטיסיה בשחרור. לכן אין מה לחשב סביבה.
+Win32Window::Point OriginForDrop(int origin_x, int origin_y, int width,
                                  int height) {
-  // ההיסט זהה ל-`kCursorOffsetX/Y` של התצוגה, מותאם לרוחב האמיתי.
-  int left = drop_x - width + 100;
-  int top = drop_y - 17;
+  int left = origin_x;
+  int top = origin_y;
 
-  // ⚠️ הידוק לאזור העבודה של המסך שתחת הסמן, ולא של המסך הראשי: שחרור
-  // בקצה מסך שני היה יוצר חלון שחלקו מחוץ לתחום.
-  POINT pt{drop_x, drop_y};
+  // ⚠️ הידוק לאזור העבודה של המסך שתחת הנקודה, ולא של המסך הראשי:
+  // שחרור בקצה מסך שני היה יוצר חלון שחלקו מחוץ לתחום.
+  POINT pt{origin_x, origin_y};
   const HMONITOR monitor = ::MonitorFromPoint(pt, MONITOR_DEFAULTTONEAREST);
   MONITORINFO info{};
   info.cbSize = sizeof(info);
@@ -335,8 +335,8 @@ flutter::EncodableValue DescribeSystemDrag(
 bool CreateSecondaryWindowOnThisThread(const flutter::DartProject& base,
                                        const std::string& payload,
                                        int inherited_width,
-                                       int inherited_height, int drop_x,
-                                       int drop_y, const RECT* bounds) {
+                                       int inherited_height, int origin_x,
+                                       int origin_y, const RECT* bounds) {
   // ניקוי חלונות שנסגרו, כדי שהרשימה לא תגדל בלי גבול.
   auto& windows = SecondaryWindowsOnThisThread();
   windows.erase(
@@ -356,8 +356,8 @@ bool CreateSecondaryWindowOnThisThread(const flutter::DartProject& base,
     if (existing->GetHandle() == nullptr || !existing->IsClosedByUser()) {
       continue;
     }
-    existing->ReviveWith(payload, inherited_width, inherited_height, drop_x,
-                         drop_y, bounds);
+    existing->ReviveWith(payload, inherited_width, inherited_height, origin_x,
+                         origin_y, bounds);
     return true;
   }
 
@@ -377,15 +377,15 @@ bool CreateSecondaryWindowOnThisThread(const flutter::DartProject& base,
   const int height = inherited_height > 300 ? inherited_height : 760;
   Win32Window::Size size(width, height);
 
-  // מסגרת מדויקת (הצמדה) קודמת לכול, אחריה נקודת השחרור, ובהיעדר
+  // מסגרת מדויקת (הצמדה) קודמת לכול, אחריה הפינה שנמסרה, ובהיעדר
   // שתיהן — היסט מדורג, כמו קודם.
   Win32Window::Point origin(0, 0);
   if (bounds != nullptr) {
     origin = Win32Window::Point(bounds->left, bounds->top);
     size = Win32Window::Size(bounds->right - bounds->left,
                              bounds->bottom - bounds->top);
-  } else if (drop_x != 0 || drop_y != 0) {
-    origin = OriginForDrop(drop_x, drop_y, width, height);
+  } else if (origin_x != 0 || origin_y != 0) {
+    origin = OriginForDrop(origin_x, origin_y, width, height);
   } else {
     static int spawn_index = 0;
     const int offset = 40 + (spawn_index++ % 6) * 32;
@@ -886,22 +886,22 @@ bool FlutterWindow::OnCreate() {
               pending.height = *v;
             }
           }
-          // נקודת השחרור — החלון ייפתח שם ולא בהיסט מדורג מהפינה.
-          const auto dx_it = args->find(flutter::EncodableValue("dropX"));
+          // פינת החלון החדש — הוא ייפתח שם ולא בהיסט מדורג מהפינה.
+          const auto dx_it = args->find(flutter::EncodableValue("originX"));
           if (dx_it != args->end()) {
             if (const auto* v = std::get_if<int>(&dx_it->second)) {
-              pending.drop_x = *v;
+              pending.origin_x = *v;
             }
           }
-          const auto dy_it = args->find(flutter::EncodableValue("dropY"));
+          const auto dy_it = args->find(flutter::EncodableValue("originY"));
           if (dy_it != args->end()) {
             if (const auto* v = std::get_if<int>(&dy_it->second)) {
-              pending.drop_y = *v;
+              pending.origin_y = *v;
             }
           }
           // מסגרת מדויקת, כשהגרירה הסתיימה בהצמדה של Windows.
           //
-          // ⚠️ מחליפה את `dropX/dropY`: חלון שהמשתמש הצמיד לחצי מסך
+          // ⚠️ מחליפה את `originX/originY`: חלון שהמשתמש הצמיד לחצי מסך
           // חייב להיווצר **באותה מסגרת**, אחרת ההצמדה שהוא ראה נעלמת
           // ברגע שהחלון האמיתי מופיע.
           const auto b_it = args->find(flutter::EncodableValue("bounds"));
@@ -1197,7 +1197,7 @@ bool RestoreLastHiddenWindow() {
 }  // namespace
 
 void FlutterWindow::ReviveWith(const std::string& payload, int width,
-                               int height, int drop_x, int drop_y,
+                               int height, int origin_x, int origin_y,
                                const RECT* bounds) {
   const HWND self = GetHandle();
   if (!self) return;
@@ -1218,14 +1218,14 @@ void FlutterWindow::ReviveWith(const std::string& payload, int width,
     ::SetWindowPos(self, nullptr, bounds->left, bounds->top,
                    bounds->right - bounds->left, bounds->bottom - bounds->top,
                    SWP_NOZORDER | SWP_NOACTIVATE);
-  } else if (drop_x != 0 || drop_y != 0) {
-    // נקודת שחרור: מזיזים **וגם** משנים גודל בקריאה אחת, כדי שלא ייראה
-    // קפיצה בשני שלבים.
+  } else if (origin_x != 0 || origin_y != 0) {
+    // פינה שנמסרה: מזיזים **וגם** משנים גודל בקריאה אחת, כדי שלא
+    // תיראה קפיצה בשני שלבים.
     RECT current{};
     ::GetWindowRect(self, &current);
     const int w = final_width > 0 ? final_width : current.right - current.left;
     const int h = final_height > 0 ? final_height : current.bottom - current.top;
-    const auto origin = OriginForDrop(drop_x, drop_y, w, h);
+    const auto origin = OriginForDrop(origin_x, origin_y, w, h);
     ::SetWindowPos(self, nullptr, origin.x, origin.y, w, h,
                    SWP_NOZORDER | SWP_NOACTIVATE);
   } else if (final_width > 0 && final_height > 0) {
@@ -1304,7 +1304,7 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
     pending_secondary_windows_.pop();
     const bool created = CreateSecondaryWindowOnThisThread(
         project_, pending.payload, pending.width, pending.height,
-        pending.drop_x, pending.drop_y,
+        pending.origin_x, pending.origin_y,
         pending.has_bounds ? &pending.bounds : nullptr);
     // יצירה שנכשלה — אין מה להחליף את הרוח, והיא לא יכולה להישאר תלויה.
     if (!created) drag_preview::End();

@@ -108,8 +108,8 @@ void main() {
 
     await drag.handleDroppedOutside(firstTab(), tabsBloc);
 
-    expect(runner.lastOpenArgs?['dropX'], 100);
-    expect(runner.lastOpenArgs?['dropY'], 200);
+    expect(runner.lastOpenArgs?['originX'], 100);
+    expect(runner.lastOpenArgs?['originY'], 200);
   });
 
   group('הרוח שהוקפאה במקום השחרור', () {
@@ -293,16 +293,21 @@ void main() {
       expect(bounds?['width'], 960);
       expect(bounds?['height'], 1040);
       expect(
-        runner.lastOpenArgs?['dropX'],
+        runner.lastOpenArgs?['originX'],
         isNull,
         reason: 'מסגרת מדויקת דוחה את נקודת השחרור',
       );
       expect(tabsBloc.events.whereType<RemoveTab>(), hasLength(1));
     });
 
-    test('שחרור בלי הצמדה עובר בנקודת השחרור, ולא במסגרת התצוגה', () async {
-      // ⚠️ התצוגה היא בגודל **כרטיסיה**. שימוש עיוור במסגרת שלה היה יוצר
-      // חלון אוצריא של 176×40.
+    test('שחרור בלי הצמדה: החלון נפתח בפינה שבה התצוגה נעצרה', () async {
+      // ⚠️ שתי הצהרות בבדיקה אחת, ובמכוון — שתיהן היו באגים שהמשתמש ראה.
+      //
+      // 1. **לא** המסגרת: התצוגה היא בגודל כרטיסיה, ושימוש עיוור בה היה
+      //    יוצר חלון אוצריא של 176×40.
+      // 2. **לא** מיקום הסמן: ה-runner הזיז את החלון `-width + 100`
+      //    מהנקודה שקיבל, ואחרי ההידוק לקצה המסך התוצאה הייתה קבועה —
+      //    "גררתי ימינה והחלון נפתח בשמאל, טיפה מתחת למקור".
       runner.cursorTarget = (slot: null, isSelf: false, isShellTray: false);
       runner.systemDragResult = (
         ran: true,
@@ -316,8 +321,13 @@ void main() {
       startDrag(firstTab());
       await Future<void>.delayed(settle);
 
-      expect(runner.lastOpenArgs?['dropX'], 100);
       expect(runner.lastOpenArgs?['bounds'], isNull);
+      expect(
+        runner.lastOpenArgs?['originX'],
+        500,
+        reason: 'הפינה של התצוגה, ולא הסמן (100)',
+      );
+      expect(runner.lastOpenArgs?['originY'], 300);
     });
 
     test('שחרור מעל חלון אוצריא אחר מעביר אליו ואינו פותח חלון', () async {

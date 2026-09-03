@@ -278,11 +278,15 @@ class CrossWindowTabDrag {
     if (bloc.state.tabs.length <= 1) return _hidePreview();
 
     // ⚠️ מסגרת מדויקת **רק** אחרי הצמדה. התצוגה היא בגודל כרטיסיה, ולכן
-    // שימוש עיוור במסגרת שלה היה יוצר חלון אוצריא של 176×40. בלי הצמדה
-    // עוברת נקודת השחרור, וה-runner ממקם ביחס אליה כמו קודם.
+    // שימוש עיוור במסגרת שלה היה יוצר חלון אוצריא של 176×40.
+    //
+    // בלי הצמדה עוברת **הפינה שבה התצוגה נעצרה** — כלומר המקום שבו
+    // המשתמש ראה את הכרטיסיה ברגע השחרור, ולא מיקום הסמן. השניים אינם
+    // זהים, והשימוש בסמן הוא מה שהוליד את "גררתי ימינה והחלון נפתח
+    // בשמאל": ה-runner הזיז את החלון `-width + 100` מהסמן.
     final moved = await _service.openWindow(
       tab: tab,
-      dropPoint: outcome.snapped ? null : (x: outcome.x, y: outcome.y),
+      origin: outcome.snapped ? null : (x: outcome.left, y: outcome.top),
       bounds: outcome.snapped
           ? (
               left: outcome.left,
@@ -372,7 +376,9 @@ class CrossWindowTabDrag {
       // עד כה הוא נפתח בהיסט מדורג מהפינה, בלי קשר למקום שאליו גררו.
       moved = await _service.openWindow(
         tab: tab,
-        dropPoint: (x: target.x, y: target.y),
+        // מסלול הנפילה, כשהגרירה לא נמסרה למערכת: אין תצוגה שנעצרה
+        // במקום, ולכן הסמן הוא כל מה שיש.
+        origin: (x: target.x, y: target.y),
       );
       if (!moved) _hidePreview();
     }

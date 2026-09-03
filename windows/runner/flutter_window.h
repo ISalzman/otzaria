@@ -37,12 +37,12 @@ class FlutterWindow : public Win32Window {
   // ⚠️ זה מה שהופך פתיחת חלון למיידית. המנוע כבר עלה, ה-blocs חיים,
   // הספרייה טעונה — נשאר רק להציג ולשלוח את הכרטיסיה. בלי זה כל פתיחה
   // משלמת שוב את מלוא האתחול, וכל מחזור פתיחה-סגירה מוסיף מנוע לזיכרון.
-  // [drop_x]/[drop_y] הם נקודת השחרור בקואורדינטות מסך, או 0 כשאין —
-  // ואז המיקום נשאר כשהיה.
-  // [bounds] היא מסגרת מדויקת שדוחה את [drop_x]/[drop_y] — כך חלון
+  // [origin_x]/[origin_y] הם **פינת** החלון בקואורדינטות מסך, או 0 כשאין
+  // — ואז המיקום נשאר כשהיה.
+  // [bounds] היא מסגרת מדויקת שדוחה את [origin_x]/[origin_y] — כך חלון
   // שהמשתמש הצמיד בגרירה נוצר בדיוק במסגרת שההצמדה נתנה.
   void ReviveWith(const std::string& payload, int width, int height,
-                  int drop_x = 0, int drop_y = 0,
+                  int origin_x = 0, int origin_y = 0,
                   const RECT* bounds = nullptr);
 
  protected:
@@ -90,12 +90,12 @@ class FlutterWindow : public Win32Window {
     std::string payload;
     int width = 0;
     int height = 0;
-    // נקודת השחרור בקואורדינטות מסך, או 0 כשהפתיחה לא באה מגרירה.
-    int drop_x = 0;
-    int drop_y = 0;
+    // פינת החלון בקואורדינטות מסך, או 0 כשהפתיחה לא באה מגרירה.
+    int origin_x = 0;
+    int origin_y = 0;
     // מסגרת מדויקת, כשהגרירה הסתיימה בהצמדה של Windows.
     //
-    // ⚠️ דוחה את `drop_x`/`drop_y`. חלון שהמשתמש הצמיד לחצי מסך חייב
+    // ⚠️ דוחה את `origin_x`/`origin_y`. חלון שהמשתמש הצמיד לחצי מסך חייב
     // להיווצר באותה מסגרת, אחרת ההצמדה שהוא ראה נעלמת ברגע שהחלון
     // האמיתי מופיע.
     bool has_bounds = false;
