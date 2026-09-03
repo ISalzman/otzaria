@@ -233,7 +233,6 @@ class TextBookSearchViewState extends State<TextBookSearchView>
     _syncBlocSearchTextState();
 
     scrollControler = widget.scrollControler;
-    widget.focusNode.requestFocus();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;

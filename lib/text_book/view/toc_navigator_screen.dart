@@ -649,9 +649,7 @@ class _TocViewerState extends State<TocViewer>
           final bool useFlat = display.totalCount > _kTocFlattenThreshold;
 
           // שדה החיפוש עצמו מצויר בסרגל שמעל החלונית; כאן רק מפרסמים את
-          // הפעולה שלו. הפוקוס עדיין מנוהל דרך focusNode מהמסך האב
-          // (_focusActiveTabSearchField), שמכבד את ההגנה מפני פוקוס אוטומטי
-          // באנדרואיד — ראה resolveLeftPaneSearchFocus.
+          // הפעולה שלו, והפוקוס מנוהל ב-focusNode של המסך האב.
           final delegate = NavPanelSearchDelegate(
             controller: searchController,
             hintText: 'איתור כותרת...',

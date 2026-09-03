@@ -979,9 +979,11 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   }
 
   /// מבקש פוקוס לשדה החיפוש של הלשונית הפעילה בפאנל הצדדי
-  /// ('ניווט' / 'כותרות' / 'חיפוש'). לא עושה דבר באנדרואיד או כשהפאנל סגור.
+  /// ('ניווט' / 'כותרות' / 'חיפוש'). לא עושה דבר כשהפאנל סגור.
   void _focusActiveTabSearchField() {
-    if (Platform.isAndroid) return;
+    // במסך צר השדה יושב בתוך החלונית ולא בסרגל שמעליה, ומיקוד יזום שלו פותח
+    // את מקלדת המערכת על ספר שהמשתמש רק רצה לקרוא.
+    if (!NavPanelSearch.canHoist(context)) return;
     final state = context.read<TextBookBloc>().state;
     if (state is! TextBookLoaded || !state.showLeftPane) return;
 
