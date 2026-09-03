@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
+import 'package:otzaria/settings/engine/settings_repository.dart';
 import 'package:otzaria/settings/services/safer_mode_guard.dart';
 import 'package:otzaria/core/messages/pdf_messages.dart';
 import 'package:otzaria/core/ui_snack.dart';
@@ -933,16 +934,19 @@ class _PrintingScreenState extends State<PrintingScreen> {
     );
   }
 
-  HolyNameStyle get _holyNameStyle =>
-      widget.displayProfile?.holyNameStyle ??
-      HolyNameStyle.fromStorage(
-        Settings.getValue<String>('key-holy-name-style'),
+  TextDisplayProfile get _exportProfile =>
+      widget.displayProfile ??
+      SettingsRepository().loadTextDisplayPolicy().resolve(
+        const TextDisplaySlot(
+          target: TextTarget.body,
+          view: TextView.regular,
+          channel: TextChannel.export,
+        ),
       );
 
-  bool get _shouldReplaceHolyNames =>
-      widget.displayProfile?.replaceHolyNames ??
-      Settings.getValue<bool>('key-replace-holy-names') ??
-      true;
+  HolyNameStyle get _holyNameStyle => _exportProfile.holyNameStyle;
+
+  bool get _shouldReplaceHolyNames => _exportProfile.replaceHolyNames;
 
   /// מסיר ניקוד/טעמים ומחליף שמות קודש לפי בחירת המשתמש.
   String _applyTextTransforms(String input, bool shouldReplaceHolyNames) {

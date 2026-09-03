@@ -170,7 +170,7 @@ class RenderSettings {
   const RenderSettings({
     this.removeNikud = false,
     this.removePunctuation = false,
-    this.removeTeamim = true,
+    this.removeTeamim = false,
     this.replaceHolyNames = false,
     this.holyNameStyle = HolyNameStyle.kufKuf,
     this.searchText = '',

@@ -12,6 +12,7 @@ import 'package:otzaria_search_engine/otzaria_search_engine.dart'
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
+import 'package:otzaria/text_display/text_display_exports.dart';
 import 'package:otzaria/text_book/text_book_repository.dart';
 import 'package:otzaria/text_book/view/page_shape/utils/page_shape_settings_manager.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
@@ -1299,7 +1300,12 @@ void main() {
         expect((bloc.state as TextBookLoaded).removeNikud, isFalse);
 
         // המשתמש מפעיל הסרת ניקוד ידנית
-        bloc.add(const ToggleNikud(true));
+        bloc.add(
+          const ApplyDisplayPatch(
+            target: TextTarget.body,
+            patch: TextDisplayPatch(nikud: MarkVisibility.hide),
+          ),
+        );
         await Future<void>.delayed(const Duration(milliseconds: 20));
         expect((bloc.state as TextBookLoaded).removeNikud, isTrue);
 
@@ -1345,8 +1351,18 @@ void main() {
         );
         await Future<void>.delayed(const Duration(milliseconds: 50));
 
-        bloc.add(const ToggleNikud(false, applyToCommentaries: true));
-        bloc.add(const TogglePunctuation(false, applyToCommentaries: true));
+        bloc.add(
+          const ApplyDisplayPatch(
+            target: TextTarget.commentary,
+            patch: TextDisplayPatch(nikud: MarkVisibility.show),
+          ),
+        );
+        bloc.add(
+          const ApplyDisplayPatch(
+            target: TextTarget.commentary,
+            patch: TextDisplayPatch(punctuation: MarkVisibility.show),
+          ),
+        );
         await Future<void>.delayed(const Duration(milliseconds: 20));
 
         bloc.add(
@@ -1389,7 +1405,12 @@ void main() {
         await Future<void>.delayed(const Duration(milliseconds: 50));
 
         // המשתמש מפעיל הסרת ניקוד ידנית
-        bloc.add(const ToggleNikud(true));
+        bloc.add(
+          const ApplyDisplayPatch(
+            target: TextTarget.body,
+            patch: TextDisplayPatch(nikud: MarkVisibility.hide),
+          ),
+        );
         await Future<void>.delayed(const Duration(milliseconds: 20));
         expect((bloc.state as TextBookLoaded).removeNikud, isTrue);
 
@@ -1437,7 +1458,12 @@ void main() {
         expect((bloc.state as TextBookLoaded).removePunctuation, isFalse);
 
         // המשתמש מסתיר פיסוק ידנית
-        bloc.add(const TogglePunctuation(true));
+        bloc.add(
+          const ApplyDisplayPatch(
+            target: TextTarget.body,
+            patch: TextDisplayPatch(punctuation: MarkVisibility.hide),
+          ),
+        );
         await Future<void>.delayed(const Duration(milliseconds: 20));
         expect((bloc.state as TextBookLoaded).removePunctuation, isTrue);
 
@@ -1484,7 +1510,12 @@ void main() {
         );
         await Future<void>.delayed(const Duration(milliseconds: 50));
 
-        bloc.add(const TogglePunctuation(true));
+        bloc.add(
+          const ApplyDisplayPatch(
+            target: TextTarget.body,
+            patch: TextDisplayPatch(punctuation: MarkVisibility.hide),
+          ),
+        );
         await Future<void>.delayed(const Duration(milliseconds: 20));
         expect((bloc.state as TextBookLoaded).removePunctuation, isTrue);
 

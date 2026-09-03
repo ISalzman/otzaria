@@ -228,30 +228,6 @@ class MockSettingsRepository extends _i1.Mock
           as _i3.Future<void>);
 
   @override
-  _i3.Future<void> updateShowTeamim(bool? value) =>
-      (super.noSuchMethod(
-            Invocation.method(
-              #updateShowTeamim,
-              [value],
-            ),
-            returnValue: _i3.Future<void>.value(),
-            returnValueForMissingStub: _i3.Future<void>.value(),
-          )
-          as _i3.Future<void>);
-
-  @override
-  _i3.Future<void> updateReplaceHolyNames(bool? value) =>
-      (super.noSuchMethod(
-            Invocation.method(
-              #updateReplaceHolyNames,
-              [value],
-            ),
-            returnValue: _i3.Future<void>.value(),
-            returnValueForMissingStub: _i3.Future<void>.value(),
-          )
-          as _i3.Future<void>);
-
-  @override
   _i3.Future<void> updateAutoUpdateIndex(bool? value) =>
       (super.noSuchMethod(
             Invocation.method(
@@ -269,42 +245,6 @@ class MockSettingsRepository extends _i1.Mock
             Invocation.method(
               #updateTextDisplayPolicy,
               [policy],
-            ),
-            returnValue: _i3.Future<void>.value(),
-            returnValueForMissingStub: _i3.Future<void>.value(),
-          )
-          as _i3.Future<void>);
-
-  @override
-  _i3.Future<void> updateDefaultRemoveNikud(bool? value) =>
-      (super.noSuchMethod(
-            Invocation.method(
-              #updateDefaultRemoveNikud,
-              [value],
-            ),
-            returnValue: _i3.Future<void>.value(),
-            returnValueForMissingStub: _i3.Future<void>.value(),
-          )
-          as _i3.Future<void>);
-
-  @override
-  _i3.Future<void> updateRemoveNikudFromTanach(bool? value) =>
-      (super.noSuchMethod(
-            Invocation.method(
-              #updateRemoveNikudFromTanach,
-              [value],
-            ),
-            returnValue: _i3.Future<void>.value(),
-            returnValueForMissingStub: _i3.Future<void>.value(),
-          )
-          as _i3.Future<void>);
-
-  @override
-  _i3.Future<void> updateDefaultRemovePunctuation(bool? value) =>
-      (super.noSuchMethod(
-            Invocation.method(
-              #updateDefaultRemovePunctuation,
-              [value],
             ),
             returnValue: _i3.Future<void>.value(),
             returnValueForMissingStub: _i3.Future<void>.value(),

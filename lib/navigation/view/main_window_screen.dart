@@ -52,6 +52,7 @@ import 'package:otzaria/shortcuts/keyboard_shortcuts.dart';
 import 'package:otzaria/shortcuts/shortcut_helper.dart';
 import 'package:otzaria/shortcuts/shortcut_validator.dart';
 import 'dart:async';
+import 'dart:convert';
 import 'package:otzaria/update/my_update_widget.dart';
 import 'package:otzaria/tools/calendar/utils/calendar_cubit.dart';
 import 'package:otzaria/widgets/dialogs/ad_popup_dialog.dart';
@@ -2734,32 +2735,10 @@ class MainWindowScreenState extends State<MainWindowScreen>
               if (previous.lineHeight != current.lineHeight) {
                 dispatch(SettingsRepository.keyLineHeight, current.lineHeight);
               }
-              if (previous.showTeamim != current.showTeamim) {
-                dispatch(SettingsRepository.keyShowTeamim, current.showTeamim);
-              }
-              if (previous.defaultRemoveNikud != current.defaultRemoveNikud) {
+              if (previous.textDisplayPolicy != current.textDisplayPolicy) {
                 dispatch(
-                  SettingsRepository.keyDefaultNikud,
-                  current.defaultRemoveNikud,
-                );
-              }
-              if (previous.removeNikudFromTanach !=
-                  current.removeNikudFromTanach) {
-                dispatch(
-                  SettingsRepository.keyRemoveNikudFromTanach,
-                  current.removeNikudFromTanach,
-                );
-              }
-              if (previous.replaceHolyNames != current.replaceHolyNames) {
-                dispatch(
-                  SettingsRepository.keyReplaceHolyNames,
-                  current.replaceHolyNames,
-                );
-              }
-              if (previous.holyNameStyle != current.holyNameStyle) {
-                dispatch(
-                  SettingsRepository.keyHolyNameStyle,
-                  current.holyNameStyle.storageKey,
+                  SettingsRepository.keyTextDisplayPolicy,
+                  jsonEncode(current.textDisplayPolicy.toJson()),
                 );
               }
               if (previous.libraryViewMode != current.libraryViewMode) {

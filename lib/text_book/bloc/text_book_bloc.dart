@@ -185,11 +185,8 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     on<TogglePageShapeView>(_onTogglePageShapeView);
     on<UpdateCommentators>(_onUpdateCommentators);
     on<UpdateLinkTypeFilter>(_onUpdateLinkTypeFilter);
-    on<ToggleNikud>(_onToggleNikud);
-    on<TogglePunctuation>(_onTogglePunctuation);
     on<ApplyDisplayPatch>(_onApplyDisplayPatch);
     on<ClearDisplayOverrides>(_onClearDisplayOverrides);
-    on<ResetCommentaryDisplayOverrides>(_onResetCommentaryDisplayOverrides);
     on<ToggleContinuousReadingMode>(_onToggleContinuousReadingMode);
     on<UpdateVisibleIndecies>(_onUpdateVisibleIndecies);
     on<UpdateSelectedIndex>(_onUpdateSelectedIndex);
@@ -1348,46 +1345,6 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     }
   }
 
-  void _onToggleNikud(
-    ToggleNikud event,
-    Emitter<TextBookState> emit,
-  ) {
-    if (state is TextBookLoaded) {
-      final currentState = state as TextBookLoaded;
-      emit(
-        event.applyToCommentaries
-            ? currentState.copyWith(
-                commentaryRemoveNikudOverride: event.remove,
-                selectedIndex: currentState.selectedIndex,
-              )
-            : currentState.copyWith(
-                removeNikud: event.remove,
-                selectedIndex: currentState.selectedIndex,
-              ),
-      );
-    }
-  }
-
-  void _onTogglePunctuation(
-    TogglePunctuation event,
-    Emitter<TextBookState> emit,
-  ) {
-    if (state is TextBookLoaded) {
-      final currentState = state as TextBookLoaded;
-      emit(
-        event.applyToCommentaries
-            ? currentState.copyWith(
-                commentaryRemovePunctuationOverride: event.remove,
-                selectedIndex: currentState.selectedIndex,
-              )
-            : currentState.copyWith(
-                removePunctuation: event.remove,
-                selectedIndex: currentState.selectedIndex,
-              ),
-      );
-    }
-  }
-
   void _onApplyDisplayPatch(
     ApplyDisplayPatch event,
     Emitter<TextBookState> emit,
@@ -1435,25 +1392,6 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       ),
     );
     unawaited(clearPerBookDisplayLayer(currentState.book));
-  }
-
-  void _onResetCommentaryDisplayOverrides(
-    ResetCommentaryDisplayOverrides event,
-    Emitter<TextBookState> emit,
-  ) {
-    final currentState = state;
-    if (currentState is! TextBookLoaded ||
-        (currentState.commentaryRemoveNikudOverride == null &&
-            currentState.commentaryRemovePunctuationOverride == null)) {
-      return;
-    }
-    emit(
-      currentState.copyWith(
-        clearCommentaryRemoveNikudOverride: true,
-        clearCommentaryRemovePunctuationOverride: true,
-        selectedIndex: currentState.selectedIndex,
-      ),
-    );
   }
 
   void _onToggleContinuousReadingMode(

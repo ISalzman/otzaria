@@ -50,7 +50,11 @@ void main() {
         _wrap(
           const SmartTextWidget(
             text: _withTaamim,
-            settings: RenderSettings(fontSize: 20, fontFamily: 'Rubik'),
+            settings: RenderSettings(
+              fontSize: 20,
+              fontFamily: 'Rubik',
+              removeTeamim: true,
+            ),
           ),
         ),
       );

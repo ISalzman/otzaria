@@ -114,13 +114,7 @@ class SettingsState extends Equatable {
     required this.showHebrewBooks,
     required this.showExternalBooks,
     TextDisplayPolicy? textDisplayPolicy,
-    bool showTeamim = true,
-    bool replaceHolyNames = true,
-    HolyNameStyle holyNameStyle = HolyNameStyle.kufKuf,
     required this.autoUpdateIndex,
-    bool defaultRemoveNikud = false,
-    bool removeNikudFromTanach = false,
-    bool defaultRemovePunctuation = false,
     this.defaultContinuousReadingMode = false,
     required this.defaultSidebarOpen,
     required this.defaultCommentaryOpen,
@@ -155,16 +149,7 @@ class SettingsState extends Equatable {
     this.builtInToolsOrder = const <String>[],
     this.settingsLanguageCode = kDefaultSettingsLanguageCode,
     this._softwareAndBookUpdatesEnabled,
-  }) : textDisplayPolicy =
-           textDisplayPolicy ??
-           TextDisplayPolicy.fromLegacy(
-             defaultRemoveNikud: defaultRemoveNikud,
-             removeNikudFromTanach: removeNikudFromTanach,
-             defaultRemovePunctuation: defaultRemovePunctuation,
-             showTeamim: showTeamim,
-             replaceHolyNames: replaceHolyNames,
-             holyNameStyle: holyNameStyle,
-           );
+  }) : textDisplayPolicy = textDisplayPolicy ?? TextDisplayPolicy.empty;
 
   factory SettingsState.initial() {
     return SettingsState(
@@ -182,12 +167,7 @@ class SettingsState extends Equatable {
       showOtzarHachochma: false,
       showHebrewBooks: false,
       showExternalBooks: false,
-      showTeamim: true,
-      replaceHolyNames: true,
       autoUpdateIndex: true,
-      defaultRemoveNikud: false,
-      removeNikudFromTanach: false,
-      defaultRemovePunctuation: false,
       defaultContinuousReadingMode: false,
       defaultSidebarOpen: false,
       defaultCommentaryOpen: false,

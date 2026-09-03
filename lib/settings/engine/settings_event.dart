@@ -1,6 +1,5 @@
 import 'package:equatable/equatable.dart';
 import 'package:flutter/material.dart';
-import 'package:otzaria/utils/text/text_manipulation.dart' show HolyNameStyle;
 import 'package:otzaria/text_display/text_display_exports.dart';
 
 abstract class SettingsEvent extends Equatable {
@@ -147,33 +146,6 @@ class UpdateShowExternalBooks extends SettingsEvent {
   List<Object?> get props => [showExternalBooks];
 }
 
-class UpdateShowTeamim extends SettingsEvent {
-  final bool showTeamim;
-
-  const UpdateShowTeamim(this.showTeamim);
-
-  @override
-  List<Object?> get props => [showTeamim];
-}
-
-class UpdateReplaceHolyNames extends SettingsEvent {
-  final bool replaceHolyNames;
-
-  const UpdateReplaceHolyNames(this.replaceHolyNames);
-
-  @override
-  List<Object?> get props => [replaceHolyNames];
-}
-
-class UpdateHolyNameStyle extends SettingsEvent {
-  final HolyNameStyle holyNameStyle;
-
-  const UpdateHolyNameStyle(this.holyNameStyle);
-
-  @override
-  List<Object?> get props => [holyNameStyle];
-}
-
 class UpdateAutoUpdateIndex extends SettingsEvent {
   final bool autoUpdateIndex;
 
@@ -181,24 +153,6 @@ class UpdateAutoUpdateIndex extends SettingsEvent {
 
   @override
   List<Object?> get props => [autoUpdateIndex];
-}
-
-class UpdateDefaultRemoveNikud extends SettingsEvent {
-  final bool defaultRemoveNikud;
-
-  const UpdateDefaultRemoveNikud(this.defaultRemoveNikud);
-
-  @override
-  List<Object?> get props => [defaultRemoveNikud];
-}
-
-class UpdateRemoveNikudFromTanach extends SettingsEvent {
-  final bool removeNikudFromTanach;
-
-  const UpdateRemoveNikudFromTanach(this.removeNikudFromTanach);
-
-  @override
-  List<Object?> get props => [removeNikudFromTanach];
 }
 
 /// עדכון מלא של מדיניות תצוגת הטקסט (עורך ההגדרות החדש).
@@ -209,15 +163,6 @@ class UpdateTextDisplayPolicy extends SettingsEvent {
 
   @override
   List<Object?> get props => [textDisplayPolicy];
-}
-
-class UpdateDefaultRemovePunctuation extends SettingsEvent {
-  final bool defaultRemovePunctuation;
-
-  const UpdateDefaultRemovePunctuation(this.defaultRemovePunctuation);
-
-  @override
-  List<Object?> get props => [defaultRemovePunctuation];
 }
 
 class UpdateDefaultContinuousReadingMode extends SettingsEvent {

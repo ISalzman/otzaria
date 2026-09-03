@@ -1766,17 +1766,17 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
 
       // 3) תצוגת הטקסט: לחיצה מחליפה ניקוד, החץ פותח את כל הפרופיל
       ActionButtonData(
-        widget: TextDisplayBarButton(
+        widget: TextBookDisplayBarButton(
           state: state,
           compact: context.read<SettingsBloc>().state.compactMenuMode,
         ),
-        icon: textDisplayBarIcon(state),
-        tooltip: textDisplayBarTooltip(state),
+        icon: textDisplayBarIcon(state.removeNikud),
+        tooltip: textDisplayBarTooltip(state.removeNikud),
         actionId: ToolbarActionId.textDisplay,
         toolbarWidth: BarSplitButton.toolbarWidth(
           context.read<SettingsBloc>().state.compactMenuMode,
         ),
-        onPressed: () => toggleBodyNikud(context, state),
+        onPressed: () => toggleTextBookNikud(context, state, TextTarget.body),
       ),
 
       // 3c) Continuous Reading Mode Button - רק לספרים שתומכים (תנ"ך/תלמוד)
@@ -3431,12 +3431,8 @@ Future<void> _dispatchContextMenuShortcut({
     return;
   }
 
-  final renderSettings = RenderSettings(
-    removeNikud: state.removeNikud,
-    removePunctuation: state.removePunctuation,
-    removeTeamim: !settingsState.showTeamim,
-    replaceHolyNames: settingsState.replaceHolyNames,
-    holyNameStyle: settingsState.holyNameStyle,
+  final renderSettings = RenderSettings.fromProfile(
+    state.bodyDisplayProfile,
     searchText: state.searchText,
     searchOptions: state.searchOptions,
     alternativeWords: state.alternativeWords,

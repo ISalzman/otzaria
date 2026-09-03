@@ -11,11 +11,11 @@ import 'package:otzaria/widgets/smart_text/text_renderer_service.dart';
 int countCommentarySearchMatches({
   required String content,
   required String query,
-  required bool removePunctuation,
+  required TextDisplayProfile displayProfile,
   required bool partialWordMatch,
 }) {
   var countText = utils.removeVolwels(content);
-  if (removePunctuation) {
+  if (displayProfile.removePunctuation) {
     countText = utils.removePunctuation(countText);
   }
   return TextRendererService.countSearchMatches(

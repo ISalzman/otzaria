@@ -765,7 +765,7 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
       final count = countCommentarySearchMatches(
         content: data,
         query: query,
-        removePunctuation: widget.displayProfile.removePunctuation,
+        displayProfile: widget.displayProfile,
         // התוכן מרונדר ב-CommentaryContent עם partialWordHighlight: true.
         partialWordMatch: true,
       );

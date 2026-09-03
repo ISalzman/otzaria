@@ -162,7 +162,7 @@ class _CommentaryContentState extends State<CommentaryContent> {
                 final searchCount = countCommentarySearchMatches(
                   content: data,
                   query: widget.searchQuery,
-                  removePunctuation: widget.displayProfile.removePunctuation,
+                  displayProfile: widget.displayProfile,
                   // כמו partialWordHighlight של הרינדור למטה — המונה חייב
                   // לספור את מה שנצבע (issue #1055).
                   partialWordMatch: true,

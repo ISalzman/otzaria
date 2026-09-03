@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
+import 'package:otzaria/settings/engine/settings_repository.dart';
 import 'package:otzaria/core/app_paths.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/settings/services/nikud_display_service.dart';
@@ -135,14 +136,12 @@ class PerBookSettings {
           (Settings.getValue<double>('key-font-size') ?? 25.0)) {
         cleaned.remove('fontSize');
       }
+      final policy = SettingsRepository().loadTextDisplayPolicy();
       _removeRedundantDisplayFields(
         cleaned,
-        defaultRemoveNikud:
-            Settings.getValue<bool>('key-default-nikud') ?? false,
-        removeNikudFromTanach:
-            Settings.getValue<bool>('key-remove-nikud-tanach') ?? false,
-        defaultRemovePunctuation:
-            Settings.getValue<bool>('key-default-remove-punctuation') ?? false,
+        defaultRemoveNikud: policy.defaultRemoveNikud,
+        removeNikudFromTanach: policy.removeNikudFromTanach,
+        defaultRemovePunctuation: policy.defaultRemovePunctuation,
       );
       if (cleaned['commentatorsBelow'] ==
           !(Settings.getValue<bool>('key-splited-view') ?? true)) {

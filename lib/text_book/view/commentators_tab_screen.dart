@@ -33,6 +33,8 @@ export 'package:otzaria/widgets/commentary/commentary_search_results_list.dart'
 import 'package:otzaria/utils/text/ref_helper.dart';
 import 'package:otzaria/widgets/lists/commentators_selection_panel.dart';
 import 'package:otzaria/settings/engine/settings_bloc.dart';
+import 'package:otzaria/text_display/text_display_exports.dart';
+import 'package:otzaria/text_display/view/text_display_bar_button.dart';
 import 'package:otzaria/settings/engine/settings_state.dart';
 import 'package:otzaria/widgets/layout/reading_area_width.dart';
 import 'package:otzaria/widgets/lists/nav_tree_tile.dart';
@@ -288,26 +290,6 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
     navExpandedChapter: _navExpandedChapter,
   );
 
-  /// הכפתורים שולטים במצב המפרשים. הבחירה אינה נשמרת פר-ספר — קובץ ההגדרות
-  /// משותף עם כרטיסיית הטקסט, ושמירה כאן הייתה דורסת את הטקסט הראשי שם.
-  void _toggleCommentaryNikud(BuildContext context, TextBookLoaded state) {
-    context.read<TextBookBloc>().add(
-      ToggleNikud(!state.commentaryRemoveNikud, applyToCommentaries: true),
-    );
-  }
-
-  void _toggleCommentaryPunctuation(
-    BuildContext context,
-    TextBookLoaded state,
-  ) {
-    context.read<TextBookBloc>().add(
-      TogglePunctuation(
-        !state.commentaryRemovePunctuation,
-        applyToCommentaries: true,
-      ),
-    );
-  }
-
   /// מחיל מצב חדש שחושב ע"י אחד הרדוסרים הטהורים (ראה [reduceChevronTap]
   /// וחבריו). מבטיח שכל הנתיבים שמשנים את מצב הניווט עוברים דרך אותו צינור.
   void _applyNavSelection(
@@ -460,9 +442,6 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
 
   @override
   void dispose() {
-    if (!widget.tab.bloc.isClosed) {
-      widget.tab.bloc.add(const ResetCommentaryDisplayOverrides());
-    }
     FocusRepository().unregisterTabContentFocusRequester(widget.tab);
     _navTabController.dispose();
     _searchHost.dispose();
@@ -1044,47 +1023,21 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
           widget: ResponsiveActionBar(
             overflowMenuOffset: const Offset(0, 8),
             actions: [
-              // ניקוד
+              // תצוגת הטקסט של המפרשים: לחיצה מחליפה ניקוד, החץ פותח את הפרופיל
               ActionButtonData(
-                widget: BarButton.icon(
-                  tooltip: state.commentaryRemoveNikud
-                      ? 'הצג ניקוד'
-                      : 'הסתר ניקוד',
-                  icon: state.commentaryRemoveNikud
-                      ? OtzariaIcons.alef_with_score_24_regular
-                      : OtzariaIcons.alef_deletion_24_regular,
+                widget: TextBookDisplayBarButton(
+                  state: state,
                   compact: context.read<SettingsBloc>().state.compactMenuMode,
-                  onPressed: () => _toggleCommentaryNikud(context, state),
+                  targets: const [TextTarget.commentary],
                 ),
-                icon: state.commentaryRemoveNikud
-                    ? OtzariaIcons.alef_with_score_24_regular
-                    : OtzariaIcons.alef_deletion_24_regular,
-                tooltip: state.commentaryRemoveNikud
-                    ? 'הצג ניקוד'
-                    : 'הסתר ניקוד',
-                actionId: ToolbarActionId.nikud,
-                onPressed: () => _toggleCommentaryNikud(context, state),
-              ),
-              // פיסוק — מוצג גם בתנ"ך, כי התוכן כאן הוא מפרשים
-              ActionButtonData(
-                widget: BarButton.icon(
-                  tooltip: state.commentaryRemovePunctuation
-                      ? 'הצג פיסוק'
-                      : 'הסתר פיסוק',
-                  icon: state.commentaryRemovePunctuation
-                      ? OtzariaIcons.alef_with_punctuation_24_regular
-                      : OtzariaIcons.alef_with_eraser_24_regular,
-                  compact: context.read<SettingsBloc>().state.compactMenuMode,
-                  onPressed: () => _toggleCommentaryPunctuation(context, state),
+                icon: textDisplayBarIcon(state.commentaryRemoveNikud),
+                tooltip: textDisplayBarTooltip(state.commentaryRemoveNikud),
+                actionId: ToolbarActionId.textDisplay,
+                toolbarWidth: BarSplitButton.toolbarWidth(
+                  context.read<SettingsBloc>().state.compactMenuMode,
                 ),
-                icon: state.commentaryRemovePunctuation
-                    ? OtzariaIcons.alef_with_punctuation_24_regular
-                    : OtzariaIcons.alef_with_eraser_24_regular,
-                tooltip: state.commentaryRemovePunctuation
-                    ? 'הצג פיסוק'
-                    : 'הסתר פיסוק',
-                actionId: ToolbarActionId.punctuation,
-                onPressed: () => _toggleCommentaryPunctuation(context, state),
+                onPressed: () =>
+                    toggleTextBookNikud(context, state, TextTarget.commentary),
               ),
               // הדפסת המפרשים המוצגים
               ActionButtonData(

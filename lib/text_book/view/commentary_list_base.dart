@@ -1240,7 +1240,7 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
       final count = countCommentarySearchMatches(
         content: data,
         query: query,
-        removePunctuation: profile.removePunctuation,
+        displayProfile: profile,
         // התוכן מרונדר ב-CommentaryContent עם partialWordHighlight: true.
         partialWordMatch: true,
       );

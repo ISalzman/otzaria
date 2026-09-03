@@ -349,33 +349,9 @@ class SettingsRepository {
         keyShowExternalBooks,
         defaultValue: false,
       ),
-      'showTeamim': _settings.getValue<bool>(
-        keyShowTeamim,
-        defaultValue: true,
-      ),
-      'replaceHolyNames': _settings.getValue<bool>(
-        keyReplaceHolyNames,
-        defaultValue: true,
-      ),
-      'holyNameStyle': _settings.getValue<String>(
-        keyHolyNameStyle,
-        defaultValue: 'kuf',
-      ),
       'autoUpdateIndex': _settings.getValue<bool>(
         keyAutoUpdateIndex,
         defaultValue: true,
-      ),
-      'defaultRemoveNikud': _settings.getValue<bool>(
-        keyDefaultNikud,
-        defaultValue: false,
-      ),
-      'removeNikudFromTanach': _settings.getValue<bool>(
-        keyRemoveNikudFromTanach,
-        defaultValue: false,
-      ),
-      'defaultRemovePunctuation': _settings.getValue<bool>(
-        keyDefaultRemovePunctuation,
-        defaultValue: false,
       ),
       'textDisplayPolicy': loadTextDisplayPolicy(),
       'defaultContinuousReadingMode': _settings.getValue<bool>(
@@ -662,32 +638,8 @@ class SettingsRepository {
     await _settings.setValue(keyShowExternalBooks, value);
   }
 
-  Future<void> updateShowTeamim(bool value) async {
-    await _settings.setValue(keyShowTeamim, value);
-  }
-
-  Future<void> updateReplaceHolyNames(bool value) async {
-    await _settings.setValue(keyReplaceHolyNames, value);
-  }
-
-  Future<void> updateHolyNameStyle(String value) async {
-    await _settings.setValue(keyHolyNameStyle, value);
-  }
-
   Future<void> updateAutoUpdateIndex(bool value) async {
     await _settings.setValue(keyAutoUpdateIndex, value);
-  }
-
-  Future<void> updateDefaultRemoveNikud(bool value) async {
-    await _settings.setValue(keyDefaultNikud, value);
-  }
-
-  Future<void> updateRemoveNikudFromTanach(bool value) async {
-    await _settings.setValue(keyRemoveNikudFromTanach, value);
-  }
-
-  Future<void> updateDefaultRemovePunctuation(bool value) async {
-    await _settings.setValue(keyDefaultRemovePunctuation, value);
   }
 
   /// טוען את מדיניות תצוגת הטקסט; בהיעדרה נבנית מהמפתחות הישנים (מיגרציה
@@ -733,27 +685,10 @@ class SettingsRepository {
     );
   }
 
-  /// שומר את המדיניות ומשקף אותה לששת המפתחות הישנים, שקוראים ישירים
-  /// (Settings.getValue) עדיין נשענים עליהם.
   Future<void> updateTextDisplayPolicy(TextDisplayPolicy policy) async {
     await _settings.setValue(
       keyTextDisplayPolicy,
       jsonEncode(policy.toJson()),
-    );
-    await _settings.setValue(keyDefaultNikud, policy.defaultRemoveNikud);
-    await _settings.setValue(
-      keyRemoveNikudFromTanach,
-      policy.removeNikudFromTanach,
-    );
-    await _settings.setValue(
-      keyDefaultRemovePunctuation,
-      policy.defaultRemovePunctuation,
-    );
-    await _settings.setValue(keyShowTeamim, policy.showTeamim);
-    await _settings.setValue(keyReplaceHolyNames, policy.replaceHolyNames);
-    await _settings.setValue(
-      keyHolyNameStyle,
-      policy.holyNameStyle.storageKey,
     );
   }
 
@@ -1209,11 +1144,8 @@ class SettingsRepository {
     await _settings.setValue(keyShowOtzarHachochma, false);
     await _settings.setValue(keyShowHebrewBooks, false);
     await _settings.setValue(keyShowExternalBooks, false);
-    await _settings.setValue(keyShowTeamim, true);
-    await _settings.setValue(keyReplaceHolyNames, true);
+    await updateTextDisplayPolicy(TextDisplayPolicy.empty);
     await _settings.setValue(keyAutoUpdateIndex, true);
-    await _settings.setValue(keyDefaultNikud, false);
-    await _settings.setValue(keyRemoveNikudFromTanach, false);
     await _settings.setValue(keyContinuousReadingMode, false);
     await _settings.setValue(keyDefaultSidebarOpen, false);
     await _settings.setValue(keyDefaultCommentaryOpen, false);
