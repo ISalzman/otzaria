@@ -82,6 +82,7 @@ import 'package:otzaria/library_update/library_update_work_status.dart';
 import 'package:otzaria/theme/app_surfaces.dart';
 import 'package:otzaria/utils/ui/fullscreen_helper.dart';
 import 'package:otzaria/widgets/dialogs/app_dialogs.dart';
+import 'package:otzaria/widgets/navigation/nav_rail_column.dart';
 import 'package:otzaria/widgets/navigation/nav_rail_item.dart';
 import 'package:otzaria/plugins/services/plugin_page_launcher.dart';
 import 'package:otzaria/plugins/services/plugin_runtime_dispatcher.dart';
@@ -234,13 +235,13 @@ Map<String, dynamic> hebrewBooksPathSettingsChangedPayload(String path) => {
   'newValue': path,
 };
 
-/// אופן המעבר מהעמוד שה-PageController מציג כרגע אל עמוד היעד.
 /// האם למקד אוטומטית את שדה החיפוש בכניסה למסך הספרייה — במובייל המקלדת
 /// הייתה נפתחת בכל כניסה, כולל בחזרה מההגדרות, ומכסה חצי מסך.
 @visibleForTesting
 bool shouldAutofocusLibrarySearch(TargetPlatform platform) =>
     platform != TargetPlatform.android && platform != TargetPlatform.iOS;
 
+/// אופן המעבר מהעמוד שה-PageController מציג כרגע אל עמוד היעד.
 enum PageTransitionKind { snap, slide, crossSlide }
 
 @visibleForTesting
@@ -3263,91 +3264,53 @@ class MainWindowScreenState extends State<MainWindowScreen>
                                                                                   final isToolsSelected =
                                                                                       !hideTools &&
                                                                                       _isToolsLauncherOpen;
-                                                                                  return LayoutBuilder(
-                                                                                    builder:
-                                                                                        (
-                                                                                          context,
-                                                                                          constraints,
-                                                                                        ) {
-                                                                                          const buttonHeight = 60.0;
-                                                                                          const minSpacerHeight = 20.0;
-                                                                                          final totalItems =
-                                                                                              (_navData.length -
-                                                                                                  (hideTools
-                                                                                                      ? 1
-                                                                                                      : 0)) +
-                                                                                              pinnedItems.length;
-                                                                                          final needsScroll =
-                                                                                              totalItems *
-                                                                                                      buttonHeight +
-                                                                                                  minSpacerHeight >
-                                                                                              constraints.maxHeight;
-
-                                                                                          final topItems =
-                                                                                              <
-                                                                                                Widget
-                                                                                              >[
-                                                                                                for (
-                                                                                                  int i = 0;
-                                                                                                  i <
-                                                                                                      _toolsNavIndex;
-                                                                                                  i++
-                                                                                                )
-                                                                                                  _buildNavRailItem(
-                                                                                                    context,
-                                                                                                    i,
-                                                                                                    state.currentScreen,
-                                                                                                    compact: isCompactRail,
-                                                                                                  ),
-                                                                                                if (!hideTools)
-                                                                                                  _buildNavRailItem(
-                                                                                                    context,
-                                                                                                    _toolsNavIndex,
-                                                                                                    state.currentScreen,
-                                                                                                    selectedOverride: isToolsSelected,
-                                                                                                    compact: isCompactRail,
-                                                                                                  ),
-                                                                                                for (
-                                                                                                  int i = 0;
-                                                                                                  i <
-                                                                                                      pinnedItems.length;
-                                                                                                  i++
-                                                                                                )
-                                                                                                  _buildPinnedItemNavRailItem(
-                                                                                                    context,
-                                                                                                    pinnedItems[i],
-                                                                                                    isSelected:
-                                                                                                        activePinnedIndex ==
-                                                                                                        i,
-                                                                                                    compact: isCompactRail,
-                                                                                                  ),
-                                                                                              ];
-                                                                                          final settingsItem = _buildNavRailItem(
+                                                                                  final topItems =
+                                                                                      <
+                                                                                        Widget
+                                                                                      >[
+                                                                                        for (
+                                                                                          int i = 0;
+                                                                                          i <
+                                                                                              _toolsNavIndex;
+                                                                                          i++
+                                                                                        )
+                                                                                          _buildNavRailItem(
                                                                                             context,
-                                                                                            _settingsNavIndex,
+                                                                                            i,
                                                                                             state.currentScreen,
                                                                                             compact: isCompactRail,
-                                                                                          );
-
-                                                                                          if (needsScroll) {
-                                                                                            return SingleChildScrollView(
-                                                                                              child: Column(
-                                                                                                children: [
-                                                                                                  ...topItems,
-                                                                                                  settingsItem,
-                                                                                                ],
-                                                                                              ),
-                                                                                            );
-                                                                                          }
-
-                                                                                          return Column(
-                                                                                            children: [
-                                                                                              ...topItems,
-                                                                                              const Spacer(),
-                                                                                              settingsItem,
-                                                                                            ],
-                                                                                          );
-                                                                                        },
+                                                                                          ),
+                                                                                        if (!hideTools)
+                                                                                          _buildNavRailItem(
+                                                                                            context,
+                                                                                            _toolsNavIndex,
+                                                                                            state.currentScreen,
+                                                                                            selectedOverride: isToolsSelected,
+                                                                                            compact: isCompactRail,
+                                                                                          ),
+                                                                                        for (
+                                                                                          int i = 0;
+                                                                                          i <
+                                                                                              pinnedItems.length;
+                                                                                          i++
+                                                                                        )
+                                                                                          _buildPinnedItemNavRailItem(
+                                                                                            context,
+                                                                                            pinnedItems[i],
+                                                                                            isSelected:
+                                                                                                activePinnedIndex ==
+                                                                                                i,
+                                                                                            compact: isCompactRail,
+                                                                                          ),
+                                                                                      ];
+                                                                                  return NavRailColumn(
+                                                                                    items: topItems,
+                                                                                    bottomItem: _buildNavRailItem(
+                                                                                      context,
+                                                                                      _settingsNavIndex,
+                                                                                      state.currentScreen,
+                                                                                      compact: isCompactRail,
+                                                                                    ),
                                                                                   );
                                                                                 },
                                                                           );

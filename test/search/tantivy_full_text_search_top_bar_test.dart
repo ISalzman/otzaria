@@ -61,6 +61,7 @@ void main() {
       searchQuery: 'בדיקה',
       totalResults: 12,
     ),
+    bool externalProvider = true,
   }) async {
     final searchBloc = _SearchBloc(state);
     final settingsBloc = _MockSettingsBloc();
@@ -71,12 +72,14 @@ void main() {
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = Size(width, 700);
     tab.isLeftPaneOpen.value = false;
-    tab.externalSearchStatus.value = const ExternalSearchStatus(
-      sourceTitle: 'היברובוקס',
-      loading: false,
-      books: 3,
-      hits: 7,
-    );
+    tab.externalSearchStatus.value = externalProvider
+        ? const ExternalSearchStatus(
+            sourceTitle: 'היברובוקס',
+            loading: false,
+            books: 3,
+            hits: 7,
+          )
+        : null;
 
     whenListen(
       settingsBloc,
@@ -171,6 +174,36 @@ void main() {
       ),
     );
     expect(menu.tooltip, 'מיקום תוצאות היברובוקס');
+  });
+
+  testWidgets('סרגל ברוחב 909 עם ספק חיצוני אינו חורג (Pixel XL landscape)', (
+    tester,
+  ) async {
+    await pumpSearch(tester, width: 909);
+
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('סרגל ברוחב 909 בלי ספק חיצוני — שורת מונים אחת ובלי חריגה', (
+    tester,
+  ) async {
+    await pumpSearch(
+      tester,
+      width: 909,
+      externalProvider: false,
+      state: const SearchState(
+        searchQuery: 'בדיקה',
+        totalResults: 12345,
+        totalGroups: 4711,
+      ),
+    );
+
+    expect(tester.takeException(), isNull);
+    // בלי maxLines הטקסט נכרך לשתי שורות בתוך סרגל בגובה שורה אחת.
+    expect(
+      tester.getSize(find.textContaining('תוצאות מאוחדות')).height,
+      lessThan(24),
+    );
   });
 
   testWidgets('בלוק המונים תחום ברוחב כשספק חיצוני פעיל (issue #1051)', (
