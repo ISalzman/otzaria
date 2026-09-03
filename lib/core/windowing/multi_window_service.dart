@@ -111,27 +111,39 @@ class MultiWindowService {
     }
   }
 
-  /// מספר החלונות הפתוחים והתקרה.
+  /// מספר החלונות הפתוחים, התקרה, ומספר המנועים החיים.
   ///
   /// ה-runner הוא מקור האמת: ה-isolate של כל חלון רואה רק את עצמו.
-  Future<({int count, int max})> windowCount() async {
-    if (!isSupported) return (count: 1, max: 1);
+  ///
+  /// ⚠️ [engines] **אינו** [count]. חלון שנסגר מוסתר ולא נהרס, והמנוע שלו
+  /// נשאר חי — כלומר "נסגר החלון האחרון" יכול לקרות בעוד שלושה מנועים
+  /// רצים. ההבדל קובע אם `exit()` בטוח: P-2 מדד ש-`exit()` בזמן שמנוע אחר
+  /// חי מפיל בדיקה של ה-Dart VM ב-~1% מהיציאות.
+  Future<({int count, int max, int engines})> windowCount() async {
+    if (!isSupported) return _singleWindow;
     try {
       final info = await _channel.invokeMapMethod<String, dynamic>(
         'windowCount',
       );
-      if (info == null) return (count: 1, max: 1);
+      if (info == null) return _singleWindow;
       return (
         count: (info['count'] as int?) ?? 1,
         max: (info['max'] as int?) ?? 1,
+        engines: (info['engines'] as int?) ?? 1,
       );
     } on PlatformException catch (e) {
       debugPrint('windowCount failed: ${e.code} ${e.message}');
-      return (count: 1, max: 1);
+      return _singleWindow;
     } on MissingPluginException {
-      return (count: 1, max: 1);
+      return _singleWindow;
     }
   }
+
+  static const ({int count, int max, int engines}) _singleWindow = (
+    count: 1,
+    max: 1,
+    engines: 1,
+  );
 
   /// מביא את החלון הנוכחי לחזית.
   ///

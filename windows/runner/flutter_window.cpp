@@ -203,6 +203,23 @@ std::map<HWND, int>& WindowSlots() {
 // ⚠️ סגירת חלון בודד **אינה** מסיימת את התהליך — רק סגירת האחרון.
 std::atomic<int> g_live_window_count{0};
 
+// מספר מנועי Flutter החיים בתהליך.
+//
+// ⚠️ **אינו זהה ל-`g_live_window_count`, וההבדל הוא הנקודה.** המונה שמעל
+// יורד בהסתרה, כי חלון שנסגר מוסתר ולא נהרס — אבל **המנוע שלו נשאר חי**.
+// כלומר "נסגר החלון האחרון" יכול לקרות בעוד שלושה מנועים רצים.
+//
+// זה קריטי ליציאה: P-2 מדד ש-`exit()` בזמן שמנוע אחר חי מפיל את הבדיקה
+// של ה-Dart VM ("Isolate main is owned by os thread X, failed to schedule
+// from os thread Y") ב-~1% מהיציאות. המסלול הרגיל יוצא ב-
+// `TerminateProcess`, שאינו מריץ teardown של ה-VM ולכן חסין; רק מסלול
+// הנפילה-לאחור (כשה-Job Object לא הוקם) מגיע ל-`exit()`. המונה הזה נשלח
+// ל-Dart כדי שהשורה בלוג תכיל את המידע שחסר בדיוק לאבחון ההוא.
+//
+// אינו יורד לעולם, במכוון: מנוע אינו נהרס עד יציאת התהליך (הריסה על
+// ה-thread הראשי מפילה — ראו `CreateSecondaryWindowOnThisThread`).
+std::atomic<int> g_live_engine_count{0};
+
 // יוצר חלון אוצריא נוסף **על ה-thread הקורא**, ומשתמש בלולאת ההודעות
 // הקיימת שלו.
 //
@@ -504,6 +521,7 @@ bool FlutterWindow::OnCreate() {
                           kAllPluginsMask & ~kPrintingPluginBit);
   }
   g_live_window_count.fetch_add(1);
+  g_live_engine_count.fetch_add(1);
   KeepWebViewWindowClassesAlive();
   // ── ריבוי חלונות ──
   // Dart קורא `openWindow` עם מטען JSON (בדרך כלל טאב מסוריאל), וה-runner
@@ -526,6 +544,11 @@ bool FlutterWindow::OnCreate() {
               flutter::EncodableValue(g_live_window_count.load());
           info[flutter::EncodableValue("max")] =
               flutter::EncodableValue(static_cast<int>(kMaxWindows));
+          // ⚠️ מנועים ולא חלונות. חלון סגור מוסתר ולא נהרס, ולכן המנוע
+          // שלו נספר כאן ולא ב-`count`. ההבדל הוא מה שקובע אם `exit()`
+          // בטוח — ראו [g_live_engine_count].
+          info[flutter::EncodableValue("engines")] =
+              flutter::EncodableValue(g_live_engine_count.load());
           result->Success(flutter::EncodableValue(info));
           return;
         }

@@ -391,9 +391,27 @@ class AppWindowListener extends WindowListener {
             // **אותה התנהגות בדיוק שהייתה לפני שינוי forceTerminate**.
             // המשמעות: סביבות שבהן Job Object נכשל לא מקבלות את ה-fast
             // exit, אבל גם לא מאבדות שום הגנה שהייתה להן קודם.
+            // ⚠️ מספר המנועים החיים נרשם כאן, וזה המידע שחסר לאבחון.
+            //
+            // המסלול הזה מסתיים ב-`exit(0)` של Dart, שמריץ teardown של
+            // ה-VM — ו-P-2 מדד שזה מפיל את הבדיקה
+            // "Isolate main is owned by os thread X, failed to schedule
+            // from os thread Y" ב-~1% מהיציאות **כשמנוע אחר חי**. המסלול
+            // הרגיל (`TerminateProcess`) חסין, כי הוא אינו מריץ teardown
+            // בכלל.
+            //
+            // חלון סגור מוסתר ולא נהרס, ולכן `engines` יכול להיות 4 בעוד
+            // `count` הוא 1 — ובלי המספר הזה בלוג אין דרך לדעת אם קריסת
+            // יציאה שדווחה הייתה בתצורה המסוכנת.
+            final live = await const MultiWindowService().windowCount().timeout(
+              const Duration(seconds: 1),
+              onTimeout: () => (count: 1, max: 1, engines: 1),
+            );
             _logForceTerminateFailure(
               'Job Object not ready in native runner — degraded close, '
-              'WebView2 children may still orphan (pre-fix behavior)',
+              'WebView2 children may still orphan (pre-fix behavior); '
+              'live engines=${live.engines} visible windows=${live.count}'
+              '${live.engines > 1 ? ' — exit() teardown is unsafe here (P-2 §3)' : ''}',
               null,
             );
             await Future<void>.delayed(const Duration(milliseconds: 500));
