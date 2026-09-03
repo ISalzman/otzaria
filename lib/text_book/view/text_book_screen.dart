@@ -971,7 +971,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     }
   }
 
-  /// מאתר את המהדורות המקבילות (לחצן "פתח מהדורה מקבילה") פעם אחת, אחרי
+  /// מאתר את המהדורות המקבילות (לחצן המהדורה המקבילה) פעם אחת, אחרי
   /// שתוכן הספר כבר נטען. `getCompanionBook` דורש את כל קטלוג הספרייה
   /// (~300ms CPU), ולכן הוא נדחה לכאן כדי לא לחנוק את שאילתת תוכן הספר
   /// בעלייה. עד שיתבצע, הלחצן פשוט מוסתר.
@@ -2594,7 +2594,9 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   ) {
     final compact = context.read<SettingsBloc>().state.compactMenuMode;
     final primary = _parallelEditions.first;
-    const tooltip = 'פתח מהדורה מקבילה';
+    final tooltip = primary.isCompanion
+        ? 'פתח בתצוגת PDF'
+        : 'פתח מהדורה מקבילה';
     if (_parallelEditions.length == 1) {
       return ActionButtonData(
         widget: BarButton.icon(

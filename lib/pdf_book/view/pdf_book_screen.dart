@@ -5310,7 +5310,9 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   ActionButtonData _buildParallelEditionsAction(BuildContext context) {
     final compact = context.read<SettingsBloc>().state.compactMenuMode;
     final primary = _parallelEditions.first;
-    const tooltip = 'פתח מהדורה מקבילה';
+    final tooltip = primary.isCompanion
+        ? 'פתח בתצוגת טקסט'
+        : 'פתח מהדורה מקבילה';
     if (_parallelEditions.length == 1) {
       return ActionButtonData(
         widget: BarButton.icon(

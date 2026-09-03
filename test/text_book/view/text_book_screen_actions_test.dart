@@ -134,6 +134,66 @@ void main() {
       expect(find.text('הצג נוסחאות נוספות'), findsNothing);
     });
 
+    testWidgets('הלחצן למהדורה המובנית כתוב "פתח בתצוגת PDF"', (
+      tester,
+    ) async {
+      final book = TextBook(title: 'ספר בדיקה');
+      final pdfBook = PdfBook(title: 'ספר בדיקה', path: 'ספר בדיקה.pdf');
+      DataRepository.instance.library = Future.value(
+        Library(
+          categories: [
+            Category(
+              title: 'קטגוריה',
+              description: '',
+              shortDescription: '',
+              order: 1,
+              subCategories: [],
+              books: [book, pdfBook],
+              parent: null,
+            ),
+          ],
+        ),
+      );
+
+      final bloc = _TestTextBookBloc(_loadedState(book));
+      final tab = TextBookTab(book: book, index: 0, blocOverride: bloc);
+      final tabsBloc = _TestTabsBloc(
+        TabsState(tabs: [tab], currentTabIndex: 0),
+      );
+      final settingsBloc = _TestSettingsBloc(SettingsState.initial());
+
+      addTearDown(() async {
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.pump();
+        await bloc.close();
+        await tabsBloc.close();
+        await settingsBloc.close();
+        tab.dispose();
+      });
+
+      await _setSurfaceSize(tester, const Size(1600, 900));
+      await _pumpTextBookScreen(
+        tester,
+        tab: tab,
+        textBookBloc: bloc,
+        tabsBloc: tabsBloc,
+        settingsBloc: settingsBloc,
+        focusRepository: focusRepository,
+        shamorZachorDataProvider: shamorZachorDataProvider,
+        shamorZachorProgressProvider: shamorZachorProgressProvider,
+        bookmarkBloc: bookmarkBloc,
+        personalNotesBloc: personalNotesBloc,
+        tourCubit: tourCubit,
+        isInCombinedView: false,
+      );
+      // איתור המהדורות המקבילות נדחה ל-listener של טעינת התוכן.
+      bloc.emitStateForTest(_loadedState(book));
+      await tester.pumpAndSettle();
+
+      expect(find.byTooltip('פתח בתצוגת PDF'), findsOneWidget);
+      expect(find.byTooltip('פתח מהדורה מקבילה'), findsNothing);
+    });
+
     testWidgets('לספר עם נוסחאות התפריט פותח את רשימת הנוסחאות', (
       tester,
     ) async {
