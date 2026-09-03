@@ -259,6 +259,7 @@ class SqliteDataProvider {
   /// מסמן כתיבה חיצונית פעילה כדי ש-[initialize] של קוראים מקבילים לא יפתח
   /// חיבור RO מתנגש בזמן שהאיזולייט כותב.
   /// יש לקרוא ל-[reopenAfterExternalWrite] לאחר שהאיזולייט סיים.
+  /// זורק [StateError] אם שחרור ה-handle של ה-worker לא אומת.
   Future<void> closeForExternalWrite() async {
     // נוצר *לפני* הגדלת המונה, כך שקורא מקביל שיראה _activeWriteSessions > 0
     // תמיד יראה גם gate להמתין עליו.
@@ -269,16 +270,19 @@ class SqliteDataProvider {
     // *ממתינה* המחיקה/החלפה של ה-DB נכשלת (ב-Windows) או נתקעת על busy.
     final released = await FindRefDbIsolate.suspendForExternalWrite();
     if (!released) {
-      // השורה הזו היא מה שיאבחן בשדה כשל מחיקה/rename של seforim.db.
-      debugPrint(
-        '[SqliteDataProvider] external write starting while the find_ref '
-        'worker may still hold seforim.db open',
+      // בלי handle סגור אסור להזיז את הקובץ, בייחוד ב-Windows.
+      await reopenAfterExternalWrite(reopenDatabase: false);
+      throw StateError(
+        'לא ניתן לשחרר את seforim.db לפני החלפת הספרייה',
       );
     }
   }
 
   /// פותח מחדש את seforim.db read-only לאחר שאיזולייט חיצוני סיים לכתוב.
-  Future<void> reopenAfterExternalWrite() async {
+  ///
+  /// [reopenDatabase] כבוי כאשר מסך הייבוא כבר קבע את נתיב/תקינות הספרייה;
+  /// החיבור ייפתח עצל בקריאה הבאה, אחרי שההחלפה הושלמה במלואה.
+  Future<void> reopenAfterExternalWrite({bool reopenDatabase = true}) async {
     if (_activeWriteSessions > 0) {
       _activeWriteSessions--;
     }
@@ -288,9 +292,11 @@ class SqliteDataProvider {
       return;
     }
     try {
-      // המונה כבר 0, ולכן initialize() לא ייכנס לבלוק ההמתנה ל-gate (אין
-      // deadlock), ומנגנון _initializationFuture מונע פתיחה כפולה מול קורא מקביל.
-      await initialize();
+      if (reopenDatabase) {
+        // המונה כבר 0, ולכן initialize() לא ייכנס לבלוק ההמתנה ל-gate (אין
+        // deadlock), ומנגנון _initializationFuture מונע פתיחה כפולה מול קורא מקביל.
+        await initialize();
+      }
     } finally {
       // ב-finally: worker שנשאר מושהה אחרי כשל פתיחה יחזיר שגיאה לכל TOC
       // וקטלוג עד סוף ה-session.

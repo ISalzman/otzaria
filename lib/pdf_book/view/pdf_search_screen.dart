@@ -143,16 +143,13 @@ class PdfBookSearchView extends StatefulWidget {
     return PdfMessages.bookNotInSearchIndex;
   }
 
-  /// אותיות עבריות, כולל הסופיות — טווח רצוף אחד ביוניקוד.
-  static final RegExp _hebrewLetter = RegExp(r'[א-ת]');
+  /// אותיות עבריות ואנגליות — שכבת טקסט עם ספרות ופיסוק בלבד אינה שמישה.
+  static final RegExp _searchableLetter = RegExp(r'[A-Za-zא-ת]');
 
-  /// האם בטקסט שנדגם מהעמודים יש עברית שאפשר לחפש בה.
-  ///
-  /// שכבת הטקסט של PDF סרוק אינה ריקה — היא מכילה פיסוק וספרות — ולכן
-  /// הקריטריון הוא אפס אותיות עבריות, לא טקסט ריק.
+  /// האם בטקסט שנדגם מהעמודים יש אות שאפשר לחפש בה.
   @visibleForTesting
-  static bool hasSearchableHebrewText(Iterable<String> pageTexts) =>
-      pageTexts.any(_hebrewLetter.hasMatch);
+  static bool hasSearchableText(Iterable<String> pageTexts) =>
+      pageTexts.any(_searchableLetter.hasMatch);
 
   /// העמודים שנדגמים לבדיקת קיום טקסט: העמוד שהמשתמש רואה ועוד שניים
   /// פרושׂים על הספר — עמוד בודד עלול להיות שער או לוח תמונות.
@@ -500,7 +497,7 @@ class PdfBookSearchViewState extends State<PdfBookSearchView> {
     if (!mounted || generation != _searchGeneration) return false;
     // בלי טקסט כלל אי אפשר להכריע (המסמך עדיין לא נטען) — נשארים ב"אין תוצאות".
     if (texts.isEmpty) return false;
-    if (PdfBookSearchView.hasSearchableHebrewText(texts)) return true;
+    if (PdfBookSearchView.hasSearchableText(texts)) return true;
     setState(() => _searchErrorMessage = PdfMessages.noTextLayer);
     return false;
   }

@@ -206,14 +206,18 @@ void main() {
   group('קריטריון הטקסט השמיש', () {
     test('פיסוק וספרות בלבד אינם טקסט שמיש', () {
       expect(
-        PdfBookSearchView.hasSearchableHebrewText([_scannedOnlyPageText]),
+        PdfBookSearchView.hasSearchableText([_scannedOnlyPageText]),
         isFalse,
       );
     });
 
-    test('אות עברית אחת בעמוד כלשהו מספיקה', () {
+    test('אות עברית או אנגלית בעמוד כלשהו מספיקה', () {
       expect(
-        PdfBookSearchView.hasSearchableHebrewText(['123', '', 'ץ']),
+        PdfBookSearchView.hasSearchableText(['123', '', 'ץ']),
+        isTrue,
+      );
+      expect(
+        PdfBookSearchView.hasSearchableText(['123', '', 'English']),
         isTrue,
       );
     });

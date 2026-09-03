@@ -143,7 +143,13 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
   ) async {
     final backupPath = event.backupExistingPath;
     String? backupDir;
+    final closesWorker = backupPath != null;
+    var writeSessionStarted = false;
     try {
+      if (closesWorker) {
+        await SqliteDataProvider.instance.closeForExternalWrite();
+        writeSessionStarted = true;
+      }
       if (backupPath != null) {
         backupDir = await _backupDatabaseFiles(backupPath);
       }
@@ -165,6 +171,12 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
           selectedPath: event.sourceFolder,
         ),
       );
+    } finally {
+      if (writeSessionStarted) {
+        await SqliteDataProvider.instance.reopenAfterExternalWrite(
+          reopenDatabase: false,
+        );
+      }
     }
   }
 
@@ -176,7 +188,13 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
   ) async {
     final backupPath = event.backupExistingPath;
     String? backupDir;
+    final closesWorker = backupPath != null;
+    var writeSessionStarted = false;
     try {
+      if (closesWorker) {
+        await SqliteDataProvider.instance.closeForExternalWrite();
+        writeSessionStarted = true;
+      }
       if (backupPath != null) {
         backupDir = await _backupDatabaseFiles(backupPath);
       }
@@ -198,6 +216,12 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
           selectedPath: event.archivePath,
         ),
       );
+    } finally {
+      if (writeSessionStarted) {
+        await SqliteDataProvider.instance.reopenAfterExternalWrite(
+          reopenDatabase: false,
+        );
+      }
     }
   }
 
@@ -367,7 +391,10 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
   ) async {
     final target = event.targetPath;
     String? backupDir;
+    var writeSessionStarted = false;
     try {
+      await SqliteDataProvider.instance.closeForExternalWrite();
+      writeSessionStarted = true;
       backupDir = await _backupDatabaseFiles(event.existingLibraryPath);
       if (event.isDownload) {
         await _downloadLibrary(target, emit);
@@ -394,6 +421,12 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
         await _restoreDatabaseFiles(backupDir, event.existingLibraryPath);
       }
       emit(_error(errorMessage: 'שגיאה בעדכון הספרייה: $e'));
+    } finally {
+      if (writeSessionStarted) {
+        await SqliteDataProvider.instance.reopenAfterExternalWrite(
+          reopenDatabase: false,
+        );
+      }
     }
   }
 
@@ -564,9 +597,6 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
     await recoverOrphanedDbBackup(dir);
     final dbFile = File(path.join(dir, DatabaseConstants.databaseFileName));
     if (!await dbFile.exists()) return null;
-    // סגירת חיבור ה-RO משחררת את נעילת seforim.db לפני ההזזה — ב-Windows
-    // handle פתוח מונע rename/delete. החיבור ייפתח מחדש בקריאה הבאה.
-    await SqliteDataProvider.instance.dispose();
     final backup = await Directory(dbBackupDirPath).create(recursive: true);
     // גיבוי אטומי: אם הזזת קובץ נכשלת באמצע (seforim.db כבר הוזז אך לוואי לא),
     // מחזירים את מה שכבר הוזז ואז זורקים — אחרת הספרייה נשארת בלי DB ראשי.
