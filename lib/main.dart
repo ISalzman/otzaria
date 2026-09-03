@@ -1400,6 +1400,11 @@ Future<void> initHive() async {
     Hive.openBox<dynamic>(DirectErrorReportService.queueBoxName),
     Hive.openBox<dynamic>(PluginReportService.queueBoxName),
   ]);
+  // ⚠️ כאן ולא ב-`TabsBloc`. שני קוראים שונים טוענים את הכרטיסיות
+  // (`TabsBloc` דרך `LoadTabs`, ו-`NavigationBloc` בקונסטרוקטור שלו), והסדר
+  // ביניהם תלוי בתזמון של תור האירועים. איחוד שמוחק מפתחות חייב לרוץ פעם
+  // אחת, לפני שניהם.
+  await TabsRepository.adoptOrphanWindowSessions();
 }
 
 Future<void> loadCerts() async {

@@ -17,6 +17,7 @@ import 'package:otzaria/plugins/services/plugin_crash_guard.dart';
 import 'package:otzaria/plugins/services/plugin_runtime_dispatcher.dart';
 import 'package:otzaria/plugins/view/webview_environment_holder.dart';
 import 'package:otzaria/tabs/utils/confirm_close_tabs.dart';
+import 'package:otzaria/tabs/tabs_repository.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
 
 /// Callback type for fullscreen state changes
@@ -215,6 +216,12 @@ class AppWindowListener extends WindowListener {
       // חלון אחד מתוך כמה: לסגור רק אותו. `setPreventClose(true)` מנע את
       // הסגירה הרגילה, ובלי הסגירה המפורשת החלון היה נשאר פתוח.
       //
+      // ⚠️ אחרי ה-flush ולפני הסגירה. המשתמש סגר את החלון הזה במכוון,
+      // ולכן הסשן שלו אינו "פתוח" יותר: השארתו הייתה מחזירה בהפעלה הבאה
+      // כרטיסיות שהוא בחר לסגור (`adoptOrphanWindowSessions`).
+      // `Ctrl+Shift+T` אינו נשען עליו אלא על המנוע שנשאר חי בזיכרון.
+      await TabsRepository().discardWindowSession();
+
       // ⚠️ דרך ה-runner ולא `_window.destroy()`: זה האחרון הורס את החלון
       // מתוך טיפול בערוץ, והריסת מנוע משם היא ריאנטרנטית ומפילה את
       // התהליך. ה-runner דוחה את ההריסה לאיטרציה הבאה של לולאת ההודעות.

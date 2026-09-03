@@ -170,7 +170,7 @@ class BackupService {
         final workspacesData = await _backupWorkspaces();
         backupData['workspaces'] = workspacesData['workspaces'];
         backupData['currentWorkspace'] = workspacesData['currentWorkspace'];
-        final openTabs = _backupOpenTabs();
+        final openTabs = await _backupOpenTabs();
         if (openTabs != null) backupData['openTabs'] = openTabs;
       }
 
@@ -568,7 +568,7 @@ class BackupService {
   ///
   /// היעדר ה-box אינו מסמן את השחזור כחלקי: הטאבים הפתוחים הם מצב רגעי
   /// שמשתנה בכל פתיחת ספר, ואין להבהיל את המשתמש בגללם.
-  static Map<String, dynamic>? _backupOpenTabs() {
+  static Future<Map<String, dynamic>?> _backupOpenTabs() async {
     if (!Hive.isBoxOpen(TabsRepository.boxName)) {
       _logger.warning('_backupOpenTabs: tabs box not open — skipping');
       return null;
