@@ -1335,12 +1335,19 @@ class CalendarCubit extends Cubit<CalendarState> {
 
   Future<void> disconnectGoogleCalendar() async {
     await _googleCalendarService.signOut();
+    // אירוע שיובא מגוגל נושא את מזהה גוגל גם כ-id; אירוע שנוצר באוצריא
+    // ונדחף לגוגל שומר id מקומי, ולכן נשאר — הוא נתון של המשתמש.
+    final remaining = state.events
+        .where((e) => e.googleEventId == null || e.googleEventId != e.id)
+        .toList();
     emit(
       state.copyWith(
+        events: remaining,
         googleCalendarConnected: false,
         clearGoogleCalendarSyncError: true,
       ),
     );
+    await _saveEventsToStorage(remaining);
   }
 
   Future<void> syncGoogleCalendar({required bool interactive}) async {

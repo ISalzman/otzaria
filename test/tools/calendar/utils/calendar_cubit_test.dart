@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:googleapis/calendar/v3.dart' as cal;
 import 'package:otzaria/settings/settings_exports.dart';
+import 'package:otzaria/tools/calendar/services/google_calendar_service.dart';
 import 'package:otzaria/tools/calendar/services/notification_service.dart';
 import 'package:otzaria/tools/calendar/utils/calendar_cubit.dart';
 import 'package:kosher_dart/kosher_dart.dart';
@@ -55,6 +56,24 @@ class _RecordingPluginAdapter implements CalendarPluginSource {
   }
 }
 
+/// GoogleCalendarService שלא נוגע ברשת — ניתוק בטסט רק מסמן שהתבצע.
+class _FakeGoogleCalendarService extends GoogleCalendarService {
+  bool signedOut = false;
+
+  @override
+  Future<bool> isSignedIn() async => false;
+
+  @override
+  Future<void> signOut() async {
+    signedOut = true;
+  }
+
+  @override
+  Future<GoogleCalendarApiClient?> getApiClient({
+    bool interactive = false,
+  }) async => null;
+}
+
 class _FakeNotificationService implements NotificationService {
   @override
   bool get isInitialized => true;
@@ -75,6 +94,7 @@ class _InMemorySettingsRepository implements SettingsRepository {
   String calendarZmanAlertsJson = '{}';
   String calendarEnabledZmanim = '';
   String savedEventsJson = '[]';
+  String storedEventsJson = '[]';
   String selectedCity = 'ירושלים';
   String calendarDayTransition = 'sunset';
 
@@ -88,7 +108,7 @@ class _InMemorySettingsRepository implements SettingsRepository {
     return {
       'calendarType': 'combined',
       'selectedCity': selectedCity,
-      'calendarEvents': '[]',
+      'calendarEvents': storedEventsJson,
       'calendarNotificationsEnabled': false,
       'calendarNotificationTime': 60,
       'calendarNotificationSound': false,
@@ -1164,6 +1184,64 @@ void main() {
     test('legacy JSON without notificationMinutes decodes to null', () {
       final json = _buildUserEvent().toJson()..remove('notificationMinutes');
       expect(CustomEvent.fromJson(json).notificationMinutes, isNull);
+    });
+  });
+
+  group('disconnectGoogleCalendar', () {
+    late _InMemorySettingsRepository settings;
+    late _FakeGoogleCalendarService google;
+    late CalendarCubit cubit;
+
+    setUp(() async {
+      final importedFromGoogle = _buildUserEvent(
+        id: 'g-imported',
+      ).copyWith(title: 'יובא מגוגל', googleEventId: 'g-imported');
+      final createdInOtzaria = _buildUserEvent(
+        id: 'otzaria-local',
+      ).copyWith(title: 'נוצר באוצריא', googleEventId: 'g-remote-copy');
+      final plainLocal = _buildUserEvent(
+        id: 'plain-local',
+      ).copyWith(title: 'ללא גוגל');
+
+      settings = _InMemorySettingsRepository();
+      settings.storedEventsJson = jsonEncode(
+        [
+          importedFromGoogle,
+          createdInOtzaria,
+          plainLocal,
+        ].map((e) => e.toJson()).toList(),
+      );
+      google = _FakeGoogleCalendarService();
+      cubit = CalendarCubit(
+        settingsRepository: settings,
+        notificationService: _FakeNotificationService(),
+        googleCalendarService: google,
+      );
+      await cubit.initialized;
+    });
+
+    tearDown(() => cubit.close());
+
+    test('מוחק את האירועים שיובאו מגוגל ומשאיר את שאר האירועים', () async {
+      expect(cubit.state.events.length, 3);
+
+      await cubit.disconnectGoogleCalendar();
+
+      expect(google.signedOut, isTrue);
+      expect(cubit.state.googleCalendarConnected, isFalse);
+      expect(
+        cubit.state.events.map((e) => e.id),
+        unorderedEquals(['otzaria-local', 'plain-local']),
+      );
+    });
+
+    test('הרשימה המעודכנת נשמרת לאחסון', () async {
+      await cubit.disconnectGoogleCalendar();
+
+      final saved = (jsonDecode(settings.savedEventsJson) as List)
+          .map((e) => (e as Map<String, dynamic>)['id'])
+          .toList();
+      expect(saved, unorderedEquals(['otzaria-local', 'plain-local']));
     });
   });
 }
