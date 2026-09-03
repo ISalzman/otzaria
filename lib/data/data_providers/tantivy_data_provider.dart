@@ -102,11 +102,21 @@ class TantivyDataProvider {
     // בפתיחה מחדש (reopen/clear) הערך כבר true; איפוס מונע מהצרכנים
     // להסיק "אין אינדקס" מ-indexedFilePaths בזמן שהטעינה מחדש רצה.
     isInitialized.value = false;
+    isTempFallback = false;
+    activeIndexPath = null;
 
     final indexPath = await AppPaths.getIndexPath();
     _indexCompatibility = await _checkIndexCompatibility(indexPath);
 
-    final engine = await _initEngine();
+    // אינדקס בסכמה לא תואמת אינו נפתח כלל: המנוע נכנס לפאניקה בפתיחתו,
+    // והכשל היה נספר בסנטינל ככשל-פתיחה ומזיז אינדקס תקין הצידה כ"פגום".
+    final SearchEngine engine;
+    if (isRebuildRequiredStatus(_indexCompatibility?.status)) {
+      debugPrint('⚠️ האינדקס דורש בנייה מחדש — המנוע נפתח על אינדקס זמני');
+      engine = await _openTempFallbackEngine();
+    } else {
+      engine = await _initEngine();
+    }
     final indexedFilePathsLoaded = await _loadIndexedFilePaths(engine);
     _syncCatalogueOrderRevision(
       indexPath,
@@ -361,8 +371,6 @@ class TantivyDataProvider {
   Future<SearchEngine> _initEngine() async {
     String? indexPath;
     File? sentinelFile;
-    isTempFallback = false;
-    activeIndexPath = null;
 
     try {
       indexPath = await AppPaths.getIndexPath();
@@ -454,18 +462,22 @@ class TantivyDataProvider {
       // Recover by falling back to temp memory index
       debugPrint('⚠️ Falling back to temporary in-memory index');
       try {
-        final tempDir = Directory.systemTemp.createTempSync(
-          'otzaria_temp_index_',
-        );
-        final tempEngine = await SearchEngine.newInstance(path: tempDir.path);
-        isTempFallback = true;
-        activeIndexPath = tempDir.path;
-        return tempEngine;
+        return await _openTempFallbackEngine();
       } catch (e2) {
         debugPrint('❌ CRITICAL: Failed to create temp index: $e2');
         rethrow;
       }
     }
+  }
+
+  /// מנוע על תיקייה זמנית, כשאינדקס הדיסק אינו ניתן לפתיחה. במצב זה
+  /// האינדוקס חסום ([isTempFallback]) כדי שכתיבות לא ילכו לתיקייה שנזרקת.
+  Future<SearchEngine> _openTempFallbackEngine() async {
+    final tempDir = Directory.systemTemp.createTempSync('otzaria_temp_index_');
+    final engine = await SearchEngine.newInstance(path: tempDir.path);
+    isTempFallback = true;
+    activeIndexPath = tempDir.path;
+    return engine;
   }
 
   /// האם האינדקס הקיים דורש איפוס ובנייה מחדש — בגלל אי-תאימות סכמה
