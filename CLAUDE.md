@@ -691,6 +691,7 @@ dart format lib/file.dart    # Format ONLY files you modified
 | קאש שורות הספר לחיפוש (שחרור בטאב רקע) | `test/text_book/view/text_book_search_content_cache_test.dart` |
 | TOC navigator UI | `test/text_book/view/toc_navigator_screen_test.dart` |
 | TOC navigator internals | `test/text_book/view/toc_navigator_internals_test.dart` |
+| דיבורי-המתחיל כתתי-כותרות בניווט (שזירה בעץ מועתק, הכותרת הנוכחית נשארת ברמת הכותרת) | `test/text_book/view/toc_dibburim_attach_test.dart`, `test/text_book/view/toc_navigator_dibburim_test.dart` |
 | Combined view helpers (shouldShow…) | `test/text_book/view/combined_view/combined_book_screen_test.dart` |
 | TabbedCommentaryPanel tab switching / onTabChanged | `test/text_book/view/tabbed_commentary_panel_test.dart` |
 | Page shape commentary selection | `test/text_book/view/page_shape_commentary_selection_test.dart` |
@@ -723,6 +724,7 @@ dart format lib/file.dart    # Format ONLY files you modified
 |------|-----------|
 | DatabaseLibraryProvider (links, alt-toc, isolate regressions) | `test/data_providers/database_library_provider_test.dart` |
 | DatabaseLibraryProvider has-book | `test/data_providers/database_library_provider_has_book_test.dart` |
+| טעינת `line_dh.dhDisplay` (מסד ישן בלי טבלה/עמודה → מפה ריקה) | `test/data_providers/database_library_provider_dibburim_test.dart` |
 | UserBooksDB | `test/data_providers/user_books_database_holder_test.dart` |
 | FileSystemLibraryProvider | `test/data_providers/file_system_library_provider_test.dart` |
 | ExternalCatalogMapper | `test/data_providers/external_catalog_mapper_test.dart` |

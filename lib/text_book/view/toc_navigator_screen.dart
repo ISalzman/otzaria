@@ -6,6 +6,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
+import 'package:otzaria/data/data_providers/database_library_provider.dart';
+import 'package:otzaria/data/data_providers/library_provider_manager.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/utils/text/ref_helper.dart';
 import 'package:flutter/scheduler.dart';
@@ -21,11 +23,16 @@ class TocViewer extends StatefulWidget {
     required this.scrollController,
     required this.closeLeftPaneCallback,
     required this.focusNode,
+    this.loadDibburim,
   });
 
   final void Function() closeLeftPaneCallback;
   final ItemScrollController scrollController;
   final FocusNode focusNode;
+
+  /// דיבורי-המתחיל של הספר (`lineIndex` → טקסט) שיוצגו כתתי-כותרות. ברירת
+  /// המחדל קוראת למסד; הבדיקות מזריקות מפה מוכנה.
+  final Future<Map<int, String>> Function(TextBook book)? loadDibburim;
 
   @override
   State<TocViewer> createState() => _TocViewerState();
@@ -53,6 +60,14 @@ class _TocViewerState extends State<TocViewer>
   bool _isManuallyScrolling = false;
   int? _lastScrolledTocIndex;
   final Map<int, bool> _expanded = {};
+
+  // דיבורי-המתחיל נטענים פעם אחת לספר; העץ הממוזג מחושב רק כשה-TOC או
+  // הדיבורים מתחלפים.
+  bool _dibburimRequested = false;
+  Map<int, String> _dibburim = const {};
+  List<TocEntry>? _mergedSource;
+  Map<int, String>? _mergedDibburim;
+  List<TocEntry>? _mergedResult;
 
   // הסינון והספירה משתנים רק כשהספר או השאילתה משתנים.
   List<TocEntry>? _displaySource;
@@ -99,6 +114,43 @@ class _TocViewerState extends State<TocViewer>
     super.dispose();
   }
 
+  Future<void> _loadDibburim(TextBook book) async {
+    final dibburim = await (widget.loadDibburim ?? _loadDibburimFromLibrary)(
+      book,
+    );
+    if (!mounted || dibburim.isEmpty) return;
+    setState(() => _dibburim = dibburim);
+  }
+
+  static Future<Map<int, String>> _loadDibburimFromLibrary(
+    TextBook book,
+  ) async {
+    // הדיבורים ממופים ל-lineIndex של הטקסט במסד. ספר אישי בשם זהה, מהדורה
+    // חלופית או ספר שתוכנו מוגש מקבצים — ממוספרים אחרת.
+    if (book.isUserBook || book.versionTitle != null) return const {};
+    final provider = LibraryProviderManager.instance.getProviderForBook(
+      book.title,
+      categoryId: book.categoryId,
+      fileType: book.fileType,
+    );
+    if (provider is! DatabaseLibraryProvider) return const {};
+    return DatabaseLibraryProvider.instance.getDibburHamatchilByLineIndex(
+      book.title,
+    );
+  }
+
+  /// העץ המוצג: ה-TOC עם דיבורי-המתחיל כעלים. `tableOfContents` שבמצב נשאר
+  /// כמות שהוא, ולכן הכותרת הנוכחית אינה יורדת לרמת הדיבור.
+  List<TocEntry> _navigationTreeFor(List<TocEntry> tableOfContents) {
+    if (!identical(_mergedSource, tableOfContents) ||
+        !identical(_mergedDibburim, _dibburim)) {
+      _mergedSource = tableOfContents;
+      _mergedDibburim = _dibburim;
+      _mergedResult = attachDibburimToToc(tableOfContents, _dibburim);
+    }
+    return _mergedResult!;
+  }
+
   /// מחיל את השאילתה בהשהיה, כדי שההקלדה עצמה לא תחכה לסינון.
   void _onSearchChanged(String value) {
     _searchDebounce?.cancel();
@@ -126,7 +178,7 @@ class _TocViewerState extends State<TocViewer>
   void _moveHighlight(int delta) {
     final state = context.read<TextBookBloc>().state;
     if (state is! TextBookLoaded) return;
-    final display = _displayDataFor(state.tableOfContents);
+    final display = _displayDataFor(_navigationTreeFor(state.tableOfContents));
     if (!display.isSearching) return;
     final flat = _flatItemsFor(display);
     if (flat.isEmpty) return;
@@ -188,7 +240,7 @@ class _TocViewerState extends State<TocViewer>
   void _openHighlightedEntry() {
     final state = context.read<TextBookBloc>().state;
     if (state is! TextBookLoaded) return;
-    final display = _displayDataFor(state.tableOfContents);
+    final display = _displayDataFor(_navigationTreeFor(state.tableOfContents));
     if (!display.isSearching) return;
     final flat = _flatItemsFor(display);
     if (flat.isEmpty) return;
@@ -248,7 +300,7 @@ class _TocViewerState extends State<TocViewer>
 
     // החלטה בין מסלול וירטואלי לרקורסיבי - חייב להיות זהה ללוגיקה ב-build,
     // אחרת ננסה לגלול בקונטרולר שלא מחובר.
-    final display = _displayDataFor(state.tableOfContents);
+    final display = _displayDataFor(_navigationTreeFor(state.tableOfContents));
     final bool useFlat = display.totalCount > _kTocFlattenThreshold;
 
     SchedulerBinding.instance.addPostFrameCallback((_) {
@@ -573,6 +625,10 @@ class _TocViewerState extends State<TocViewer>
         },
         builder: (context, state) {
           if (state is! TextBookLoaded) return const Center();
+          if (!_dibburimRequested) {
+            _dibburimRequested = true;
+            unawaited(_loadDibburim(state.book));
+          }
 
           // חישוב יחיד של ה"ערך הפעיל" - מועבר כפרמטר ל-_buildTocItem
           // במקום שכל פריט יחשב בעצמו (שזה מה שיצר את ה-O(n²)).
@@ -586,7 +642,9 @@ class _TocViewerState extends State<TocViewer>
                   : null);
 
           // גם חיפוש עשוי להציג עשרות אלפי ערכים, ולכן הסף נגזר מהפלט.
-          final display = _displayDataFor(state.tableOfContents);
+          final display = _displayDataFor(
+            _navigationTreeFor(state.tableOfContents),
+          );
           final bool useFlat = display.totalCount > _kTocFlattenThreshold;
 
           // שדה החיפוש עצמו מצויר בסרגל שמעל החלונית; כאן רק מפרסמים את

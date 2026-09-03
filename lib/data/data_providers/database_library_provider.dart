@@ -1017,6 +1017,62 @@ Future<Map<int, String>> _runInlineSectionMarkersInIsolate({
   );
 }
 
+/// דיבורי-המתחיל של ספר, ממופתחים לפי `lineIndex` — הצורה המודפסת
+/// (`dhDisplay`) מטבלת `line_dh`. מסד ישן, בלי הטבלה או בלי העמודה, נותן
+/// מפה ריקה.
+Map<int, String> _loadDibburHamatchilInIsolate({
+  required String dbPath,
+  required String bookTitle,
+}) {
+  sqlite3.Database? db;
+  try {
+    db = sqlite3.sqlite3.open(dbPath, mode: sqlite3.OpenMode.readOnly);
+
+    final hasDisplayColumn = db
+        .select("PRAGMA table_info('line_dh')")
+        .any((row) => row['name'] == 'dhDisplay');
+    if (!hasDisplayColumn) return const {};
+
+    final bookResults = db.select(
+      'SELECT id FROM book WHERE title = ? LIMIT 1',
+      [bookTitle],
+    ).toMapList();
+    if (bookResults.isEmpty) return const {};
+    final bookId = bookResults.first['id'] as int;
+
+    final rows = db.select(
+      'SELECT lineIndex, dhDisplay FROM line_dh WHERE bookId = ? '
+      'ORDER BY lineIndex',
+      [bookId],
+    ).toMapList();
+    final dibburim = <int, String>{};
+    for (final row in rows) {
+      final lineIndex = row['lineIndex'];
+      final display = row['dhDisplay'];
+      if (lineIndex is int && display is String && display.isNotEmpty) {
+        dibburim[lineIndex] = display;
+      }
+    }
+    return dibburim;
+  } finally {
+    db?.close();
+  }
+}
+
+/// Top-level wrapper עבור טעינת דיבורי-המתחיל ב-isolate.
+/// ראה ההסבר ב-[_runAlternativeStructuresInIsolate].
+Future<Map<int, String>> _runDibburHamatchilInIsolate({
+  required String dbPath,
+  required String bookTitle,
+}) {
+  return Isolate.run(
+    () => _loadDibburHamatchilInIsolate(
+      dbPath: dbPath,
+      bookTitle: bookTitle,
+    ),
+  );
+}
+
 /// Top-level wrapper עבור טעינת קישורי ספר ב-isolate.
 /// ראה ההסבר ב-[_runAlternativeStructuresInIsolate].
 Future<List<Map<String, Object?>>> _runBookLinksInIsolate({
@@ -1407,6 +1463,14 @@ class DatabaseLibraryProvider implements LibraryProvider {
       dbPath: dbPath,
       bookTitle: bookTitle,
     );
+  }
+
+  @visibleForTesting
+  static Map<int, String> loadDibburHamatchilForTesting({
+    required String dbPath,
+    required String bookTitle,
+  }) {
+    return _loadDibburHamatchilInIsolate(dbPath: dbPath, bookTitle: bookTitle);
   }
 
   @visibleForTesting
@@ -3599,6 +3663,27 @@ class DatabaseLibraryProvider implements LibraryProvider {
       debugPrint(
         '⚠️ Error in getInlineSectionMarkersByLineIndex "$bookTitle": $e',
       );
+      return const {};
+    }
+  }
+
+  /// דיבורי-המתחיל של ספר (`line_dh`, מגרסת ספרייה 25), ממופתחים לפי
+  /// `lineIndex` של שורת הפירוש: הצורה המודפסת של הדיבור, לתצוגה כתת-כותרת
+  /// בעץ הניווט. לספר בלי אינדקס, או במסד ישן, מוחזרת מפה ריקה.
+  Future<Map<int, String>> getDibburHamatchilByLineIndex(
+    String bookTitle,
+  ) async {
+    if (!_sqliteProvider.isInitialized || _sqliteProvider.repository == null) {
+      return const {};
+    }
+
+    try {
+      return await _runDibburHamatchilInIsolate(
+        dbPath: _sqliteProvider.dbPath,
+        bookTitle: bookTitle,
+      );
+    } catch (e) {
+      debugPrint('⚠️ Error in getDibburHamatchilByLineIndex "$bookTitle": $e');
       return const {};
     }
   }

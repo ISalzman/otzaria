@@ -70,3 +70,65 @@ List<TocFlatItem> flattenVisibleToc(
   }
   return result;
 }
+
+/// מחזירה עותק של [toc] שבו כל דיבור-מתחיל ב-[dibburim] (`lineIndex` → טקסט)
+/// הוא עלה תחת הכותרת האחרונה שלפניו בסדר הספר — גם כשזו כותרת שהייתה עלה
+/// בעצמה. העץ המקורי אינו משתנה, ולכן "הכותרת הנוכחית", הסימניות וההעתקה
+/// ממשיכים להתייחס לכותרות בלבד. דיבור שלפני הכותרת הראשונה נשמט.
+List<TocEntry> attachDibburimToToc(
+  List<TocEntry> toc,
+  Map<int, String> dibburim,
+) {
+  if (dibburim.isEmpty) return toc;
+
+  final lineIndexes = dibburim.keys.toList()..sort();
+  var nextDibbur = 0;
+  TocEntry? lastHeading;
+
+  // מצרף ל-[lastHeading] את כל הדיבורים שלפני הכותרת הבאה (או את כולם).
+  void attachDibburimBefore(int? nextHeadingIndex) {
+    while (nextDibbur < lineIndexes.length &&
+        (nextHeadingIndex == null ||
+            lineIndexes[nextDibbur] < nextHeadingIndex)) {
+      final lineIndex = lineIndexes[nextDibbur++];
+      final heading = lastHeading;
+      if (heading == null) continue;
+      heading.children.add(
+        TocEntry(
+          text: dibburim[lineIndex]!,
+          index: lineIndex,
+          level: heading.level + 1,
+          parent: heading,
+        ),
+      );
+    }
+    // דיבור על שורת הכותרת עצמה אינו קיים במסד; אם בכל זאת הגיע — נשמט.
+    if (nextHeadingIndex != null &&
+        nextDibbur < lineIndexes.length &&
+        lineIndexes[nextDibbur] == nextHeadingIndex) {
+      nextDibbur++;
+    }
+  }
+
+  List<TocEntry> copyLevel(List<TocEntry> entries, TocEntry? parent) {
+    return [
+      for (final entry in entries)
+        () {
+          attachDibburimBefore(entry.index);
+          final copy = TocEntry(
+            text: entry.text,
+            index: entry.index,
+            level: entry.level,
+            parent: parent,
+          );
+          lastHeading = copy;
+          copy.children.addAll(copyLevel(entry.children, copy));
+          return copy;
+        }(),
+    ];
+  }
+
+  final result = copyLevel(toc, null);
+  attachDibburimBefore(null);
+  return result;
+}
