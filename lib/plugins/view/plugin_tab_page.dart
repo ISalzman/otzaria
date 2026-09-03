@@ -58,6 +58,7 @@ import 'package:otzaria/plugins/view/plugin_webview_failed_view.dart';
 import 'package:otzaria/plugins/services/windows_arch_info.dart';
 import 'package:otzaria/plugins/view/plugin_drop_guard_script.dart';
 import 'package:otzaria/plugins/view/plugin_linkify_script.dart';
+import 'package:otzaria/plugins/view/widgets/plugin_webview_focus_restorer.dart';
 import 'package:otzaria/plugins/services/plugin_file_server.dart';
 import 'package:otzaria/plugins/services/plugin_download_handler.dart';
 import 'package:otzaria/plugins/services/plugin_webview_permission_gate.dart';
@@ -1294,7 +1295,17 @@ class _PluginTabPageState extends State<PluginTabPage> {
 
     // ה-WebView מגיב ללחצן האמצעי בעצמו (Chromium מפעיל שם גלילה אוטומטית
     // משלו), ובלי החסימה היו נפתחים שני עוגנים במקביל.
-    return AutoScrollBarrier(child: webView);
+    return AutoScrollBarrier(
+      child: PluginWebViewFocusRestorer(
+        onRestore: () => unawaited(
+          PluginRuntimeDispatcher.instance.requestKeyboardFocus(
+            widget.plugin.pluginId,
+            instanceId: widget.instanceId,
+          ),
+        ),
+        child: webView,
+      ),
+    );
   }
 
   static bool get _needsWebViewPrerequisites {
