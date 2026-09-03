@@ -54,6 +54,26 @@ Future<void> main() async {
       );
     });
 
+    test('fromJson מצמצם מרחק מקורב ישן לטווח שהמנוע מכבד', () {
+      final source = SearchingTab('חיפוש', 'שלום');
+      addTearDown(source.dispose);
+      final json = source.toJson()
+        ..['searchMode'] = SearchMode.fuzzy.index
+        ..['distance'] = kMaxFuzzyDistance + 5;
+
+      final restored = SearchingTab.fromJson(json);
+      addTearDown(restored.dispose);
+
+      expect(
+        restored.searchBloc.state.configuration.searchMode,
+        SearchMode.fuzzy,
+      );
+      expect(
+        restored.searchBloc.state.configuration.distance,
+        kMaxFuzzyDistance,
+      );
+    });
+
     test('toJson/fromJson משחזר autoRunInitialSearch', () {
       final source = SearchingTab(
         'חיפוש',
@@ -275,7 +295,7 @@ Future<void> main() async {
       // אם clone יחזור לדפוס של "שלח event אחרי בנייה", state יישאר ב-default
       // וה-UI יפעיל UpdateSearchQuery לפני שה-events יעבדו.
       final config = cloned.searchBloc.state.configuration;
-      expect(config.distance, 7);
+      expect(config.distance, kMaxFuzzyDistance);
       expect(config.searchMode, SearchMode.fuzzy);
       expect(config.numResults, 250);
       expect(config.sortBy, ResultsOrder.relevance);

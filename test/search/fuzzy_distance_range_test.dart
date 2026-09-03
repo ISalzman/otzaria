@@ -50,4 +50,32 @@ void main() {
 
     expect((await fuzzyState).configuration.distance, lessThanOrEqualTo(2));
   });
+
+  test('תצורה מקורבת משוחזרת מצטמצמת לטווח שהמנוע מכבד', () {
+    final bloc = SearchBloc(
+      initialConfiguration: const SearchConfiguration(
+        searchMode: SearchMode.fuzzy,
+        distance: 7,
+      ),
+    );
+    addTearDown(bloc.close);
+
+    expect(bloc.state.configuration.distance, kMaxFuzzyDistance);
+  });
+
+  test('עדכון מרחק מקורב מצטמצם לטווח שהמנוע מכבד', () async {
+    final bloc = SearchBloc(
+      initialConfiguration: const SearchConfiguration(
+        searchMode: SearchMode.fuzzy,
+      ),
+    );
+    addTearDown(bloc.close);
+
+    final updatedState = bloc.stream.firstWhere(
+      (state) => state.configuration.distance == kMaxFuzzyDistance,
+    );
+    bloc.add(UpdateDistanceWithoutSearch(kMaxFuzzyDistance + 5));
+
+    expect((await updatedState).configuration.distance, kMaxFuzzyDistance);
+  });
 }

@@ -171,8 +171,9 @@ class SemanticSearchRequest {
     this.matchTaamim = false,
   });
 
-  /// מנוע החיפוש תומך במרחק עריכה 0–2 בלבד.
-  int get effectiveFuzzyMaxDistance => fuzzyMaxDistance.clamp(0, 2);
+  /// מנוע החיפוש תומך במרחק עריכה עד [kMaxFuzzyDistance].
+  int get effectiveFuzzyMaxDistance =>
+      fuzzyMaxDistance.clamp(0, kMaxFuzzyDistance).toInt();
 }
 
 /// חוזה נפרד לפעולות הסמנטיות שמנועי בדיקה לקסיקליים אינם חייבים לממש.

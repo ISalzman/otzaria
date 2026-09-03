@@ -183,7 +183,7 @@ class _SearchDialogState extends State<SearchDialog> {
         initialConfiguration: SearchConfiguration(
           searchMode: searchMode,
           distance: searchMode == SearchMode.fuzzy
-              ? 2
+              ? kMaxFuzzyDistance
               : SearchDefaults.initialDistanceForNewSearch(),
         ),
       );
