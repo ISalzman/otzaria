@@ -21,6 +21,12 @@ class OtzariaEmptyState extends StatelessWidget {
   final bool isCompact;
   final EdgeInsetsGeometry? padding;
 
+  /// האם לעטוף את התוכן במעטפת גלילה ממורכזת ([CenteredScrollableState]).
+  /// כברירת מחדל `true`. יש לכבות (`false`) כאשר הרכיב מוצג בתוך אזור
+  /// שכבר מנהל גלילה בעצמו — כגון [SliverFillRemaining] או [CustomScrollView],
+  /// כדי למנוע גלילה כפולה וקריסת חישוב ממדים אינטרינסיים ב-LayoutBuilder.
+  final bool scrollable;
+
   const OtzariaEmptyState({
     super.key,
     this.icon,
@@ -31,6 +37,7 @@ class OtzariaEmptyState extends StatelessWidget {
     this.actions,
     this.isCompact = false,
     this.padding,
+    this.scrollable = true,
   }) : assert(
          icon == null || customIcon == null,
          'Cannot provide both icon and customIcon',
@@ -87,44 +94,57 @@ class OtzariaEmptyState extends StatelessWidget {
 
     final effectiveActions = actions ?? (action != null ? [action!] : null);
 
-    return CenteredScrollableState(
-      padding:
-          padding ??
-          (isCompact
-              ? const EdgeInsets.symmetric(horizontal: 16, vertical: 12)
-              : const EdgeInsets.all(AppTokens.spaceLG)),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (iconWidget != null) ...[
-            iconWidget,
-            SizedBox(height: isCompact ? AppTokens.spaceSM : AppTokens.spaceMD),
-          ],
+    final effectivePadding =
+        padding ??
+        (isCompact
+            ? const EdgeInsets.symmetric(horizontal: 16, vertical: 12)
+            : const EdgeInsets.all(AppTokens.spaceLG));
+
+    final content = Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (iconWidget != null) ...[
+          iconWidget,
+          SizedBox(height: isCompact ? AppTokens.spaceSM : AppTokens.spaceMD),
+        ],
+        Text(
+          title,
+          style: titleStyle,
+          textAlign: TextAlign.center,
+        ),
+        if (message != null) ...[
+          SizedBox(height: isCompact ? 4 : AppTokens.spaceSM),
           Text(
-            title,
-            style: titleStyle,
+            message!,
+            style: messageStyle,
             textAlign: TextAlign.center,
           ),
-          if (message != null) ...[
-            SizedBox(height: isCompact ? 4 : AppTokens.spaceSM),
-            Text(
-              message!,
-              style: messageStyle,
-              textAlign: TextAlign.center,
-            ),
-          ],
-          if (effectiveActions != null && effectiveActions.isNotEmpty) ...[
-            SizedBox(height: isCompact ? AppTokens.spaceMD : AppTokens.spaceLG),
-            Wrap(
-              alignment: WrapAlignment.center,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              spacing: AppTokens.spaceSM,
-              runSpacing: AppTokens.spaceSM,
-              children: effectiveActions,
-            ),
-          ],
         ],
-      ),
+        if (effectiveActions != null && effectiveActions.isNotEmpty) ...[
+          SizedBox(height: isCompact ? AppTokens.spaceMD : AppTokens.spaceLG),
+          Wrap(
+            alignment: WrapAlignment.center,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: AppTokens.spaceSM,
+            runSpacing: AppTokens.spaceSM,
+            children: effectiveActions,
+          ),
+        ],
+      ],
+    );
+
+    if (!scrollable) {
+      return Center(
+        child: Padding(
+          padding: effectivePadding,
+          child: content,
+        ),
+      );
+    }
+
+    return CenteredScrollableState(
+      padding: effectivePadding,
+      child: content,
     );
   }
 }

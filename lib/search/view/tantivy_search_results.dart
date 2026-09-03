@@ -100,7 +100,11 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
     required String message,
     bool showEditButton = false,
   }) {
+    // scrollable: false — הרכיב מוצג בתוך sliver (SliverFillRemaining או
+    // SliverToBoxAdapter ב-CustomScrollView), ושם הגלילה מנוהלת מבחוץ. עטיפה
+    // ב-SingleChildScrollView/LayoutBuilder הייתה שוברת חישוב intrinsics.
     return OtzariaEmptyState(
+      scrollable: false,
       icon: icon,
       title: title,
       message: message,
