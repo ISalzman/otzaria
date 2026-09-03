@@ -1835,7 +1835,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
     if (widget.isMainText) {
       entries.add(
         AppContextMenuEntry(
-          label: 'מפרשים',
+          label: kParagraphCommentatorsMenuLabel,
           icon: OtzariaIcons.book_24_regular,
           enabled: state.availableCommentators.isNotEmpty,
           childrenBuilder: () => _buildCommentatorsMenuItems(state, index),
@@ -2148,8 +2148,8 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
     ];
   }
 
-  /// פריטי תת-התפריט "מפרשים" — זהים לתצוגה הרגילה, ומשנים את בחירת המפרשים
-  /// שמוצגת בלשונית המפרשים בחלונית הצד (לא את טורי צורת הדף).
+  /// פריטי תת-התפריט "מפרשים על פסקה זו" — זהים לתצוגה הרגילה, ומשנים את
+  /// בחירת המפרשים שבלשונית המפרשים בחלונית הצד (לא את טורי צורת הדף).
   List<AppContextMenuEntry> _buildCommentatorsMenuItems(
     TextBookLoaded state,
     int index,
@@ -2174,8 +2174,14 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
 
     return buildCommentatorsContextMenuChildren(
       activeCommentators: state.activeCommentators,
-      availableCommentators: state.availableCommentators,
+      availableCommentators: paragraphCommentators(
+        availableCommentators: state.availableCommentators,
+        content: widget.content,
+        paragraphIndex: index,
+        linksByLine: state.linksByLine,
+      ),
       commentatorGroups: state.commentatorGroups,
+      linksLoading: state.linksLoading,
       onOpenPane: showOpenPane && widget.onOpenCommentatorsPane != null
           ? () {
               selectClickedLine();

@@ -1,7 +1,36 @@
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/foundation.dart';
+import 'package:otzaria/models/link_types.dart';
+import 'package:otzaria/models/links.dart';
 import 'package:otzaria/text_book/models/commentator_group.dart';
+import 'package:otzaria/text_book/utils/inline_notes_utils.dart'
+    as inline_notes;
+import 'package:otzaria/utils/text/text_manipulation.dart'
+    show getTitleFromPath;
 import 'package:otzaria/widgets/misc/app_menu_exports.dart';
+
+/// כותרת תת-התפריט "מפרשים" בתפריט ההקשר של גוף הספר.
+const String kParagraphCommentatorsMenuLabel = 'מפרשים על פסקה זו';
+
+/// המפרשים מתוך [availableCommentators] שיש להם תוכן על הפסקה [paragraphIndex]
+/// (0-based): קישור-מפרש ב-[linksByLine] (ממופתח 1-based), או הערות inline
+/// בשורה עבור המפרש הוירטואלי [kNotesCommentatorTitle]. הסדר נשמר.
+List<String> paragraphCommentators({
+  required List<String> availableCommentators,
+  required List<String> content,
+  required int paragraphIndex,
+  required Map<int, List<Link>> linksByLine,
+}) {
+  final onParagraph = <String>{};
+  for (final link in linksByLine[paragraphIndex + 1] ?? const <Link>[]) {
+    if (!LinkTypes.isDependentTextLink(link.connectionType)) continue;
+    onParagraph.add(getTitleFromPath(link.path2));
+  }
+  if (inline_notes.notesForLines(content, [paragraphIndex]).isNotEmpty) {
+    onParagraph.add(kNotesCommentatorTitle);
+  }
+  return availableCommentators.where(onParagraph.contains).toList();
+}
 
 /// פריט "פתח את חלונית המפרשים" יוצג כשיש מפרשים נבחרים, המפרשים אינם מוצגים
 /// inline מתחת לטקסט, וטאב המפרשים אינו כבר פעיל בחלונית הצד.
@@ -34,12 +63,14 @@ bool shouldShowSelectCommentatorsEntry({
 typedef CommentatorsSelectionChanged =
     void Function(List<String> commentators, {required bool isAdding});
 
-/// בונה את פריטי תת-התפריט "מפרשים" בתפריט ההקשר של גוף הספר.
+/// בונה את פריטי תת-התפריט "מפרשים על פסקה זו" בתפריט ההקשר של גוף הספר.
 ///
 /// משותף לתצוגה המשולבת/מפוצלת ולצורת הדף, כדי ששלושתן יציגו את אותם פריטים
-/// ואותה התנהגות.
+/// ואותה התנהגות. [availableCommentators] הם מפרשי הפסקה בלבד (ראו
+/// [paragraphCommentators]); הקבוצות מסוננות לפיהם.
 ///
-/// [onOpenPane] ו-[onSelectMultiple] אינם מוצגים כשהם `null`.
+/// [onOpenPane] ו-[onSelectMultiple] אינם מוצגים כשהם `null`. כשאין מפרשים
+/// לפסקה מוצגים רק פריטי הפתיחה, ובזמן [linksLoading] גם פריט "טוען…" מושבת.
 List<AppContextMenuEntry> buildCommentatorsContextMenuChildren({
   required List<String> activeCommentators,
   required List<String> availableCommentators,
@@ -47,13 +78,16 @@ List<AppContextMenuEntry> buildCommentatorsContextMenuChildren({
   required CommentatorsSelectionChanged onCommentatorsChanged,
   VoidCallback? onOpenPane,
   VoidCallback? onSelectMultiple,
+  bool linksLoading = false,
 }) {
   final activeSet = activeCommentators.toSet();
+  final availableSet = availableCommentators.toSet();
   final allActive = activeSet.containsAll(availableCommentators);
 
   List<AppContextMenuEntry> buildGroup(CommentatorGroup group) {
-    if (group.commentators.isEmpty) return const <AppContextMenuEntry>[];
-    final groupActive = group.commentators.every(activeSet.contains);
+    final commentators = group.commentators.where(availableSet.contains);
+    if (commentators.isEmpty) return const <AppContextMenuEntry>[];
+    final groupActive = commentators.every(activeSet.contains);
     return [
       AppContextMenuEntry(
         label: 'הצג את כל ${group.title}',
@@ -61,16 +95,16 @@ List<AppContextMenuEntry> buildCommentatorsContextMenuChildren({
         onTap: () {
           final updated = List<String>.from(activeCommentators);
           if (groupActive) {
-            updated.removeWhere(group.commentators.contains);
+            updated.removeWhere(commentators.contains);
           } else {
-            for (final title in group.commentators) {
+            for (final title in commentators) {
               if (!updated.contains(title)) updated.add(title);
             }
           }
           onCommentatorsChanged(updated, isAdding: !groupActive);
         },
       ),
-      ...group.commentators.map((title) {
+      ...commentators.map((title) {
         final isActive = activeSet.contains(title);
         return AppContextMenuEntry(
           label: title,
@@ -104,14 +138,17 @@ List<AppContextMenuEntry> buildCommentatorsContextMenuChildren({
       ),
     if (onOpenPane != null || onSelectMultiple != null)
       const AppContextMenuEntry.divider(),
-    AppContextMenuEntry(
-      label: 'הצג את כל המפרשים',
-      isSelected: allActive,
-      onTap: () => onCommentatorsChanged(
-        allActive ? <String>[] : List<String>.from(availableCommentators),
-        isAdding: !allActive,
+    if (availableCommentators.isEmpty && linksLoading)
+      const AppContextMenuEntry(label: 'טוען מפרשים…', enabled: false),
+    if (availableCommentators.isNotEmpty)
+      AppContextMenuEntry(
+        label: 'הצג את כל המפרשים על פסקה זו',
+        isSelected: allActive,
+        onTap: () => onCommentatorsChanged(
+          allActive ? <String>[] : List<String>.from(availableCommentators),
+          isAdding: !allActive,
+        ),
       ),
-    ),
   ];
 
   // הקבוצות מגיעות מה-BLoC כשהן כבר ממוינות לפי דורות; מפריד מתווסף רק לפני
