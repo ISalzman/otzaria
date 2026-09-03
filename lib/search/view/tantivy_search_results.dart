@@ -34,7 +34,11 @@ import 'package:otzaria/text_book/view/page_shape/utils/page_shape_settings_mana
 import 'package:otzaria/utils/navigation/talmud_bavli_open_format.dart';
 import 'package:otzaria/utils/text/copy_utils.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
+import 'package:otzaria/utils/ui/context_menu_utils.dart';
 import 'package:otzaria/widgets/controls/action_buttons.dart';
+import 'package:otzaria/widgets/misc/app_menu_exports.dart';
+import 'package:otzaria/widgets/misc/middle_click_open.dart';
+import 'package:otzaria/widgets/feedback/otzaria_empty_state.dart';
 import 'package:otzaria/widgets/layout/adaptive_side_pane.dart';
 import 'package:otzaria_search_engine/otzaria_search_engine.dart'
     show MergedSibling;
@@ -96,46 +100,21 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
     required String message,
     bool showEditButton = false,
   }) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          // הרכיב מוצג גם כשורה קומפקטית בתוך sliver (גובה לא חסום) —
-          // בלי min ה-Column היה דורש גובה אינסופי.
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 52, color: colorScheme.onSurfaceVariant),
-            const SizedBox(height: 16),
-            Text(
-              title,
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-                color: colorScheme.onSurface,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              message,
-              style: TextStyle(
-                fontSize: 14,
-                color: colorScheme.onSurfaceVariant,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            if (showEditButton && widget.onEditSearch != null) ...[
-              const SizedBox(height: 16),
-              ActionButton.neutral(
-                text: 'ערוך חיפוש',
-                onPressed: widget.onEditSearch!,
-                icon: FluentIcons.edit_24_regular,
-              ),
-            ],
-          ],
-        ),
-      ),
+    // scrollable: false — הרכיב מוצג בתוך sliver (SliverFillRemaining או
+    // SliverToBoxAdapter ב-CustomScrollView), ושם הגלילה מנוהלת מבחוץ. עטיפה
+    // ב-SingleChildScrollView/LayoutBuilder הייתה שוברת חישוב intrinsics.
+    return OtzariaEmptyState(
+      scrollable: false,
+      icon: icon,
+      title: title,
+      message: message,
+      action: (showEditButton && widget.onEditSearch != null)
+          ? ActionButton.recommended(
+              text: 'ערוך חיפוש',
+              onPressed: widget.onEditSearch!,
+              icon: FluentIcons.edit_24_regular,
+            )
+          : null,
     );
   }
 
@@ -425,6 +404,7 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
     required bool isPdf,
     required String filePath,
     required Map<String, Map<String, bool>> effectiveOptions,
+    bool inBackground = false,
   }) async {
     // המפתח משמר את זהות הספר (ספר אישי מול רשמי בעל אותה כותרת), והכותרת
     // מאמתת אותו: אינדקס שאינו מסונכרן ממפה את המפתח לספר אחר לגמרי.
@@ -495,6 +475,7 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
           ),
           targetTitle: reference,
           insertAdjacent: true,
+          inBackground: inBackground,
         ),
       );
     } else {
@@ -559,7 +540,12 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
             );
 
       context.read<TabsBloc>().add(
-        OpenOrFocusTab(tab, targetTitle: reference, insertAdjacent: true),
+        OpenOrFocusTab(
+          tab,
+          targetTitle: reference,
+          insertAdjacent: true,
+          inBackground: inBackground,
+        ),
       );
       unawaited(IndexFreshnessWarner.instance.warnIfContentDrifted(textBook));
     }
@@ -1025,225 +1011,249 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
                     child: child,
                   );
                 },
-                child: InkWell(
-                  onTap: () => _handleResultTap(
-                    previewEnabled: previewEnabled,
+                child: _OpenInNewTabRegion(
+                  onOpenInBackground: () => _openResultLocation(
                     title: result.title,
                     reference: result.reference,
                     segment: result.segment.toInt(),
                     isPdf: result.isPdf,
                     filePath: result.filePath,
                     effectiveOptions: effectiveOptions,
+                    inBackground: true,
                   ),
-                  onDoubleTap: previewEnabled
-                      ? () => _openResultLocation(
-                          title: result.title,
-                          reference: result.reference,
-                          segment: result.segment.toInt(),
-                          isPdf: result.isPdf,
-                          filePath: result.filePath,
-                          effectiveOptions: effectiveOptions,
-                        )
-                      : null,
-                  borderRadius: AppTokens.borderRadiusAll,
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // מספר התוצאה
-                        Container(
-                          constraints: const BoxConstraints(minWidth: 32),
-                          height: 32,
-                          padding: const EdgeInsets.symmetric(horizontal: 6),
-                          decoration: BoxDecoration(
-                            color: Theme.of(
-                              context,
-                            ).colorScheme.primaryContainer,
-                            borderRadius: AppTokens.borderRadiusAll,
-                          ),
-                          child: Center(
-                            widthFactor: 1,
-                            child: Text(
-                              '${index + 1}',
-                              style: TextStyle(
-                                color: Theme.of(
-                                  context,
-                                ).colorScheme.onPrimaryContainer,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 16,
+                  child: InkWell(
+                    onTap: () => _handleResultTap(
+                      previewEnabled: previewEnabled,
+                      title: result.title,
+                      reference: result.reference,
+                      segment: result.segment.toInt(),
+                      isPdf: result.isPdf,
+                      filePath: result.filePath,
+                      effectiveOptions: effectiveOptions,
+                    ),
+                    onDoubleTap: previewEnabled
+                        ? () => _openResultLocation(
+                            title: result.title,
+                            reference: result.reference,
+                            segment: result.segment.toInt(),
+                            isPdf: result.isPdf,
+                            filePath: result.filePath,
+                            effectiveOptions: effectiveOptions,
+                          )
+                        : null,
+                    borderRadius: AppTokens.borderRadiusAll,
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // מספר התוצאה
+                          Container(
+                            constraints: const BoxConstraints(minWidth: 32),
+                            height: 32,
+                            padding: const EdgeInsets.symmetric(horizontal: 6),
+                            decoration: BoxDecoration(
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.primaryContainer,
+                              borderRadius: AppTokens.borderRadiusAll,
+                            ),
+                            child: Center(
+                              widthFactor: 1,
+                              child: Text(
+                                '${index + 1}',
+                                style: TextStyle(
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.onPrimaryContainer,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                        const SizedBox(width: 16),
-                        // תוכן התוצאה
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  if (result.isPdf)
-                                    Padding(
-                                      padding: const EdgeInsets.only(left: 8),
-                                      child: Icon(
-                                        OtzariaIcons.book_pdf_24_regular,
+                          const SizedBox(width: 16),
+                          // תוכן התוצאה
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    if (result.isPdf)
+                                      Padding(
+                                        padding: const EdgeInsets.only(left: 8),
+                                        child: Icon(
+                                          OtzariaIcons.book_pdf_24_regular,
+                                          size: 16,
+                                          color: Theme.of(
+                                            context,
+                                          ).colorScheme.primary,
+                                        ),
+                                      ),
+                                    Expanded(
+                                      child: Text(
+                                        result.title,
+                                        style: TextStyle(
+                                          fontSize: 15,
+                                          fontWeight: FontWeight.bold,
+                                          color: Theme.of(
+                                            context,
+                                          ).colorScheme.primary,
+                                        ),
+                                        textAlign: TextAlign.right,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                    // תגית מקור: מבדילה את תוצאות המנוע המובנה
+                                    // מתוצאות ספק חיצוני שמוצגות באותו מסך. בלי
+                                    // מדור חיצוני אין ממה להבדיל, והתגית הייתה
+                                    // רק גוזלת רוחב משם הספר.
+                                    ValueListenableBuilder<
+                                      ExternalSearchStatus?
+                                    >(
+                                      valueListenable:
+                                          widget.tab.externalSearchStatus,
+                                      builder: (context, status, _) =>
+                                          status == null
+                                          ? const SizedBox(width: 4)
+                                          : const Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                SizedBox(width: 8),
+                                                SearchResultSourceTag(
+                                                  label: 'אוצריא',
+                                                ),
+                                                SizedBox(width: 4),
+                                              ],
+                                            ),
+                                    ),
+                                    IconButton(
+                                      icon: Icon(
+                                        FluentIcons.copy_24_regular,
                                         size: 16,
                                         color: Theme.of(
                                           context,
-                                        ).colorScheme.primary,
+                                        ).colorScheme.onSurfaceVariant,
                                       ),
+                                      tooltip: 'העתק טקסט',
+                                      visualDensity: VisualDensity.compact,
+                                      padding: EdgeInsets.zero,
+                                      constraints: const BoxConstraints(
+                                        minWidth: 28,
+                                        minHeight: 28,
+                                      ),
+                                      onPressed: () {
+                                        final plainText = utils
+                                            .stripHtmlIfNeeded(
+                                              rawHtml,
+                                            );
+                                        // אותה התנהגות כמו העתקה ממסך הקריאה:
+                                        // המקור והכותרת מצורפים לפי ההגדרות.
+                                        // titleText כבר עבר החלפת שמות קודש.
+                                        final bookName =
+                                            settingsState.replaceHolyNames
+                                            ? utils.replaceHolyNames(
+                                                result.title,
+                                                style:
+                                                    settingsState.holyNameStyle,
+                                              )
+                                            : result.title;
+                                        final textToCopy =
+                                            CopyUtils.formatTextWithHeaders(
+                                              originalText: plainText,
+                                              copyWithHeaders:
+                                                  settingsState.copyWithHeaders,
+                                              copyHeaderFormat: settingsState
+                                                  .copyHeaderFormat,
+                                              bookName: bookName,
+                                              currentPath:
+                                                  CopyUtils.referencePath(
+                                                    bookName: bookName,
+                                                    reference: titleText,
+                                                  ),
+                                            );
+                                        Clipboard.setData(
+                                          ClipboardData(text: textToCopy),
+                                        );
+                                        UiSnack.show(UiSnack.textCopied);
+                                      },
                                     ),
-                                  Expanded(
+                                  ],
+                                ),
+                                if (wrappedTitleText.isNotEmpty)
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 2),
                                     child: Text(
-                                      result.title,
+                                      wrappedTitleText,
                                       style: TextStyle(
-                                        fontSize: 15,
-                                        fontWeight: FontWeight.bold,
+                                        fontSize: 13,
                                         color: Theme.of(
                                           context,
-                                        ).colorScheme.primary,
+                                        ).colorScheme.onSurfaceVariant,
                                       ),
                                       textAlign: TextAlign.right,
-                                      maxLines: 1,
+                                      softWrap: true,
+                                      maxLines: 2,
                                       overflow: TextOverflow.ellipsis,
                                     ),
                                   ),
-                                  // תגית מקור: מבדילה את תוצאות המנוע המובנה
-                                  // מתוצאות ספק חיצוני שמוצגות באותו מסך. בלי
-                                  // מדור חיצוני אין ממה להבדיל, והתגית הייתה
-                                  // רק גוזלת רוחב משם הספר.
-                                  ValueListenableBuilder<ExternalSearchStatus?>(
-                                    valueListenable:
-                                        widget.tab.externalSearchStatus,
-                                    builder: (context, status, _) =>
-                                        status == null
-                                        ? const SizedBox(width: 4)
-                                        : const Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              SizedBox(width: 8),
-                                              SearchResultSourceTag(
-                                                label: 'אוצריא',
-                                              ),
-                                              SizedBox(width: 4),
-                                            ],
-                                          ),
-                                  ),
-                                  IconButton(
-                                    icon: Icon(
-                                      FluentIcons.copy_24_regular,
-                                      size: 16,
-                                      color: Theme.of(
-                                        context,
-                                      ).colorScheme.onSurfaceVariant,
-                                    ),
-                                    tooltip: 'העתק טקסט',
-                                    visualDensity: VisualDensity.compact,
-                                    padding: EdgeInsets.zero,
-                                    constraints: const BoxConstraints(
-                                      minWidth: 28,
-                                      minHeight: 28,
-                                    ),
-                                    onPressed: () {
-                                      final plainText = utils.stripHtmlIfNeeded(
-                                        rawHtml,
-                                      );
-                                      // אותה התנהגות כמו העתקה ממסך הקריאה:
-                                      // המקור והכותרת מצורפים לפי ההגדרות.
-                                      // titleText כבר עבר החלפת שמות קודש.
-                                      final bookName =
-                                          settingsState.replaceHolyNames
-                                          ? utils.replaceHolyNames(
-                                              result.title,
-                                              style:
-                                                  settingsState.holyNameStyle,
-                                            )
-                                          : result.title;
-                                      final textToCopy =
-                                          CopyUtils.formatTextWithHeaders(
-                                            originalText: plainText,
-                                            copyWithHeaders:
-                                                settingsState.copyWithHeaders,
-                                            copyHeaderFormat:
-                                                settingsState.copyHeaderFormat,
-                                            bookName: bookName,
-                                            currentPath:
-                                                CopyUtils.referencePath(
-                                                  bookName: bookName,
-                                                  reference: titleText,
-                                                ),
-                                          );
-                                      Clipboard.setData(
-                                        ClipboardData(text: textToCopy),
-                                      );
-                                      UiSnack.show(UiSnack.textCopied);
-                                    },
-                                  ),
-                                ],
-                              ),
-                              if (wrappedTitleText.isNotEmpty)
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 2),
-                                  child: Text(
-                                    wrappedTitleText,
+                                const SizedBox(height: 8),
+                                // הטקסט שנמצא
+                                RichText(
+                                  textAlign: TextAlign.justify,
+                                  text: TextSpan(
                                     style: TextStyle(
-                                      fontSize: 13,
+                                      fontSize: 16,
                                       color: Theme.of(
                                         context,
-                                      ).colorScheme.onSurfaceVariant,
+                                      ).colorScheme.onSurface,
+                                      height: 1.5,
                                     ),
-                                    textAlign: TextAlign.right,
-                                    softWrap: true,
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
+                                    children: snippetSpans,
                                   ),
                                 ),
-                              const SizedBox(height: 8),
-                              // הטקסט שנמצא
-                              RichText(
-                                textAlign: TextAlign.justify,
-                                text: TextSpan(
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    color: Theme.of(
-                                      context,
-                                    ).colorScheme.onSurface,
-                                    height: 1.5,
-                                  ),
-                                  children: snippetSpans,
-                                ),
-                              ),
-                              // תוצאות שאוחדו לכרטיס זה (במצב איחוד תוצאות)
-                              if (result.mergedCount > 1)
-                                _MergedSiblingsSection(
-                                  mergedCount: result.mergedCount,
-                                  siblings: result.merged,
-                                  groupingMode: state.resultGrouping,
-                                  onOpenSibling: (sibling) =>
-                                      _openResultLocation(
-                                        title: sibling.title,
-                                        reference: sibling.reference,
-                                        segment: sibling.segment.toInt(),
-                                        isPdf: sibling.isPdf,
-                                        filePath: sibling.filePath,
-                                        effectiveOptions: effectiveOptions,
-                                      ),
-                                  onPreviewSibling: previewEnabled
-                                      ? (sibling) => _togglePreview(
+                                // תוצאות שאוחדו לכרטיס זה (במצב איחוד תוצאות)
+                                if (result.mergedCount > 1)
+                                  _MergedSiblingsSection(
+                                    mergedCount: result.mergedCount,
+                                    siblings: result.merged,
+                                    groupingMode: state.resultGrouping,
+                                    onOpenSibling: (sibling) =>
+                                        _openResultLocation(
                                           title: sibling.title,
                                           reference: sibling.reference,
                                           segment: sibling.segment.toInt(),
                                           isPdf: sibling.isPdf,
                                           filePath: sibling.filePath,
-                                        )
-                                      : null,
-                                ),
-                            ],
+                                          effectiveOptions: effectiveOptions,
+                                        ),
+                                    onOpenSiblingInBackground: (sibling) =>
+                                        _openResultLocation(
+                                          title: sibling.title,
+                                          reference: sibling.reference,
+                                          segment: sibling.segment.toInt(),
+                                          isPdf: sibling.isPdf,
+                                          filePath: sibling.filePath,
+                                          effectiveOptions: effectiveOptions,
+                                          inBackground: true,
+                                        ),
+                                    onPreviewSibling: previewEnabled
+                                        ? (sibling) => _togglePreview(
+                                            title: sibling.title,
+                                            reference: sibling.reference,
+                                            segment: sibling.segment.toInt(),
+                                            isPdf: sibling.isPdf,
+                                            filePath: sibling.filePath,
+                                          )
+                                        : null,
+                                  ),
+                              ],
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -1289,12 +1299,38 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
 /// חיווי "תוצאות מאוחדות" בתחתית כרטיס תוצאה: שורת מונה עדינה שנפתחת
 /// ללחיצה ומציגה את שאר חברות הקבוצה ([MergedSibling]) כשורות קומפקטיות.
 /// לחיצה על שורה פותחת את המיקום בדיוק כמו לחיצה על תוצאה ראשית.
+/// תוצאת חיפוש שנפתחת בכרטיסייה חדשה ברקע מתפריט ההקשר או בלחיצת גלגל.
+class _OpenInNewTabRegion extends StatelessWidget {
+  const _OpenInNewTabRegion({
+    required this.onOpenInBackground,
+    required this.child,
+  });
+
+  final VoidCallback onOpenInBackground;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return AppContextMenuRegion(
+      menuBuilder: (_, _) => [
+        AppContextMenuEntry(
+          label: kOpenInNewTabLabel,
+          icon: FluentIcons.tab_add_24_regular,
+          onTap: onOpenInBackground,
+        ),
+      ],
+      child: MiddleClickOpen(onMiddleClick: onOpenInBackground, child: child),
+    );
+  }
+}
+
 class _MergedSiblingsSection extends StatefulWidget {
   const _MergedSiblingsSection({
     required this.mergedCount,
     required this.siblings,
     required this.groupingMode,
     required this.onOpenSibling,
+    required this.onOpenSiblingInBackground,
     this.onPreviewSibling,
   });
 
@@ -1306,6 +1342,9 @@ class _MergedSiblingsSection extends StatefulWidget {
 
   final ResultGroupingMode groupingMode;
   final ValueChanged<MergedSibling> onOpenSibling;
+
+  /// "פתח בכרטיסייה חדשה" (תפריט הקשר / לחיצת גלגל) על שורת sibling.
+  final ValueChanged<MergedSibling> onOpenSiblingInBackground;
 
   /// כשהתצוגה המקדימה פעילה: לחיצה אחת על שורה עוברת לכאן (טוגל תצוגה)
   /// ולחיצה כפולה פותחת בעיון; null = לחיצה אחת פותחת בעיון כרגיל.
@@ -1379,28 +1418,32 @@ class _MergedSiblingsSectionState extends State<_MergedSiblingsSection> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   for (final sibling in widget.siblings)
-                    InkWell(
-                      onTap: () =>
-                          (widget.onPreviewSibling ?? widget.onOpenSibling)
-                              .call(sibling),
-                      onDoubleTap: widget.onPreviewSibling != null
-                          ? () => widget.onOpenSibling(sibling)
-                          : null,
-                      borderRadius: AppTokens.borderRadiusAll,
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 4.0,
-                          vertical: 4.0,
-                        ),
-                        child: Text(
-                          '${sibling.title} — ${sibling.reference}',
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: colorScheme.primary,
+                    _OpenInNewTabRegion(
+                      onOpenInBackground: () =>
+                          widget.onOpenSiblingInBackground(sibling),
+                      child: InkWell(
+                        onTap: () =>
+                            (widget.onPreviewSibling ?? widget.onOpenSibling)
+                                .call(sibling),
+                        onDoubleTap: widget.onPreviewSibling != null
+                            ? () => widget.onOpenSibling(sibling)
+                            : null,
+                        borderRadius: AppTokens.borderRadiusAll,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 4.0,
+                            vertical: 4.0,
                           ),
-                          textAlign: TextAlign.right,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                          child: Text(
+                            '${sibling.title} — ${sibling.reference}',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: colorScheme.primary,
+                            ),
+                            textAlign: TextAlign.right,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
                       ),
                     ),

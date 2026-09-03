@@ -12,6 +12,7 @@ import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/text_book/view/selected_line_links_view.dart';
+import 'package:otzaria/text_display/models/text_display_profile.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
 void main() {
@@ -23,7 +24,7 @@ void main() {
 
       final renderSettings = buildSelectedLinkRenderSettings(
         settingsState: settings,
-        removeNikud: true,
+        displayProfile: const TextDisplayProfile(nikud: MarkVisibility.hide),
         searchText: '',
       );
 
@@ -35,7 +36,9 @@ void main() {
 
       final renderSettings = buildSelectedLinkRenderSettings(
         settingsState: settings,
-        removeNikud: false,
+        displayProfile: const TextDisplayProfile(
+          teamim: TeamimVisibility.hide,
+        ),
         searchText: 'שלום',
       );
 
@@ -48,7 +51,7 @@ void main() {
 
       final renderSettings = buildSelectedLinkRenderSettings(
         settingsState: settings,
-        removeNikud: false,
+        displayProfile: TextDisplayProfile.defaults,
         searchText: '',
       );
 

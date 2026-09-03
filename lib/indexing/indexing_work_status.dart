@@ -31,7 +31,7 @@ WorkStatusItem indexingWorkStatusItem(
       message: 'מסיים ומאחד את קבצי האינדקס',
       detail: fraction == null
           ? 'כל הספרים אונדקסו; הפעולה עשויה להימשך מספר דקות'
-          : 'כל הספרים אונדקסו; האיחוד הושלם ב-${formatFinalizingPercent(fraction)}',
+          : 'כל הספרים אונדקסו',
       progress: fraction,
       onTap: onTap,
     );

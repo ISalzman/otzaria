@@ -243,10 +243,9 @@ class NavTreeTile extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text(
-                    title,
+                  OverflowTooltipText(
+                    text: title,
                     maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
                     style: AppTextStyles.settingTitle.copyWith(
                       fontWeight: fontWeight,
                       color: cs.onSurface,
@@ -254,12 +253,12 @@ class NavTreeTile extends StatelessWidget {
                     ),
                   ),
                   if (subtitle != null && subtitle!.isNotEmpty)
-                    Text(
-                      subtitle!,
+                    OverflowTooltipText(
+                      text: subtitle!,
                       maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
                       style: AppTextStyles.settingSubtitle.copyWith(
                         color: cs.onSurfaceVariant,
+                        fontSize: AppTokens.fontSM,
                       ),
                     ),
                 ],
@@ -343,10 +342,9 @@ class NavTreeHeader extends StatelessWidget {
       child: Row(
         children: [
           Expanded(
-            child: Text(
-              title,
+            child: OverflowTooltipText(
+              text: title,
               maxLines: 1,
-              overflow: TextOverflow.ellipsis,
               style: AppTextStyles.settingTitle.copyWith(
                 fontWeight: FontWeight.w700,
                 fontSize: AppTokens.fontMD,

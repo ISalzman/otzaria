@@ -51,12 +51,7 @@ void main() {
         'showOtzarHachochma': true,
         'showHebrewBooks': true,
         'showExternalBooks': true,
-        'showTeamim': false,
-        'replaceHolyNames': false,
         'autoUpdateIndex': false,
-        'defaultRemoveNikud': true,
-        'removeNikudFromTanach': true,
-        'defaultRemovePunctuation': true,
         'defaultContinuousReadingMode': true,
         'defaultSidebarOpen': true,
         'defaultCommentaryOpen': true,
@@ -107,14 +102,7 @@ void main() {
             showOtzarHachochma: mockSettings['showOtzarHachochma'] as bool,
             showHebrewBooks: mockSettings['showHebrewBooks'] as bool,
             showExternalBooks: mockSettings['showExternalBooks'] as bool,
-            showTeamim: mockSettings['showTeamim'] as bool,
-            replaceHolyNames: mockSettings['replaceHolyNames'] as bool,
             autoUpdateIndex: mockSettings['autoUpdateIndex'] as bool,
-            defaultRemoveNikud: mockSettings['defaultRemoveNikud'] as bool,
-            removeNikudFromTanach:
-                mockSettings['removeNikudFromTanach'] as bool,
-            defaultRemovePunctuation:
-                mockSettings['defaultRemovePunctuation'] as bool,
             defaultContinuousReadingMode:
                 mockSettings['defaultContinuousReadingMode'] as bool,
             defaultSidebarOpen: mockSettings['defaultSidebarOpen'] as bool,
@@ -246,30 +234,22 @@ void main() {
       );
     });
 
-    group('UpdateDefaultRemoveNikud', () {
+    group('UpdateTextDisplayPolicy', () {
       blocTest<SettingsBloc, SettingsState>(
-        'emits updated state when UpdateDefaultRemoveNikud is added',
+        'emits updated state when UpdateTextDisplayPolicy is added',
         build: () => settingsBloc,
-        act: (bloc) => bloc.add(const UpdateDefaultRemoveNikud(true)),
+        act: (bloc) => bloc.add(
+          UpdateTextDisplayPolicy(
+            settingsBloc.state
+                .copyWith(defaultRemoveNikud: true)
+                .textDisplayPolicy,
+          ),
+        ),
         expect: () => [
           settingsBloc.state.copyWith(defaultRemoveNikud: true),
         ],
         verify: (_) {
-          verify(mockRepository.updateDefaultRemoveNikud(true)).called(1);
-        },
-      );
-    });
-
-    group('UpdateRemoveNikudFromTanach', () {
-      blocTest<SettingsBloc, SettingsState>(
-        'emits updated state when UpdateRemoveNikudFromTanach is added',
-        build: () => settingsBloc,
-        act: (bloc) => bloc.add(const UpdateRemoveNikudFromTanach(true)),
-        expect: () => [
-          settingsBloc.state.copyWith(removeNikudFromTanach: true),
-        ],
-        verify: (_) {
-          verify(mockRepository.updateRemoveNikudFromTanach(true)).called(1);
+          verify(mockRepository.updateTextDisplayPolicy(any)).called(1);
         },
       );
     });

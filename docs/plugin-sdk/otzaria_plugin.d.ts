@@ -583,6 +583,17 @@ export interface ReaderTabIndexArgs {
   index: number;
 }
 
+/**
+ * ארגומנטים ל-`ui.setUnsavedChanges`.
+ *
+ * כל עוד `hasChanges` דלוק, סגירת כרטיסיית התוסף עוברת דרך דיאלוג אישור.
+ * `message` (עד 200 תווים) מוצג בדיאלוג מתחת לשם הכרטיסיה.
+ */
+export interface UiSetUnsavedChangesArgs {
+  hasChanges: boolean;
+  message?: string;
+}
+
 /** ארגומנטים ל-`bookmarks.add`. הספר מזוהה ב-`id` או ב-`bookId`. */
 export interface BookmarkAddArgs extends BookIdentity {
   index?: number;
@@ -1716,6 +1727,7 @@ export type OtzariaMethod =
   | 'ui.pickFolder'
   | 'ui.print'
   | 'ui.exportPdf'
+  | 'ui.setUnsavedChanges'
   | 'fs.extractZip'
   | 'fs.deleteFile'
   | 'fs.pickUserFile'

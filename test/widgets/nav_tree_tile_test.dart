@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/widgets/lists/nav_tree_tile.dart';
+import 'package:otzaria/widgets/widgets_exports.dart';
 
 void main() {
   Future<void> pump(WidgetTester tester, Widget child) {
@@ -225,6 +226,87 @@ void main() {
         ),
         findsOneWidget,
       );
+    });
+  });
+
+  group('OverflowTooltipText וטולטיפ בריחוף בעץ הניווט (issue #1103)', () {
+    testWidgets('כותרת קצרה ב-NavTreeTile אינה מציגה Tooltip', (tester) async {
+      await pump(
+        tester,
+        SizedBox(
+          width: 300,
+          child: NavTreeTile.category(
+            title: 'קצר',
+            level: 0,
+          ),
+        ),
+      );
+
+      expect(find.text('קצר'), findsOneWidget);
+      expect(find.byTooltip('קצר'), findsNothing);
+    });
+
+    testWidgets('כותרת ארוכה שנקטעת ב-NavTreeTile מציגה Tooltip עם הטקסט המלא', (
+      tester,
+    ) async {
+      const longTitle =
+          'חזון איש יורה דעה הלכות שחיטה וטרפות סימן קכ"ג סעיף קטן ד';
+      await pump(
+        tester,
+        SizedBox(
+          width: 120,
+          child: NavTreeTile.category(
+            title: longTitle,
+            level: 2,
+          ),
+        ),
+      );
+
+      expect(find.text(longTitle), findsOneWidget);
+      expect(find.byTooltip(longTitle), findsOneWidget);
+    });
+
+    testWidgets('כותרת ארוכה שנקטעת ב-NavTreeHeader מציגה Tooltip עם הטקסט המלא', (
+      tester,
+    ) async {
+      const longTitle =
+          'שולחן ערוך חלק יורה דעה הלכות ריבית והיתר עסקה עם פירוש מקיף';
+      await pump(
+        tester,
+        SizedBox(
+          width: 100,
+          child: const NavTreeHeader(title: longTitle),
+        ),
+      );
+
+      expect(find.text(longTitle), findsOneWidget);
+      expect(find.byTooltip(longTitle), findsOneWidget);
+    });
+
+    testWidgets('OverflowTooltipText ישיר: מציג Tooltip אך ורק כשיש חריגה', (
+      tester,
+    ) async {
+      const text = 'טקסט לבדיקת חריגה';
+
+      // רוחב רחב מאוד - אין חריגה
+      await pump(
+        tester,
+        const SizedBox(
+          width: 400,
+          child: OverflowTooltipText(text: text),
+        ),
+      );
+      expect(find.byTooltip(text), findsNothing);
+
+      // רוחב צר מאוד - יש חריגה
+      await pump(
+        tester,
+        const SizedBox(
+          width: 30,
+          child: OverflowTooltipText(text: text),
+        ),
+      );
+      expect(find.byTooltip(text), findsOneWidget);
     });
   });
 }

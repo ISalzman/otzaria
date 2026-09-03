@@ -23,10 +23,13 @@ import 'package:otzaria/widgets/commentary/commentary_content.dart';
 import 'package:otzaria/text_book/view/error_report_dialog.dart';
 import 'package:otzaria/text_book/models/commentator_group.dart';
 import 'package:otzaria/text_book/utils/commentary_search_utils.dart';
+import 'package:otzaria/text_display/models/text_display_profile.dart';
+import 'package:otzaria/text_display/models/text_display_slot.dart';
 // מיוצא כאן כדי שצרכני כרטיסיית הטקסט יייבאו אותו מנקודה אחת.
 export 'package:otzaria/text_book/utils/commentary_search_utils.dart'
     show CommentarySearchSnippet;
 import 'package:otzaria/text_book/utils/category_settings_utils.dart';
+import 'package:otzaria/text_book/utils/commentary_title_visibility.dart';
 import 'package:otzaria/text_book/utils/commentary_type_filter.dart';
 import 'package:otzaria/text_book/utils/commentator_group_builder.dart';
 import 'package:otzaria/text_book/utils/link_anchor_markers.dart';
@@ -34,10 +37,12 @@ import 'package:otzaria/text_book/view/commentators_list_screen.dart';
 import 'package:otzaria/widgets/misc/commentators_filter_button.dart';
 import 'package:otzaria/widgets/layout/commentators_filter_screen.dart';
 import 'package:otzaria/widgets/lists/commentators_selection_panel.dart';
+import 'package:otzaria/widgets/feedback/otzaria_empty_state.dart';
 import 'package:otzaria/widgets/misc/progressive_scrolling.dart';
 import 'package:otzaria/widgets/misc/smooth_wheel_scroll.dart';
 import 'package:otzaria/settings/services/per_book_settings_service.dart';
 import 'package:otzaria/settings/settings_exports.dart';
+import 'package:otzaria/utils/text/ref_helper.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
 import 'package:otzaria/utils/ui/context_menu_utils.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
@@ -686,7 +691,7 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
     if (!mounted) return;
 
     final bookTitle = _bookTitle(blocState);
-    final removeTaamim = !context.read<SettingsBloc>().state.showTeamim;
+    final profile = blocState.commentaryDisplayProfile;
     await showDialog<bool>(
       context: context,
       barrierDismissible: false,
@@ -695,8 +700,8 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
         bookId: bookTitle,
         documentTitle: bookTitle,
         prebuiltBlocks: blocks,
-        removeNikud: blocState.commentaryRemoveNikud,
-        removeTaamim: removeTaamim,
+        removeNikud: profile.removeNikud,
+        removeTaamim: profile.removeTeamim,
       ),
     );
   }
@@ -1219,10 +1224,9 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
     final gen = ++_searchComputeGen;
 
     final blocState = context.read<TextBookBloc>().state;
-    final removePunctuation =
-        blocState is TextBookLoaded && blocState.commentaryRemovePunctuation;
-    final removeNikud =
-        blocState is TextBookLoaded && blocState.commentaryRemoveNikud;
+    final profile = blocState is TextBookLoaded
+        ? blocState.commentaryDisplayProfile
+        : TextDisplayProfile.defaults;
     final wantSnippets = widget.externalSearchSnippetsNotifier != null;
 
     for (final link in links) {
@@ -1236,7 +1240,7 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
       final count = countCommentarySearchMatches(
         content: data,
         query: query,
-        removePunctuation: removePunctuation,
+        displayProfile: profile,
         // התוכן מרונדר ב-CommentaryContent עם partialWordHighlight: true.
         partialWordMatch: true,
       );
@@ -1246,8 +1250,7 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
           buildCommentarySearchSnippet(
             content: data,
             query: query,
-            removeNikud: removeNikud,
-            removePunctuation: removePunctuation,
+            displayProfile: profile,
           ),
         ]);
       }
@@ -1374,6 +1377,43 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
     );
   }
 
+  // מטמון כתובות שורות המקור להכרעת הסתרת כותרת (issue #896); מתאפס עם ה-TOC.
+  Object? _sourceRefTocIdentity;
+  final Map<int, String> _sourceRefByIndex = {};
+
+  String _sourceRefFor(TextBookLoaded state, int index1) {
+    if (!identical(_sourceRefTocIdentity, state.tableOfContents)) {
+      _sourceRefTocIdentity = state.tableOfContents;
+      _sourceRefByIndex.clear();
+    }
+    return _sourceRefByIndex.putIfAbsent(
+      index1,
+      () => refFromTocList(index1 - 1, state.tableOfContents),
+    );
+  }
+
+  /// האם להציג את כותרת המקור של מקטע: מוסתרת רק כשכל מקטעי הקבוצה מאותה
+  /// שורת מקור והיעד הוא המקום הנקרא כעת — אחרת הכותרת נושאת מידע (issue #896).
+  bool _shouldShowItemTitle(
+    CommentaryGroup group,
+    TextBookLoaded state,
+    String displayTitle,
+  ) {
+    if (!groupSharesSingleSource(group.links)) return true;
+    return !commentaryTitleMatchesReadingLocation(
+      displayTitle: displayTitle,
+      targetBookTitle: group.bookTitle,
+      sourceBookTitle: state.book.title,
+      sourceRef: _sourceRefFor(state, group.links.first.index1),
+    );
+  }
+
+  static TextDisplayProfile _commentaryCopyProfile(TextBookLoaded state) =>
+      state.displayProfile(
+        target: TextTarget.commentary,
+        channel: TextChannel.copy,
+      );
+
   Widget _buildLinkItem(
     CommentaryGroup group,
     Link link,
@@ -1384,8 +1424,8 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
       link: link,
       fontSize: widget.fontSize,
       openBookCallback: widget.openBookCallback,
-      removeNikud: state.commentaryRemoveNikud,
-      removePunctuation: state.commentaryRemovePunctuation,
+      displayProfile: state.commentaryDisplayProfile,
+      copyDisplayProfile: _commentaryCopyProfile(state),
       showSearch: widget.showSearch,
       searchQueryListenable: _searchQueryNotifier,
       currentSearchIndexListenable: _currentSearchIndexNotifier,
@@ -1411,6 +1451,7 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
               .replaceAll(RegExp(r'\s+'), ' ')
               .trim(),
       onOpenPersonalNote: widget.onOpenPersonalNote,
+      shouldShowItemTitle: (title) => _shouldShowItemTitle(group, state, title),
       personalNotes: _personalNotesForGroup(group),
       onNoteSaved: () => _refreshGroupPersonalNotes(group.bookTitle),
       restoreLineBreaks: _restoreLineBreaks,
@@ -1528,11 +1569,10 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
             previous.selectedIndex != current.selectedIndex ||
             !setEquals(previous.selectedIndices, current.selectedIndices) ||
             previous.fontSize != current.fontSize ||
-            previous.removeNikud != current.removeNikud ||
-            previous.commentaryRemoveNikud != current.commentaryRemoveNikud ||
-            previous.removePunctuation != current.removePunctuation ||
-            previous.commentaryRemovePunctuation !=
-                current.commentaryRemovePunctuation;
+            previous.bodyDisplayProfile != current.bodyDisplayProfile ||
+            previous.commentaryDisplayProfile !=
+                current.commentaryDisplayProfile ||
+            _commentaryCopyProfile(previous) != _commentaryCopyProfile(current);
       },
       loadingWidget: const Center(),
       builder: (context, state) {
@@ -1623,7 +1663,7 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
                   notesWidget = _NotesCommentaryWidget(
                     notes: relevantNotes,
                     fontSize: widget.fontSize,
-                    removeNikud: state.removeNikud,
+                    displayProfile: state.commentaryDisplayProfile,
                     openBookCallback: widget.openBookCallback,
                     state: state,
                     reportLineIndex:
@@ -1631,18 +1671,10 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
                     selectionSyncController: widget.selectionSyncController,
                   );
                 } else if (selectedCommentators.isEmpty) {
-                  notesWidget = Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Text(
-                        'אין הערות לקטע זה',
-                        style: TextStyle(
-                          fontSize: widget.fontSize * 0.7,
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
+                  notesWidget = const OtzariaEmptyState(
+                    isCompact: true,
+                    icon: FluentIcons.note_24_regular,
+                    title: 'אין הערות לקטע זה',
                   );
                 }
               }
@@ -1706,20 +1738,12 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
                 }
 
                 // אין מפרשים בכלל לקטע הזה, או שיש מפרשים נבחרים אבל הם לא רלוונטיים
-                return Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Text(
-                      hasAnyCommentaryLinks
-                          ? 'לא נמצאו מפרשים מהנבחרים לקטע זה'
-                          : 'לא נמצאו מפרשים לקטע הנבחר',
-                      style: TextStyle(
-                        fontSize: widget.fontSize * 0.7,
-                        color: Colors.grey,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
+                return OtzariaEmptyState(
+                  isCompact: true,
+                  icon: OtzariaIcons.link_24_regular,
+                  title: hasAnyCommentaryLinks
+                      ? 'לא נמצאו מפרשים מהנבחרים לקטע זה'
+                      : 'לא נמצאו מפרשים לקטע הנבחר',
                 );
               }
 
@@ -1739,20 +1763,10 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
                     // רשימה ריקה כאן נובעת מסינון הסוגים בלבד (יש קישורים
                     // רלוונטיים), ולכן מסבירים במקום להציג ריק בלי הסבר.
                     if (effectiveTypes.isEmpty) return const SizedBox.shrink();
-                    return Center(
-                      child: Padding(
-                        padding: const EdgeInsets.all(16.0),
-                        child: Text(
-                          'לא נמצאו מפרשים מהסוגים שנבחרו',
-                          style: TextStyle(
-                            fontSize: widget.fontSize * 0.7,
-                            color: Theme.of(
-                              context,
-                            ).colorScheme.onSurfaceVariant,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
+                    return const OtzariaEmptyState(
+                      isCompact: true,
+                      icon: OtzariaIcons.link_24_regular,
+                      title: 'לא נמצאו מפרשים מהסוגים שנבחרו',
                     );
                   }
                   final data = thisLinksSnapshot.data!;
@@ -2285,8 +2299,8 @@ class _CommentaryLinkItem extends StatefulWidget {
   final Link link;
   final double fontSize;
   final Function(OpenedTab) openBookCallback;
-  final bool removeNikud;
-  final bool removePunctuation;
+  final TextDisplayProfile displayProfile;
+  final TextDisplayProfile copyDisplayProfile;
   final bool showSearch;
   final ValueListenable<String> searchQueryListenable;
   final ValueListenable<int> currentSearchIndexListenable;
@@ -2321,13 +2335,17 @@ class _CommentaryLinkItem extends StatefulWidget {
   final ValueListenable<String>? highlightQueryListenable;
   final void Function(Link link, int lineNumber)? onOpenPersonalNote;
 
+  /// מכריע אם להציג את כותרת המקור (מקבל את הכותרת ללא אות העוגן).
+  /// null = הצג תמיד.
+  final bool Function(String displayTitle)? shouldShowItemTitle;
+
   const _CommentaryLinkItem({
     super.key,
     required this.link,
     required this.fontSize,
     required this.openBookCallback,
-    required this.removeNikud,
-    required this.removePunctuation,
+    required this.displayProfile,
+    required this.copyDisplayProfile,
     required this.showSearch,
     required this.searchQueryListenable,
     required this.currentSearchIndexListenable,
@@ -2347,6 +2365,7 @@ class _CommentaryLinkItem extends StatefulWidget {
     this.restoreLineBreaks,
     this.highlightQueryListenable,
     this.onOpenPersonalNote,
+    this.shouldShowItemTitle,
   });
 
   @override
@@ -2384,13 +2403,25 @@ class _CommentaryLinkItemState extends State<_CommentaryLinkItem> {
                   builder: (context, snapshot) {
                     String displayTitle =
                         snapshot.data ?? link.fallbackDisplayReference;
-                    // קישור עם עוגן-מילה: אות הסימון שמופיעה בגוף
-                    // הטקסט מוצגת גם לפני כותרת ההערה.
-                    if (link.anchorStart != null) {
-                      final markerLetter = anchorMarkerLetter(link);
-                      if (markerLetter != null) {
-                        displayTitle = '($markerLetter) $displayTitle';
-                      }
+                    final showTitle =
+                        widget.shouldShowItemTitle?.call(displayTitle) ?? true;
+                    // קישור עם עוגן-מילה: אות הסימון שמופיעה בגוף הטקסט
+                    // נשמרת גם כשהכותרת מוסתרת — היא הקישור הוויזואלי להערה.
+                    final markerLetter = link.anchorStart != null
+                        ? anchorMarkerLetter(link)
+                        : null;
+                    if (!showTitle && markerLetter == null) {
+                      // דיווח ריק דורס כותרת שדווחה קודם — לשחזור העתקה נכון.
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        if (!mounted) return;
+                        widget.onLinkTitleRendered?.call(link, '');
+                      });
+                      return const SizedBox.shrink();
+                    }
+                    if (!showTitle) {
+                      displayTitle = '($markerLetter)';
+                    } else if (markerLetter != null) {
+                      displayTitle = '($markerLetter) $displayTitle';
                     }
                     if (settingsState.replaceHolyNames) {
                       displayTitle = utils.replaceHolyNames(
@@ -2479,8 +2510,8 @@ class _CommentaryLinkItemState extends State<_CommentaryLinkItem> {
                       link: link,
                       openBookCallback: widget.openBookCallback,
                       fontSize: widget.fontSize,
-                      removeNikud: widget.removeNikud,
-                      removePunctuation: widget.removePunctuation,
+                      displayProfile: widget.displayProfile,
+                      copyDisplayProfile: widget.copyDisplayProfile,
                       savedSelectedText: savedTextAtBuild,
                       onNavigateToLink: _navigateToLink,
                       onNoteSaved: widget.onNoteSaved,
@@ -2517,8 +2548,7 @@ class _CommentaryLinkItemState extends State<_CommentaryLinkItem> {
                     link: link,
                     fontSize: widget.fontSize,
                     openBookCallback: widget.openBookCallback,
-                    removeNikud: widget.removeNikud,
-                    removePunctuation: widget.removePunctuation,
+                    displayProfile: widget.displayProfile,
                     searchQuery: searchQuery,
                     currentSearchIndex: currentSearchIndex,
                     onSearchResultsCountChanged:
@@ -2567,7 +2597,9 @@ class _CommentaryLinkItemState extends State<_CommentaryLinkItem> {
 class _NotesCommentaryWidget extends StatefulWidget {
   final List<String> notes;
   final double fontSize;
-  final bool removeNikud;
+
+  /// אותו פרופיל כמו טקסט המפרשים — ההערות מוצגות כמפרש.
+  final TextDisplayProfile displayProfile;
   final Function(OpenedTab) openBookCallback;
 
   /// מצב הספר הראשי — דרוש לדיווח על טעות (ההערות inline בתוכו).
@@ -2580,7 +2612,7 @@ class _NotesCommentaryWidget extends StatefulWidget {
   const _NotesCommentaryWidget({
     required this.notes,
     required this.fontSize,
-    required this.removeNikud,
+    required this.displayProfile,
     required this.openBookCallback,
     required this.state,
     required this.reportLineIndex,
@@ -2715,12 +2747,8 @@ class _NotesCommentaryWidgetState extends State<_NotesCommentaryWidget> {
                           ),
                           child: SmartTextWidget(
                             text: note,
-                            settings: RenderSettings(
-                              removeNikud: widget.removeNikud,
-                              removePunctuation: false,
-                              removeTeamim: false,
-                              replaceHolyNames: settingsState.replaceHolyNames,
-                              holyNameStyle: settingsState.holyNameStyle,
+                            settings: RenderSettings.fromProfile(
+                              widget.displayProfile,
                               searchText: '',
                               currentSearchIndex: -1,
                               fontSize: widget.fontSize * 0.85,

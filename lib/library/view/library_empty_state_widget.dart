@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:otzaria/widgets/controls/action_buttons.dart';
 import 'package:otzaria/widgets/layout/centered_scrollable_state.dart';
 
 /// ווידג'ט המוצג כאשר אין תוצאות בספרייה.
@@ -35,16 +36,16 @@ class LibraryEmptyStateWidget extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        OutlinedButton.icon(
+        ActionButton.neutral(
           onPressed: onBack,
-          icon: const Icon(FluentIcons.arrow_up_24_regular),
-          label: const Text('חזור'),
+          icon: FluentIcons.arrow_up_24_regular,
+          text: 'חזור',
         ),
         const SizedBox(width: 8),
-        OutlinedButton.icon(
+        ActionButton.neutral(
           onPressed: onHome,
-          icon: const Icon(FluentIcons.home_24_regular),
-          label: const Text('בית'),
+          icon: FluentIcons.home_24_regular,
+          text: 'בית',
         ),
       ],
     );
@@ -75,10 +76,10 @@ class LibraryEmptyStateWidget extends StatelessWidget {
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 16),
-            FilledButton.icon(
+            ActionButton.recommended(
               onPressed: onOpenLink,
-              icon: const Icon(FluentIcons.link_24_regular),
-              label: const Text('פתיחת קישור'),
+              icon: FluentIcons.link_24_regular,
+              text: 'פתיחת קישור',
             ),
             const SizedBox(height: 12),
             _buildNavButtons(),
@@ -99,10 +100,10 @@ class LibraryEmptyStateWidget extends StatelessWidget {
               style: Theme.of(context).textTheme.bodyMedium,
             ),
             const SizedBox(height: 8),
-            FilledButton.icon(
+            ActionButton.recommended(
               onPressed: onOpenSearch,
-              icon: const Icon(FluentIcons.search_24_regular),
-              label: const Text('פתח חיפוש טקסט'),
+              icon: FluentIcons.search_24_regular,
+              text: 'פתח חיפוש טקסט',
             ),
           ],
         ],

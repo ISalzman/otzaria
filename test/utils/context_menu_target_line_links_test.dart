@@ -4,6 +4,7 @@ import 'package:otzaria/models/link_types.dart';
 import 'package:otzaria/models/links.dart';
 import 'package:otzaria/services/target_line_links_service.dart';
 import 'package:otzaria/utils/ui/context_menu_utils.dart';
+import 'package:otzaria/text_display/models/text_display_profile.dart';
 import 'package:otzaria/widgets/misc/app_menu_exports.dart';
 
 /// תפריט ההקשר של מפרש/קישור מציג "מפרשים" ו"קישורים" של *קטע היעד* — מה
@@ -39,8 +40,7 @@ class _MenuProbe extends StatelessWidget {
           link: _link(),
           openBookCallback: (_) {},
           fontSize: 16,
-          removeNikud: false,
-          removePunctuation: false,
+          displayProfile: TextDisplayProfile.defaults,
           savedSelectedText: 'טקסט מסומן',
           onCopySelected: () {},
           onNavigateToLink: onNavigateToLink,
@@ -82,6 +82,18 @@ void main() {
       expect(labels, isNot(contains('קישורים')));
       expect(labels, contains('העתק'));
       expect(labels, contains('פתח ספר זה בחלון נפרד'));
+    });
+
+    testWidgets('"פתח בכרטיסייה חדשה" מופיע מיד אחרי פתיחת הספר', (
+      tester,
+    ) async {
+      final labels = (await buildMenu(tester)).map((e) => e.label).toList();
+
+      expect(labels, contains(kOpenInNewTabLabel));
+      expect(
+        labels.indexOf(kOpenInNewTabLabel),
+        labels.indexOf('פתח ספר זה בחלון נפרד') + 1,
+      );
     });
 
     testWidgets('עם onNavigateToLink נוספים שני הפריטים', (tester) async {

@@ -431,9 +431,10 @@ flutter test test/settings/l10n/
    showDialog(context: context, builder: settingsDialogBuilder(context, (_) => const MyDialog()));
    ```
 
-Strings outside `lib/settings/` are Hebrew-only by design — do **not** wrap them. Two areas are the exception and **do** go through the same catalog:
+Strings outside `lib/settings/` are Hebrew-only by design — do **not** wrap them. The exceptions below **do** go through the same catalog (translated text, direction stays RTL — the app-wide `SettingsTextScope` in `lib/app.dart` makes `context.settingsText` work everywhere, dialogs included, with no `settingsDialogBuilder` needed outside settings):
 
 - **`lib/navigation/`** — the fixed navigation rail and the title-bar screen names, because the settings screen is reached from them.
+- **Interface chrome of the main screens (issue #1101)** — the library browser (`lib/library/view/library_browser.dart`), the Find Sources dialog (`lib/find_ref/view/find_ref_dialog.dart`), the library search dialog (`lib/search/view/search_dialog.dart` + `enhanced_search_field.dart`, `search_scope_menu.dart`, `full_text_settings_widgets.dart`), and the tools launcher panel (`lib/tools/view/tools_launcher_panel.dart`). Only UI chrome is wrapped — book/category titles, tab titles, plugin names, and BLoC-produced status messages stay Hebrew. Labels that reach `settingsText` through a variable (search mode/scope/word-match enums, word-option keys, tool-tile actions, built-in tool names, the library-update tooltip) are guarded by cases in `test/settings/l10n/settings_variable_labels_test.dart`.
 - **`lib/tour/`** — the guided tour and the live tips. **Every new tour step title/body and every live-tip title/description needs an ARB entry**, same as a settings string; see `docs/guided_tour_developer_guide.md`. Two rules specific to the tour: a step's `body` must stay a plain string literal (a variable value goes in as a placeholder — a keyboard shortcut via `shortcut:` filling `{shortcut}`), and coverage is guarded by `test/settings/l10n/settings_variable_labels_test.dart`, which builds the steps for real, so a step with no translation fails there rather than rendering Hebrew.
 
 ### 10. Navigation Side Panel — ONLY `NavSidePanel`
@@ -690,6 +691,7 @@ dart format lib/file.dart    # Format ONLY files you modified
 | קאש שורות הספר לחיפוש (שחרור בטאב רקע) | `test/text_book/view/text_book_search_content_cache_test.dart` |
 | TOC navigator UI | `test/text_book/view/toc_navigator_screen_test.dart` |
 | TOC navigator internals | `test/text_book/view/toc_navigator_internals_test.dart` |
+| דיבורי-המתחיל כתתי-כותרות בניווט (שזירה בעץ מועתק, הכותרת הנוכחית נשארת ברמת הכותרת) | `test/text_book/view/toc_dibburim_attach_test.dart`, `test/text_book/view/toc_navigator_dibburim_test.dart` |
 | Combined view helpers (shouldShow…) | `test/text_book/view/combined_view/combined_book_screen_test.dart` |
 | TabbedCommentaryPanel tab switching / onTabChanged | `test/text_book/view/tabbed_commentary_panel_test.dart` |
 | Page shape commentary selection | `test/text_book/view/page_shape_commentary_selection_test.dart` |
@@ -700,9 +702,11 @@ dart format lib/file.dart    # Format ONLY files you modified
 | SimpleTextViewer | `test/text_book/view/page_shape/simple_text_viewer_test.dart` |
 | Selected text copy/restore | `test/text_book/view/selection/selected_text_copy_test.dart`, `…selected_text_restore_test.dart` |
 | SelectionSyncController | `test/text_book/view/selection/selection_sync_controller_test.dart` |
+| בחירה כלפי מעלה מעבר לנקודת העיגון של הרשימה (sliver הפוך) | `test/text_book/view/selection/selection_upward_across_anchor_test.dart` |
 | Commentary open-filter request | `test/text_book/view/commentary_list_base_open_filter_test.dart` |
 | Commentary search focus | `test/text_book/view/commentary_search_focus_test.dart` |
 | Commentary grouping | `test/text_book/commentary_grouping_test.dart` |
+| הסתרת כותרת מקור מיותרת במקטע מפרש | `test/text_book/view/commentary_item_title_visibility_test.dart` |
 | Book source dialog | `test/text_book/view/book_source_dialog_test.dart` |
 | Error report dialog | `test/text_book/view/error_report_dialog_test.dart` |
 
@@ -720,6 +724,7 @@ dart format lib/file.dart    # Format ONLY files you modified
 |------|-----------|
 | DatabaseLibraryProvider (links, alt-toc, isolate regressions) | `test/data_providers/database_library_provider_test.dart` |
 | DatabaseLibraryProvider has-book | `test/data_providers/database_library_provider_has_book_test.dart` |
+| טעינת `line_dh.dhDisplay` (מסד ישן בלי טבלה/עמודה → מפה ריקה) | `test/data_providers/database_library_provider_dibburim_test.dart` |
 | UserBooksDB | `test/data_providers/user_books_database_holder_test.dart` |
 | FileSystemLibraryProvider | `test/data_providers/file_system_library_provider_test.dart` |
 | ExternalCatalogMapper | `test/data_providers/external_catalog_mapper_test.dart` |
@@ -798,6 +803,8 @@ dart format lib/file.dart    # Format ONLY files you modified
 | Scrollable list scrollbar | `test/widgets/scrollable_positioned_list_scrollbar_test.dart` |
 | Smooth mouse-wheel scrolling | `test/widgets/smooth_wheel_scroll_test.dart` |
 | גלילה אוטומטית בלחיצת גלגל העכבר | `test/widgets/middle_click_autoscroll_test.dart` |
+| פתיחה בכרטיסייה חדשה בלחיצת גלגל (`MiddleClickOpen`) | `test/widgets/middle_click_open_test.dart` |
+| זיהוי קישור `<a>` תחת הסמן (תפריט הקשר / לחיצת גלגל) | `test/widgets/inline_link_targets_test.dart` |
 | Smart text render settings | `test/widgets/smart_text/render_settings_test.dart` |
 | Smart text ↔ plugin section sync gate | `test/widgets/smart_text/smart_text_section_sync_gate_test.dart` |
 | קיבוע מדויק של גובה השורה (סימוני הערות, `<big>`) בשלושת מסלולי הרינדור | `test/widgets/smart_text/exact_line_height_test.dart` |
@@ -837,16 +844,19 @@ dart format lib/file.dart    # Format ONLY files you modified
 | External catalog | `test/external_catalog/external_catalog_repository_test.dart`, `…settings_helper_test.dart` |
 | Plugins | `test/plugins/utils/reader_location_resolver_test.dart`, `…plugin_store_link_parser_test.dart`, `…plugin_bridge_adapter_test.dart` |
 | Plugin links API (`getLinks`, `getRawLinks`, `getCommentators`, `getLinkContent`) | `test/plugins/bridge/plugin_bridge_links_api_test.dart` |
+| דגל שינויים שלא נשמרו בתוסף (`ui.setUnsavedChanges`, רגיסטרי, שומר סגירת כרטיסיה) | `test/plugins/bridge/plugin_bridge_set_unsaved_changes_test.dart`, `test/plugins/services/plugin_unsaved_changes_registry_test.dart`, `test/tabs/utils/confirm_close_tabs_test.dart` |
 | Plugin permission enforcement / rate limiting | `test/plugins/bridge/plugin_bridge_handler_test.dart` |
 | Plugin highlights / reader section tracking | `test/plugins/services/plugin_highlight_registry_test.dart`, `…reader_section_content_tracker_test.dart`, `…reader_section_sync_gate_test.dart` |
 | Plugin foreground suspend/resume | `test/plugins/services/plugin_runtime_dispatcher_test.dart` |
 | פוקוס מקלדת ל-WebView של תוסף (הקלדה מיד בפתיחה) | `test/plugins/services/plugin_webview_focus_test.dart`, `…plugin_keyboard_focus_test.dart` |
+| שחזור פוקוס ה-WebView של תוסף בחזרה לחלון (Alt-Tab) | `test/plugins/view/widgets/plugin_webview_focus_restorer_test.dart` |
 | בדיקת עדכוני תוספים מהחנות (שירות batch, קוביט, צ'יפ "עדכון זמין") | `test/plugins/services/plugin_update_check_service_test.dart`, `test/plugins/bloc/plugin_updates_cubit_test.dart`, `test/plugins/view/plugin_update_chip_test.dart` |
 
 **Tools & plugins as reading tabs**
 | Area | Test File |
 |------|-----------|
 | ToolTab model (JSON, clone, dedupe) | `test/tabs/models/tool_tab_test.dart` |
+| כותרת מיקום לטאב טקסט שטרם נבנה (שאילתת DB יחידה, בלי טעינת תוכן) | `test/tabs/models/text_tab_location_title_test.dart` |
 | Tool catalog + availability reasons | `test/tools/tool_catalog_test.dart` |
 | Tools launcher panel (search, grouping, grid columns, tile layout) | `test/tools/tools_launcher_panel_test.dart` |
 | Tool tab focus (WebView regression) | `test/tools/tool_tab_focus_test.dart` |

@@ -23,11 +23,8 @@ import 'package:otzaria/theme/app_surfaces.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/bloc/tabs_state.dart';
 import 'package:otzaria/tabs/bloc/tabs_event.dart';
-import 'package:otzaria/tabs/models/pdf_commentators_tab.dart';
 import 'package:otzaria/tabs/models/pdf_tab.dart';
-import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/tabs/models/combined_tab.dart';
-import 'package:otzaria/tabs/models/searching_tab.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/tabs/models/tool_tab.dart';
 import 'package:otzaria/tools/tool_catalog_entry.dart';
@@ -576,8 +573,8 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
       onExternalDrop: (tab, insertIndex) => context.read<TabsBloc>().add(
         DetachPane(tab, insertIndex: insertIndex),
       ),
-      // גרירה אינה בוחרת כרטיסיה: התצוגה נשארת על הספר שהמשתמש קורא, ומשתנה
-      // רק אם הוא משתהה מעל כרטיסיה אחרת.
+      // תחילת גרירה אינה בוחרת כרטיסיה — בחירה מיידית הייתה מפצלת את הנגררת
+      // עם עצמה בשחרור מעל אזור הקריאה; בסידור מחדש MoveTab בוחר את הנגררת.
       onDragStarted: () => _pendingTabSelection = null,
       onSpringOpen: (tab) {
         // ה-state שנתפס ב-build עלול להיות מיושן באמצע גרירה, ורק קריאה
@@ -895,16 +892,6 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
     );
   }
 
-  /// הכותרת שמתעדכנת תוך כדי קריאה (המיקום בספר, שאילתת החיפוש), או `null`
-  /// לכרטיסיה שכותרתה סטטית.
-  ValueListenable<String>? _liveTitleOf(OpenedTab tab) {
-    if (tab is SearchingTab) return tab.titleNotifier;
-    if (tab is PdfBookTab) return tab.currentTitle;
-    if (tab is PdfCommentatorsTab) return tab.sourceTab.currentTitle;
-    if (tab is TextBookTab) return tab.currentTitle;
-    return null;
-  }
-
   Widget _buildTab(
     BuildContext context,
     OpenedTab tab,
@@ -1156,25 +1143,11 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
       );
     }
 
-    // בכרטיסיה עם כותרת חיה הזוג (כותרת מוצגת, הודעת tooltip) נגזר מהערך העדכני;
-    // בכל השאר שניהם שם הכרטיסיה.
-    final liveTitle = _liveTitleOf(tab);
-    Widget buildLiveTabAppearance() {
-      if (liveTitle == null) {
-        return buildTabAppearance(tab.title, tab.title);
-      }
-      return ValueListenableBuilder<String>(
-        valueListenable: liveTitle,
-        builder: (context, value, child) {
-          // בכרטיסיית חיפוש הערך הוא הכותרת עצמה; בשאר הוא המיקום שמתווסף לה.
-          if (tab is SearchingTab) return buildTabAppearance(value, value);
-          return buildTabAppearance(
-            tab.title,
-            value.isEmpty ? tab.title : '${tab.title}, $value',
-          );
-        },
-      );
-    }
+    Widget buildLiveTabAppearance() => LiveTabTitleBuilder(
+      tab: tab,
+      builder: (_, displayTitle, tooltipMessage) =>
+          buildTabAppearance(displayTitle, tooltipMessage),
+    );
 
     return _wrapWithTabPointer(
       context,

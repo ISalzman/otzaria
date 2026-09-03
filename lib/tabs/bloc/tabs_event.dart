@@ -16,10 +16,17 @@ class AddTab extends TabsEvent {
   // אחרת – נוסף בסוף רשימת הטאבים, כברירת מחדל לפתיחת ספר חדש.
   final bool insertAdjacent;
 
-  const AddTab(this.tab, {this.insertAdjacent = false});
+  /// פתיחה ברקע ("פתח בכרטיסייה חדשה"): הטאב נוסף אך המשתמש נשאר על הנוכחי.
+  final bool inBackground;
+
+  const AddTab(
+    this.tab, {
+    this.insertAdjacent = false,
+    this.inBackground = false,
+  });
 
   @override
-  List<Object?> get props => [tab, insertAdjacent];
+  List<Object?> get props => [tab, insertAdjacent, inBackground];
 }
 
 class OpenOrFocusTab extends TabsEvent {
@@ -32,11 +39,15 @@ class OpenOrFocusTab extends TabsEvent {
   /// רק את הספר, ולכן רוצים שהטאב הקיים ייגלל לאותו מיקום.
   final bool navigateToPositionIfReused;
 
+  /// פתיחה ברקע: תמיד טאב חדש (בלי מיקוד טאב קיים), והמשתמש נשאר על הנוכחי.
+  final bool inBackground;
+
   const OpenOrFocusTab(
     this.tab, {
     this.targetTitle,
     this.insertAdjacent = false,
     this.navigateToPositionIfReused = false,
+    this.inBackground = false,
   });
 
   @override
@@ -45,6 +56,7 @@ class OpenOrFocusTab extends TabsEvent {
     targetTitle,
     insertAdjacent,
     navigateToPositionIfReused,
+    inBackground,
   ];
 }
 

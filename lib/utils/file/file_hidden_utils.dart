@@ -38,5 +38,8 @@ bool hasHiddenOrSystemWindowsAttributes(int attributes) {
 }
 
 bool _isHiddenOrSystemName(String name) {
-  return name.startsWith('.') || name.startsWith(r'$');
+  // ~$ — קובצי נעילה זמניים של Word (owner files); עלולים להגיע בלי דגל hidden
+  return name.startsWith('.') ||
+      name.startsWith(r'$') ||
+      name.startsWith(r'~$');
 }

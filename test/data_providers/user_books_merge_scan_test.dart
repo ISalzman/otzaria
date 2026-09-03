@@ -427,4 +427,93 @@ void main() {
       );
     },
   );
+
+  test('תיקייה מוסתרת נעלמת מהעץ ומופיעה שוב בהחזרה בלי סריקה', () async {
+    final tempDir = await Directory.systemTemp.createTemp(
+      'otzaria_user_books_hidden_folder',
+    );
+    final libraryPath = path.join(tempDir.path, 'library');
+    final dataRootPath = path.join(tempDir.path, 'data_root');
+    final dbPath = path.join(libraryPath, DatabaseConstants.databaseFileName);
+    final database = MyDatabase.withPath(dbPath);
+    final repository = SeforimRepository(database);
+    final provider = DatabaseLibraryProvider.instance;
+    final previousDataRootPath = AppPaths.cachedDataRootPath;
+
+    addTearDown(() => tempDir.delete(recursive: true));
+    addTearDown(() => database.close());
+    addTearDown(() => provider.clearCache());
+    addTearDown(() => provider.sqliteProvider.dispose());
+    addTearDown(
+      () => AppPaths.debugOverrideDataRootPath(previousDataRootPath),
+    );
+    addTearDown(() => UserBooksDatabaseHolder.instance.close());
+
+    await Directory(libraryPath).create(recursive: true);
+    await provider.sqliteProvider.dispose();
+    provider.clearCache();
+    await UserBooksDatabaseHolder.instance.close();
+    AppPaths.debugOverrideDataRootPath(dataRootPath);
+    await repository.ensureInitialized();
+
+    await Settings.setValue<String>(
+      SettingsRepository.keyLibraryPath,
+      libraryPath,
+    );
+    await Settings.setValue<String>(
+      SettingsRepository.keyLibraryFolderName,
+      '',
+    );
+    await Settings.setValue<String>(SettingsRepository.keyDbEffectivePath, '');
+    await Settings.setValue<bool>(
+      SettingsRepository.keyMergeUserBooksIntoLibrary,
+      true,
+    );
+
+    final pickedFolder = Directory(path.join(tempDir.path, 'מסמכים'));
+    final lessonsDir = Directory(path.join(pickedFolder.path, 'שיעורים'));
+    await lessonsDir.create(recursive: true);
+    await File(
+      path.join(lessonsDir.path, 'שיעור שבועי.txt'),
+    ).writeAsString('שורה ראשונה\nשורה שניה\n');
+
+    Future<void> saveFolder({required bool hidden}) =>
+        Settings.setValue<String>(
+          SettingsRepository.keyCustomFolders,
+          CustomFoldersManager.saveFolders([
+            CustomFolder(
+              path: pickedFolder.path,
+              hidden: hidden,
+              addedAt: DateTime(2026, 1, 1),
+            ),
+          ]),
+        );
+
+    await saveFolder(hidden: true);
+    final userBooksRepository =
+        await UserBooksDatabaseHolder.instance.repository;
+    final scanResult = await provider.scanAndAddExternalBooksFromFolder(
+      pickedFolder.path,
+      'מסמכים',
+      userBooksRepository,
+    );
+    expect(scanResult.fatalError, isNull);
+
+    await provider.initialize();
+    var library = await provider.buildLibraryCatalog({}, libraryPath);
+    expect(
+      library.subCategories.where(
+        (c) => c.title == 'שיעורים' || c.title == 'ספרים אישיים',
+      ),
+      isEmpty,
+      reason: 'תיקייה מוסתרת אינה נכנסת לעץ — לא ממוזגת ולא תחת ספרים אישיים',
+    );
+
+    // החזרה: רק ההגדרה משתנה, בלי סריקה נוספת — הספרים נשארו ב-DB.
+    await saveFolder(hidden: false);
+    provider.clearCache();
+    await provider.initialize();
+    library = await provider.buildLibraryCatalog({}, libraryPath);
+    expect(library.subCategories.map((c) => c.title), contains('שיעורים'));
+  });
 }

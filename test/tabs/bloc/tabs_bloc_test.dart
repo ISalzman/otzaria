@@ -2067,6 +2067,63 @@ void main() {
       await _closeBlocAndAllowDeferredDispose(bloc);
     });
   });
+
+  group('פתיחה ברקע (פתח בכרטיסייה חדשה)', () {
+    setUp(() async {
+      await Settings.init(cacheProvider: _MemoryCacheProvider());
+    });
+
+    test('AddTab ברקע מוסיף אחרי הנוכחי ומשאיר את המיקוד עליו', () async {
+      final bloc = TabsBloc(repository: _FakeTabsRepository());
+      final first = _createTextTab('ספר א', categoryId: 1);
+      final second = _createTextTab('ספר ב', categoryId: 2);
+      bloc.add(AddTab(first));
+      bloc.add(AddTab(second));
+      await bloc.stream.firstWhere((s) => s.tabs.length == 2);
+      bloc.add(SetCurrentTab(0));
+      await bloc.stream.firstWhere((s) => s.currentTabIndex == 0);
+
+      final background = _createTextTab('ספר ג', categoryId: 3);
+      bloc.add(AddTab(background, insertAdjacent: true, inBackground: true));
+      await bloc.stream.firstWhere((s) => s.tabs.length == 3);
+
+      expect(bloc.state.currentTabIndex, 0);
+      expect(bloc.state.currentTab, same(first));
+      expect(bloc.state.tabs[1], same(background));
+
+      await _closeBlocAndAllowDeferredDispose(bloc);
+    });
+
+    test('AddTab ברקע כשאין טאבים פתוחים ממקד את הטאב החדש', () async {
+      final bloc = TabsBloc(repository: _FakeTabsRepository());
+      final tab = _createTextTab('ספר יחיד', categoryId: 1);
+      bloc.add(AddTab(tab, inBackground: true));
+      await bloc.stream.firstWhere((s) => s.tabs.length == 1);
+
+      expect(bloc.state.currentTab, same(tab));
+
+      await _closeBlocAndAllowDeferredDispose(bloc);
+    });
+
+    test('OpenOrFocusTab ברקע פותח טאב חדש גם כשאותו ספר כבר פתוח', () async {
+      final bloc = TabsBloc(repository: _FakeTabsRepository());
+      final existing = _createTextTab('ספר א', categoryId: 1);
+      bloc.add(AddTab(existing));
+      await bloc.stream.firstWhere((s) => s.tabs.length == 1);
+
+      final duplicate = _createTextTab('ספר א', categoryId: 1);
+      bloc.add(
+        OpenOrFocusTab(duplicate, insertAdjacent: true, inBackground: true),
+      );
+      await bloc.stream.firstWhere((s) => s.tabs.length == 2);
+
+      expect(bloc.state.currentTabIndex, 0);
+      expect(bloc.state.currentTab, same(existing));
+      expect(duplicate.bloc.isClosed, isFalse);
+
+      await _closeBlocAndAllowDeferredDispose(bloc);
+    });
+  });
 }
 
 TextBookBloc _createLoadedTextBookBloc({

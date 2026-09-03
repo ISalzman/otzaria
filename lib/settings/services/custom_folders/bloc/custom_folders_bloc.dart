@@ -55,6 +55,7 @@ class CustomFoldersBloc extends Bloc<CustomFoldersEvent, CustomFoldersState> {
     on<RemoveCustomFolder>(_onRemove);
     on<ToggleAddToDatabase>(_onToggleAddToDatabase);
     on<SetFolderMergeMode>(_onSetFolderMergeMode);
+    on<SetFolderHidden>(_onSetFolderHidden);
     on<RescanCustomFolders>(_onRescan);
     on<ImportUserContentFiles>(_onImportUserFiles);
     on<ClearUserContent>(_onClearUserContent);
@@ -206,6 +207,23 @@ class CustomFoldersBloc extends Bloc<CustomFoldersEvent, CustomFoldersState> {
       _loadFolders(),
       event.folder.path,
       event.value,
+    );
+    await _saveFolders(newFolders);
+    emit(state.copyWith(folders: newFolders, message: null, error: null));
+    _addLibraryEvent(
+      const RefreshLibrary(source: RefreshSource.customFoldersScan),
+    );
+  }
+
+  /// כמו שינוי מיקום — הספרים כבר ב-DB, רק העץ נבנה מחדש.
+  Future<void> _onSetFolderHidden(
+    SetFolderHidden event,
+    Emitter<CustomFoldersState> emit,
+  ) async {
+    final newFolders = CustomFoldersManager.updateFolderHiddenSetting(
+      _loadFolders(),
+      event.folder.path,
+      event.hidden,
     );
     await _saveFolders(newFolders);
     emit(state.copyWith(folders: newFolders, message: null, error: null));

@@ -41,6 +41,8 @@ import 'package:otzaria/text_book/view/text_book_screen.dart';
 import 'package:otzaria/text_book/view/commentators_tab_screen.dart';
 import 'package:otzaria/pdf_book/view/pdf_commentators_tab_screen.dart';
 import 'package:otzaria/theme/theme_exports.dart';
+import 'package:otzaria_icons/otzaria_icons.dart';
+import 'package:otzaria/widgets/widgets_exports.dart';
 import 'package:otzaria/tour/tour_target_keys.dart';
 
 class ReadingScreen extends StatefulWidget {
@@ -382,33 +384,30 @@ class _ReadingScreenState extends State<ReadingScreen>
             ),
             child: Scaffold(
               body: !state.hasOpenTabs
-                  ? Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Padding(
-                            padding: EdgeInsets.all(16.0),
-                            child: Text(
-                              'לא נבחרו ספרים',
-                              style: TextStyle(fontSize: 18),
-                            ),
-                          ),
-                          Padding(
-                            padding: const EdgeInsets.all(8.0),
-                            child: ElevatedButton.icon(
-                              onPressed: () {
-                                context.read<NavigationBloc>().add(
-                                  const NavigateToScreen(Screen.library),
-                                );
-                              },
-                              icon: const Icon(
-                                FluentIcons.library_24_regular,
-                              ),
-                              label: const Text('דפדף בספרייה'),
-                            ),
-                          ),
-                        ],
-                      ),
+                  ? OtzariaEmptyState(
+                      icon: OtzariaIcons.otzaria_icon_2_page_24_regular,
+                      title: 'לא נבחרו ספרים',
+                      message: 'פתחו ספר מהספרייה או מהאיתור כדי להתחיל בקריאה',
+                      actions: [
+                        ActionButton.recommended(
+                          text: 'דפדף בספרייה',
+                          icon: FluentIcons.library_24_regular,
+                          onPressed: () {
+                            context.read<NavigationBloc>().add(
+                              const NavigateToScreen(Screen.library),
+                            );
+                          },
+                        ),
+                        ActionButton.neutral(
+                          text: 'איתור ספר',
+                          icon: FluentIcons.search_24_regular,
+                          onPressed: () {
+                            context.read<NavigationBloc>().add(
+                              const NavigateToScreen(Screen.find),
+                            );
+                          },
+                        ),
+                      ],
                     )
                   : KeyedSubtree(
                       key: tourReadingScreenTargetKey,

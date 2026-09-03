@@ -36,6 +36,10 @@ class CustomFolder {
   /// ההגדרה הגלובלית, וזו ברירת המחדל לכל תיקייה שלא נקבעה לה חריגה.
   final bool? mergeIntoLibrary;
 
+  /// האם התיקייה מוסתרת מעץ הספרייה. ספריה נשארים ב-DB ובסריקות, כך
+  /// שההחזרה מיידית ואינה דורשת סריקה מחדש.
+  final bool hidden;
+
   /// תאריך הוספה
   final DateTime addedAt;
 
@@ -43,6 +47,7 @@ class CustomFolder {
     required this.path,
     this.addToDatabase = false,
     this.mergeIntoLibrary,
+    this.hidden = false,
     required this.addedAt,
   });
 
@@ -60,6 +65,7 @@ class CustomFolder {
     bool? addToDatabase,
     bool? mergeIntoLibrary,
     bool clearMergeIntoLibrary = false,
+    bool? hidden,
     DateTime? addedAt,
   }) {
     return CustomFolder(
@@ -68,6 +74,7 @@ class CustomFolder {
       mergeIntoLibrary: clearMergeIntoLibrary
           ? null
           : (mergeIntoLibrary ?? this.mergeIntoLibrary),
+      hidden: hidden ?? this.hidden,
       addedAt: addedAt ?? this.addedAt,
     );
   }
@@ -77,6 +84,7 @@ class CustomFolder {
       'path': path,
       'addToDatabase': addToDatabase,
       if (mergeIntoLibrary != null) 'mergeIntoLibrary': mergeIntoLibrary,
+      if (hidden) 'hidden': true,
       'addedAt': addedAt.toIso8601String(),
     };
   }
@@ -86,6 +94,7 @@ class CustomFolder {
       path: json['path'] as String,
       addToDatabase: json['addToDatabase'] as bool? ?? false,
       mergeIntoLibrary: json['mergeIntoLibrary'] as bool?,
+      hidden: json['hidden'] as bool? ?? false,
       addedAt: DateTime.parse(json['addedAt'] as String),
     );
   }
@@ -99,11 +108,13 @@ class CustomFolder {
     return other is CustomFolder &&
         other.path == path &&
         other.addToDatabase == addToDatabase &&
-        other.mergeIntoLibrary == mergeIntoLibrary;
+        other.mergeIntoLibrary == mergeIntoLibrary &&
+        other.hidden == hidden;
   }
 
   @override
-  int get hashCode => Object.hash(path, addToDatabase, mergeIntoLibrary);
+  int get hashCode =>
+      Object.hash(path, addToDatabase, mergeIntoLibrary, hidden);
 }
 
 /// מנהל תיקיות מותאמות אישית
@@ -179,6 +190,36 @@ class CustomFoldersManager {
         clearMergeIntoLibrary: mergeIntoLibrary == null,
       );
     }).toList();
+  }
+
+  /// הסתרה/הצגה של כל התיקיות שחולקות קטגוריית-שורש — הן מוצגות בעץ
+  /// כקטגוריה אחת, ולכן אי אפשר להסתיר רק חלק מהן.
+  static List<CustomFolder> updateFolderHiddenSetting(
+    List<CustomFolder> folders,
+    String path,
+    bool hidden,
+  ) {
+    final folderName = folders
+        .where((folder) => folder.path == path)
+        .firstOrNull
+        ?.name;
+    if (folderName == null) return folders;
+
+    return folders
+        .map((f) => f.name == folderName ? f.copyWith(hidden: hidden) : f)
+        .toList();
+  }
+
+  /// שמות קטגוריות-השורש שכל התיקיות שלהן מוסתרות — אלו שנעלמות מהעץ.
+  static Set<String> hiddenFolderNames(List<CustomFolder> folders) {
+    final visible = {
+      for (final f in folders)
+        if (!f.hidden) f.name,
+    };
+    return {
+      for (final f in folders)
+        if (f.hidden) f.name,
+    }..removeAll(visible);
   }
 
   /// עדכון הגדרת addToDatabase לתיקייה

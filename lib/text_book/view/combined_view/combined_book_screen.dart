@@ -1,3 +1,5 @@
+import 'package:otzaria/shortcuts/dynamic/dynamic_shortcut.dart';
+import 'package:otzaria/text_display/view/copy_as_menu.dart';
 import 'dart:async';
 
 import 'package:flutter/foundation.dart' show ValueListenable, ValueNotifier;
@@ -46,6 +48,7 @@ import 'package:otzaria/utils/text/ref_helper.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/widgets/feedback/scrollable_positioned_list_scrollbar.dart';
 import 'package:otzaria/widgets/layout/reading_area_width.dart';
+import 'package:otzaria/widgets/selection/viewport_aligned_selection_container.dart';
 import 'package:otzaria/widgets/smart_text/smart_text.dart';
 import 'package:otzaria/text_book/view/selection/text_selection_manager.dart';
 import 'package:otzaria/text_book/view/selection/selection_sync_controller.dart';
@@ -81,6 +84,7 @@ import 'package:otzaria/text_book/utils/note_inline_render.dart';
 import 'package:otzaria/text_book/utils/reading_segments.dart';
 import 'package:otzaria/text_book/utils/reading_segment_navigation.dart';
 import 'package:otzaria/text_book/utils/section_search_utils.dart';
+import 'package:otzaria/text_display/text_display_exports.dart';
 import 'package:otzaria/text_book/utils/inline_section_markers.dart';
 import 'package:otzaria/text_book/view/widgets/continuous_reading_paragraph.dart';
 import 'package:otzaria/theme/theme_exports.dart';
@@ -229,31 +233,13 @@ bool hasCommentariesForLine({
   return (text: text, link: controller.activeSelectionLink);
 }
 
-/// מעבד טקסט גולמי לפי הגדרות התצוגה (טעמים/ניקוד/פיסוק), כך שפעולת
-/// "העתק את כל הפסקה" תשקף את מה שמוצג בפועל על המסך —
-/// באותו סדר עיבוד של [TextRendererService] (טעמים → ניקוד → פיסוק).
-///
-/// הערה: [utils.removeVolwels] מסיר גם ניקוד וגם טעמים, ולכן כש-[removeNikud]
-/// פעיל הטעמים מוסרים ממילא ללא תלות ב-[showTeamim].
+/// מעבד טקסט גולמי לפי פרופיל ערוץ ההעתקה, כך שפעולת "העתק את כל הפסקה"
+/// תשקף את מה שמוצג בפועל על המסך.
 @visibleForTesting
 String applyDisplayTextPreferences({
   required String text,
-  required bool removeNikud,
-  required bool removePunctuation,
-  required bool showTeamim,
-}) {
-  var processed = text;
-  if (!showTeamim) {
-    processed = utils.removeTeamim(processed);
-  }
-  if (removeNikud) {
-    processed = utils.removeVolwels(processed);
-  }
-  if (removePunctuation) {
-    processed = utils.removePunctuation(processed);
-  }
-  return processed;
-}
+  required TextDisplayProfile profile,
+}) => applyTextDisplayProfile(text, profile);
 
 /// האם שינוי במצב הקריאה הרציף מחייב שחזור גלילה לשורת המקור הנוכחית.
 /// `previousMode == null` פירושו ה-state הראשון שנצפה — אין ממה לשחזר.
@@ -353,6 +339,7 @@ class _CombinedViewState extends State<CombinedView> {
     int lineIndex0,
     TextBookLoaded state,
   ) {
+    if (!state.bodyDisplayProfile.showAnchorMarkers) return rawLine;
     // מהדורה חלופית: העוגנים ממופים לנוסח הראשי — במיקומים שגויים כאן.
     if (state.book.versionTitle != null) return rawLine;
     // linksByLine ולא state.links: סינון על כל קישורי הספר (עשרות אלפים)
@@ -758,6 +745,7 @@ class _CombinedViewState extends State<CombinedView> {
     widget.tab.positionsListener.itemPositions.addListener(_onScroll);
     // עדכון האינדקס ב-tab בזמן אמת
     widget.tab.positionsListener.itemPositions.addListener(_updateTabIndex);
+    widget.tab.dynamicCopyRequestNotifier.addListener(_onDynamicCopyRequest);
 
     // האזנה לשינויים ב-state כדי לגלול למיקום הנכון בפעם הראשונה
     _textBookBloc.stream.listen((state) {
@@ -896,6 +884,7 @@ class _CombinedViewState extends State<CombinedView> {
 
   @override
   void dispose() {
+    widget.tab.dynamicCopyRequestNotifier.removeListener(_onDynamicCopyRequest);
     PluginHighlightRevealService.instance.removeListener(
       _handlePluginHighlightReveal,
     );
@@ -1151,12 +1140,7 @@ class _CombinedViewState extends State<CombinedView> {
           enabled: selectedText != null && selectedText.trim().isNotEmpty,
           onTap: () => _copyFormattedText(selectedText),
         ),
-        if (showCopyWithoutNikud(selectedText))
-          AppContextMenuEntry(
-            label: 'העתק בלי ניקוד',
-            icon: FluentIcons.text_clear_formatting_24_regular,
-            onTap: () => _copyFormattedText(selectedText, true),
-          ),
+        _copyAsEntry(state, selectedText),
       ];
     }
 
@@ -1278,14 +1262,7 @@ class _CombinedViewState extends State<CombinedView> {
             ),
           ),
       ]),
-      // "העתק בלי ניקוד" (issue #851) — מוצג רק כשהבחירה מנוקדת בפועל;
-      // מסיר ניקוד/טעמים מהעותק בלבד, בלי לשנות את התצוגה.
-      if (showCopyWithoutNikud(selectedText))
-        AppContextMenuEntry(
-          label: 'העתק בלי ניקוד',
-          icon: FluentIcons.text_clear_formatting_24_regular,
-          onTap: () => _copyFormattedText(selectedText, true),
-        ),
+      _copyAsEntry(state, selectedText),
       const AppContextMenuEntry.divider(),
       AppContextMenuEntry(
         label: hasSelectedText ? 'חפש "${quote(10)}" בספר זה' : 'חיפוש',
@@ -1539,28 +1516,26 @@ class _CombinedViewState extends State<CombinedView> {
     );
   }
 
-  /// מחלץ את העדפות התצוגה מה-state ומעבד את הטקסט בהתאם, כך שההעתקה
-  /// תשקף את מה שמוצג בפועל על המסך — בדיוק כמו [TextRendererService].
+  /// מעבד את הטקסט לפי פרופיל ערוץ ההעתקה של גוף הספר.
   String _applyDisplayTextPreferences(
     String text,
     TextBookState textBookState,
-    SettingsState settingsState,
   ) {
-    final removeNikud =
-        textBookState is TextBookLoaded && textBookState.removeNikud;
-    final removePunctuation =
-        textBookState is TextBookLoaded && textBookState.removePunctuation;
-
+    if (textBookState is! TextBookLoaded) return text;
     return applyDisplayTextPreferences(
       text: text,
-      removeNikud: removeNikud,
-      removePunctuation: removePunctuation,
-      showTeamim: settingsState.showTeamim,
+      profile: textBookState.displayProfile(
+        target: TextTarget.body,
+        channel: TextChannel.copy,
+      ),
     );
   }
 
   /// העתקת פסקה לפי אינדקס (משתמש ב־widget.data[index] ומייצר גם HTML)
-  Future<void> _copyParagraphByIndex(int index) async {
+  Future<void> _copyParagraphByIndex(
+    int index, {
+    TextDisplayProfile? profile,
+  }) async {
     if (index < 0 || index >= widget.data.length) return;
 
     final text = widget.data[index];
@@ -1570,11 +1545,9 @@ class _CombinedViewState extends State<CombinedView> {
     final settingsState = context.read<SettingsBloc>().state;
     final textBookState = context.read<TextBookBloc>().state;
 
-    final processedText = _applyDisplayTextPreferences(
-      text,
-      textBookState,
-      settingsState,
-    );
+    final processedText = profile != null
+        ? applyTextDisplayProfile(text, profile)
+        : _applyDisplayTextPreferences(text, textBookState);
 
     final plainText = utils.stripHtmlIfNeeded(processedText);
 
@@ -1608,11 +1581,11 @@ class _CombinedViewState extends State<CombinedView> {
       );
     }
 
+    // שם הוי"ה כבר הוחלף לפי פרופיל ההעתקה — לא להחיל שוב.
     final copyContent = CopyUtils.applyCopyPreferencesForClipboard(
       plainText: finalText,
       htmlText: finalHtmlText,
-      replaceHolyNames: settingsState.replaceHolyNames,
-      holyNameStyle: settingsState.holyNameStyle,
+      replaceHolyNames: false,
     );
 
     final item = DataWriterItem();
@@ -1633,9 +1606,49 @@ class _CombinedViewState extends State<CombinedView> {
   }
 
   /// העתקת טקסט מעוצב (HTML) ללוח
+  /// "העתק כ..." — וריאציות ההעתקה מפרופיל ערוץ ההעתקה של הגוף.
+  AppContextMenuEntry _copyAsEntry(TextBookLoaded state, String? selectedText) {
+    final hasSelection = selectedText != null && selectedText.trim().isNotEmpty;
+    return AppContextMenuEntry(
+      label: 'העתק כ...',
+      icon: FluentIcons.text_clear_formatting_24_regular,
+      enabled: hasSelection,
+      children: buildCopyAsMenuEntries(
+        base: state.displayProfile(
+          target: TextTarget.body,
+          channel: TextChannel.copy,
+        ),
+        hasSelection: hasSelection,
+        onCopy: (profile) => _copyFormattedText(selectedText, false, profile),
+      ),
+    );
+  }
+
+  /// בקשת העתקה מקיצור דינמי (ראה DynamicShortcutDispatcher).
+  void _onDynamicCopyRequest() {
+    final request = widget.tab.dynamicCopyRequestNotifier.value;
+    if (request == null || !mounted) return;
+    widget.tab.dynamicCopyRequestNotifier.value = null;
+    switch (request.kind) {
+      case DynamicShortcutKind.copySelectionWith:
+        _copyFormattedText(null, false, request.profile);
+      case DynamicShortcutKind.copyParagraphWith:
+        final state = _textBookBloc.state;
+        final index =
+            _currentSelectedIndex.value ??
+            (state is TextBookLoaded ? state.selectedIndex : null);
+        if (index != null) {
+          _copyParagraphByIndex(index, profile: request.profile);
+        }
+      case DynamicShortcutKind.setTextDisplay:
+        break;
+    }
+  }
+
   Future<void> _copyFormattedText([
     String? capturedText,
     bool removeNikud = false,
+    TextDisplayProfile? profile,
   ]) async {
     final plainText = capturedText ?? _savedSelectedText.value;
 
@@ -1677,6 +1690,7 @@ class _CombinedViewState extends State<CombinedView> {
         fontFamily: settingsState.fontFamily,
         fontSize: widget.textSize,
         removeNikud: removeNikud,
+        copyProfile: profile,
       );
     } catch (e) {
       if (mounted) {
@@ -1754,12 +1768,8 @@ class _CombinedViewState extends State<CombinedView> {
     TextBookLoaded state,
     SettingsState settingsState,
   ) {
-    return RenderSettings(
-      removeNikud: state.removeNikud,
-      removePunctuation: state.removePunctuation,
-      removeTeamim: !settingsState.showTeamim,
-      replaceHolyNames: settingsState.replaceHolyNames,
-      holyNameStyle: settingsState.holyNameStyle,
+    return RenderSettings.fromProfile(
+      state.bodyDisplayProfile,
       searchText: state.searchText,
       searchOptions: state.searchOptions,
       alternativeWords: state.alternativeWords,
@@ -2149,19 +2159,21 @@ class _CombinedViewState extends State<CombinedView> {
         );
         final sourceBannerKind = _sourceBannerKind;
         if (index == 0 && sourceBannerKind != null) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              BookSourceBanner(
-                kind: sourceBannerKind,
-                bookTitle: widget.tab.book.title,
-                fontSize: widget.textSize,
-              ),
-              tile,
-            ],
+          return ViewportAlignedSelectionContainer(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                BookSourceBanner(
+                  kind: sourceBannerKind,
+                  bookTitle: widget.tab.book.title,
+                  fontSize: widget.textSize,
+                ),
+                tile,
+              ],
+            ),
           );
         }
-        return tile;
+        return ViewportAlignedSelectionContainer(child: tile);
       },
     );
   }
@@ -2530,12 +2542,8 @@ class _CombinedViewState extends State<CombinedView> {
                             widgetKey: ValueKey(
                               'html_${widget.tab.book.title}_$primaryLineIndex',
                             ),
-                            settings: RenderSettings(
-                              removeNikud: state.removeNikud,
-                              removePunctuation: state.removePunctuation,
-                              removeTeamim: !settingsState.showTeamim,
-                              replaceHolyNames: settingsState.replaceHolyNames,
-                              holyNameStyle: settingsState.holyNameStyle,
+                            settings: RenderSettings.fromProfile(
+                              state.bodyDisplayProfile,
                               searchText:
                                   (state.highlightText.isNotEmpty &&
                                       state.permanentHighlightLine == index)
@@ -2603,13 +2611,19 @@ class _CombinedViewState extends State<CombinedView> {
                           primaryLineIndex,
                           context,
                         ),
-                    menuBuilder: (menuCtx, tapPos) => _buildContextMenuForIndex(
-                      state,
-                      primaryLineIndex,
-                      menuCtx,
-                      selectedText,
-                      tapPos,
-                    ),
+                    menuBuilder: (menuCtx, tapPos) => [
+                      ...ContextMenuUtils.buildInlineLinkContextMenuEntries(
+                        menuCtx,
+                        tapPos,
+                      ),
+                      ..._buildContextMenuForIndex(
+                        state,
+                        primaryLineIndex,
+                        menuCtx,
+                        selectedText,
+                        tapPos,
+                      ),
+                    ],
                     child: child!,
                   );
                 },
@@ -2685,6 +2699,8 @@ class _CombinedViewState extends State<CombinedView> {
           anchorActiveBackground: Theme.of(
             context,
           ).colorScheme.primaryContainer,
+          onMiddleClickUrl: (url) =>
+              HtmlLinkHandler.openLinkInBackground(context, url),
           onTapUrl: (url) async {
             if (url.startsWith('otzaria://anchor')) {
               return _handleAnchorTap(url);
@@ -2849,12 +2865,8 @@ class _CombinedViewState extends State<CombinedView> {
         ? SearchMatchPolicy.standard
         : state.matchPolicy;
 
-    final renderSettings = RenderSettings(
-      removeNikud: state.removeNikud,
-      removePunctuation: state.removePunctuation,
-      removeTeamim: !settingsState.showTeamim,
-      replaceHolyNames: settingsState.replaceHolyNames,
-      holyNameStyle: settingsState.holyNameStyle,
+    final renderSettings = RenderSettings.fromProfile(
+      state.bodyDisplayProfile,
       searchText: effectiveSearchText,
       searchOptions: effectiveSearchOptions,
       alternativeWords: effectiveAlternativeWords,

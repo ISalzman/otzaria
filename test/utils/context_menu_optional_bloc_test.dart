@@ -7,6 +7,7 @@ import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/utils/ui/context_menu_utils.dart';
+import 'package:otzaria/text_display/models/text_display_profile.dart';
 import 'package:otzaria/widgets/misc/app_menu_exports.dart';
 
 class _StubTextBookBloc extends Bloc<TextBookEvent, TextBookState>
@@ -59,8 +60,7 @@ class _MenuProbe extends StatelessWidget {
           link: link,
           openBookCallback: (_) {},
           fontSize: 16,
-          removeNikud: false,
-          removePunctuation: false,
+          displayProfile: TextDisplayProfile.defaults,
           savedSelectedText: 'טקסט מסומן',
           onCopySelected: () {},
         ),
@@ -138,8 +138,10 @@ void main() {
   test('סינון תוכן להעתקה מכבד ניקוד ופיסוק של התצוגה', () {
     final result = ContextMenuUtils.applyCommentaryDisplayFilters(
       'שָׁלוֹם, עוֹלָם!',
-      removeNikud: true,
-      removePunctuation: true,
+      const TextDisplayProfile(
+        nikud: MarkVisibility.hide,
+        punctuation: MarkVisibility.hide,
+      ),
     );
 
     expect(result, 'שלום עולם');

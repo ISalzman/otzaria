@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/text_book/utils/commentary_search_utils.dart';
+import 'package:otzaria/text_display/text_display_exports.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
 
 import '../../support/search_engine_test_init.dart';
@@ -44,7 +45,7 @@ Future<void> main() async {
           countCommentarySearchMatches(
             content: 'וַיֹּאמֶר משה אמר',
             query: 'אמר',
-            removePunctuation: false,
+            displayProfile: TextDisplayProfile.defaults,
             partialWordMatch: true,
           ),
           2,
@@ -54,7 +55,7 @@ Future<void> main() async {
           countCommentarySearchMatches(
             content: 'וַיֹּאמֶר משה אמר',
             query: 'אמר',
-            removePunctuation: false,
+            displayProfile: TextDisplayProfile.defaults,
             partialWordMatch: false,
           ),
           1,

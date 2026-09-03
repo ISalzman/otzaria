@@ -443,7 +443,7 @@ class _BookPreviewPanelState extends State<BookPreviewPanel> {
     return BlocBuilder<SettingsBloc, SettingsState>(
       buildWhen: (p, c) =>
           p.compactMenuMode != c.compactMenuMode ||
-          p.defaultRemoveNikud != c.defaultRemoveNikud,
+          p.textDisplayPolicy != c.textDisplayPolicy,
       builder: (context, settingsState) {
         final compact = settingsState.compactMenuMode;
         return Stack(

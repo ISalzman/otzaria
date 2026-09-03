@@ -54,7 +54,7 @@ import 'package:otzaria/personal_notes/bloc/personal_notes_event.dart';
 import 'package:otzaria/personal_notes/models/personal_note.dart';
 import 'package:otzaria/personal_notes/services/personal_note_draft_service.dart';
 import 'package:otzaria/settings/settings_exports.dart';
-import 'package:otzaria/settings/services/nikud_display_service.dart';
+import 'package:otzaria/text_display/models/text_display_slot.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/bloc/tabs_event.dart';
 import 'package:otzaria/tabs/bloc/tabs_state.dart';
@@ -2920,8 +2920,9 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       );
 
       if (_pageTurnTargetSnapshot != null) {
-        final navigationFuture = _goToPageWithSpreadLock(targetPage)
-            .catchError((Object _) {});
+        final navigationFuture = _goToPageWithSpreadLock(
+          targetPage,
+        ).catchError((Object _) {});
         await _pageTurnController.animateTo(
           1.0,
           duration: duration,
@@ -3441,8 +3442,9 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         // queued page-turn (if any) starts from the actual settled spread,
         // not a stale viewer mid-transition. The overlay stays visible (at
         // progress=1) until finally clears it, so the user sees no flash.
-        final navigationFuture = _goToPageWithSpreadLock(targetPage)
-            .catchError((Object _) {});
+        final navigationFuture = _goToPageWithSpreadLock(
+          targetPage,
+        ).catchError((Object _) {});
 
         await _pageTurnController.forward(from: 0);
         await navigationFuture;
@@ -4413,9 +4415,9 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                                 state.message,
                                 textAlign: TextAlign.center,
                                 style: TextStyle(
-                                  color: Theme.of(context)
-                                      .colorScheme
-                                      .onSurface,
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.onSurface,
                                 ),
                               ),
                               const SizedBox(height: 16),
@@ -4632,29 +4634,23 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     // ה-BlocBuilder מחיל את הגדרת התצוגה של המשתמש גם על חלונית פתוחה.
     return BlocBuilder<SettingsBloc, SettingsState>(
       buildWhen: (prev, curr) =>
-          prev.defaultRemoveNikud != curr.defaultRemoveNikud ||
-          prev.removeNikudFromTanach != curr.removeNikudFromTanach ||
-          prev.defaultRemovePunctuation != curr.defaultRemovePunctuation ||
+          prev.textDisplayPolicy != curr.textDisplayPolicy ||
           prev.commentatorsFontSize != curr.commentatorsFontSize,
       builder: (context, settingsState) => _buildCommentaryPanel(settingsState),
     );
   }
 
   Widget _buildCommentaryPanel(SettingsState settingsState) {
+    // המפרשים אינם תנ"ך, ולכן החרגות התנ"ך אינן חלות עליהם.
+    final policy = settingsState.textDisplayPolicy;
     return PdfCommentaryPanel(
       openFilterRequest: _openFilterRequest,
       tab: widget.tab,
       linksCount: widget.tab.links.length,
       linksLoading: _linksLoading,
-      // המפרשים אינם תנ"ך, ולכן החרגת הניקוד של התנ"ך אינה חלה עליהם.
-      removeNikud: shouldRemoveNikudForBook(
-        defaultRemoveNikud: settingsState.defaultRemoveNikud,
-        removeNikudFromTanach: settingsState.removeNikudFromTanach,
-        isTanach: false,
-      ),
-      removePunctuation: shouldRemovePunctuationForBook(
-        defaultRemovePunctuation: settingsState.defaultRemovePunctuation,
-        isTanach: false,
+      displayProfile: policy.resolve(TextDisplaySlot.commentaryDisplay),
+      copyDisplayProfile: policy.resolve(
+        TextDisplaySlot.commentaryDisplay.copyWith(channel: TextChannel.copy),
       ),
       openBookCallback: (tab) =>
           openPreparedTab(context, tab, insertAdjacent: true),
@@ -5314,7 +5310,9 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   ActionButtonData _buildParallelEditionsAction(BuildContext context) {
     final compact = context.read<SettingsBloc>().state.compactMenuMode;
     final primary = _parallelEditions.first;
-    const tooltip = 'פתח מהדורה מקבילה';
+    final tooltip = primary.isCompanion
+        ? 'פתח בתצוגת טקסט'
+        : 'פתח מהדורה מקבילה';
     if (_parallelEditions.length == 1) {
       return ActionButtonData(
         widget: BarButton.icon(

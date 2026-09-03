@@ -1,3 +1,4 @@
+import 'package:otzaria/shortcuts/dynamic/dynamic_shortcut_dispatcher.dart';
 import 'dart:async';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/text_book_repository.dart';
@@ -11,6 +12,7 @@ import 'package:otzaria/tabs/models/tab.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:flutter/foundation.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
+import 'package:otzaria/utils/text/ref_helper.dart';
 import 'package:otzaria/utils/ui/reading_left_pane_policy.dart';
 
 /// Represents a tab that contains a text book.
@@ -74,6 +76,31 @@ class TextBookTab extends OpenedTab {
   /// הכותרת הנוכחית של המיקום בספר (למשל "בראשית פרק ד")
   final currentTitle = ValueNotifier<String>("");
 
+  /// שולף את כתובת השורה [index] ב-[book] בלי לטעון את תוכן הספר.
+  @visibleForTesting
+  static Future<String?> Function(TextBook book, int index)
+  locationTitleResolver = refFromDbLine;
+
+  Future<void>? _locationTitleResolution;
+  bool _isDisposed = false;
+
+  /// ממלא את [currentTitle] לטאב שטרם נבנה על המסך (למשל אחרי שחזור בעלייה),
+  /// בשאילתת DB יחידה. הטאב הפעיל מקבל את הכותרת מה-BLoC, ולכן רק ערך ריק מתמלא.
+  Future<void> ensureLocationTitle() =>
+      _locationTitleResolution ??= _resolveLocationTitle();
+
+  Future<void> _resolveLocationTitle() async {
+    if (currentTitle.value.isNotEmpty) return;
+    final title = (await locationTitleResolver(book, index))?.trim();
+    if (_isDisposed || currentTitle.value.isNotEmpty) return;
+    if (title == null || title.isEmpty) {
+      // ה-DB אולי עוד לא נפתח — הקריאה הבאה תנסה שוב.
+      _locationTitleResolution = null;
+      return;
+    }
+    currentTitle.value = title;
+  }
+
   /// counter שמתגלגל עם כל בקשה לטוגל חלונית המפרשים מקיצור מקלדת גלובלי.
   /// המאזין הוא [SplitedViewScreen] בלבד; כל הגדלה = toggle יחיד.
   final ValueNotifier<int> toggleCommentatorsPaneNotifier = ValueNotifier<int>(
@@ -90,6 +117,10 @@ class TextBookTab extends OpenedTab {
   final ValueNotifier<int> navNextSegmentNotifier = ValueNotifier<int>(0);
   final ValueNotifier<int> navPreviousTocNotifier = ValueNotifier<int>(0);
   final ValueNotifier<int> navNextTocNotifier = ValueNotifier<int>(0);
+
+  /// בקשת העתקה מקיצור דינמי; המסך שמחזיק את הבחירה מבצע ומאפס ל-null.
+  final ValueNotifier<DynamicCopyRequest?> dynamicCopyRequestNotifier =
+      ValueNotifier<DynamicCopyRequest?>(null);
 
   List<String>? commentators;
   bool _lastSplitView = false;
@@ -201,6 +232,7 @@ class TextBookTab extends OpenedTab {
   /// Cleanup when the tab is disposed
   @override
   void dispose() {
+    _isDisposed = true;
     _stateSubscription?.cancel();
     currentTitle.dispose();
     toggleCommentatorsPaneNotifier.dispose();
@@ -209,6 +241,7 @@ class TextBookTab extends OpenedTab {
     navNextSegmentNotifier.dispose();
     navPreviousTocNotifier.dispose();
     navNextTocNotifier.dispose();
+    dynamicCopyRequestNotifier.dispose();
     bloc.close();
     super.dispose();
   }

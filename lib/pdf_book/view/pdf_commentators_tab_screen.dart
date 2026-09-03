@@ -30,6 +30,8 @@ import 'package:otzaria/text_book/utils/commentator_group_builder.dart';
 import 'package:otzaria/text_book/view/page_shape/utils/default_commentators.dart';
 import 'package:otzaria/widgets/lists/commentators_selection_panel.dart';
 import 'package:otzaria/settings/settings_exports.dart';
+import 'package:otzaria/text_display/text_display_exports.dart';
+import 'package:otzaria/text_display/view/text_display_bar_button.dart';
 import 'package:otzaria/settings/services/per_book_settings_service.dart';
 import 'package:otzaria/text_book/utils/category_settings_utils.dart';
 import 'package:otzaria/widgets/lists/nav_tree_tile.dart';
@@ -109,22 +111,58 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
   /// משקף את מצב "הכל מורחב" מתוך PdfCommentaryPanel (לכפתור כיווץ/הרחבה בסרגל).
   final _allExpandedInChild = ValueNotifier<bool>(true);
 
-  /// מאותחל מהגדרת התצוגה, אחרת מוצג ניקוד למי שכיבה אותו. החרגות התנ"ך
-  /// אינן חלות כאן: תוכן הכרטיסייה הוא מפרשים, ואינו תנ"ך.
-  late bool _removeNikud;
-  late bool _removePunctuation;
+  /// עקיפת התצוגה של הכרטיסייה (זמנית, אינה נשמרת). החרגות התנ"ך אינן
+  /// חלות כאן: תוכן הכרטיסייה הוא מפרשים, ואינו תנ"ך.
+  final _displayOverride = ValueNotifier<TextDisplayPatch>(
+    TextDisplayPatch.empty,
+  );
+
+  TextDisplayProfile _baseProfile(BuildContext context, TextDisplaySlot slot) =>
+      context.read<SettingsBloc>().state.textDisplayPolicy.resolve(slot);
+
+  /// הפרופיל הגלובלי של [slot] עם עקיפת הכרטיסייה.
+  TextDisplayProfile _profileFor(BuildContext context, TextDisplaySlot slot) =>
+      _displayOverride.value.applyTo(
+        context.watch<SettingsBloc>().state.textDisplayPolicy.resolve(slot),
+      );
+
+  TextDisplayProfile get _commentaryProfile => _displayOverride.value.applyTo(
+    _baseProfile(context, TextDisplaySlot.commentaryDisplay),
+  );
 
   void _toggleRemoveNikud() {
-    setState(() {
-      _removeNikud = !_removeNikud;
-    });
+    final remove = !_commentaryProfile.removeNikud;
+    _displayOverride.value = _displayOverride.value.merge(
+      TextDisplayPatch(
+        nikud: remove ? MarkVisibility.hide : MarkVisibility.show,
+      ),
+    );
   }
 
-  void _toggleRemovePunctuation() {
-    setState(() {
-      _removePunctuation = !_removePunctuation;
-    });
-  }
+  Widget _buildDisplayPanel(BuildContext context) => ValueListenableBuilder(
+    valueListenable: _displayOverride,
+    builder: (context, override, _) {
+      final base = _baseProfile(context, TextDisplaySlot.commentaryDisplay);
+      final current = override.applyTo(base);
+      return TextDisplayPopupPanel(
+        viewLabel: 'כרטיסיית מפרשים',
+        sections: [
+          TextDisplaySection(
+            title: 'מפרשים',
+            profile: current,
+            showAnchorMarkers: false,
+            onChanged: (next) => _displayOverride.value = override.merge(
+              next.toPatch().pruneAgainst(current),
+            ),
+          ),
+        ],
+        footer: 'השינויים חלים על כרטיסייה זו בלבד',
+        onReset: override.isEmpty
+            ? null
+            : () => _displayOverride.value = TextDisplayPatch.empty,
+      );
+    },
+  );
 
   bool get _isNavigationReady =>
       _sortedHeadings != null && _sortedHeadings!.isNotEmpty;
@@ -132,9 +170,7 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
   @override
   void initState() {
     super.initState();
-    final settings = context.read<SettingsBloc>().state;
-    _removeNikud = settings.defaultRemoveNikud;
-    _removePunctuation = settings.defaultRemovePunctuation;
+    _displayOverride.addListener(() => setState(() {}));
     _navTabController = TabController(length: 3, vsync: this);
     _navTabController.addListener(_handleTabChanged);
     _initHeadings();
@@ -181,8 +217,9 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
   void _scrollNavToSelectedHeading() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !_navScrollController.isAttached) return;
-      final headingIdx = _navFilteredIndices(_navSearchController.text)
-          .indexOf(_selectedHeadingIdx);
+      final headingIdx = _navFilteredIndices(
+        _navSearchController.text,
+      ).indexOf(_selectedHeadingIdx);
       if (headingIdx < 0) return;
       _navScrollController.scrollTo(
         // +1: פריט 0 הוא הכותרת הראשית.
@@ -401,10 +438,12 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
     if (headings == null || headings.isEmpty) return;
     try {
       final library = await DataRepository.instance.library;
-      final textBook = library.getCompanionBook(
-        widget.tab.sourceTab.book,
-        TextBook,
-      ) as TextBook?;
+      final textBook =
+          library.getCompanionBook(
+                widget.tab.sourceTab.book,
+                TextBook,
+              )
+              as TextBook?;
       if (textBook == null) return;
 
       int lo = 0;
@@ -490,6 +529,7 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
     _currentIdxNotifier.dispose();
     _searchSnippetsNotifier.dispose();
     _typeSelection.dispose();
+    _displayOverride.dispose();
     _allExpandedInChild.dispose();
     super.dispose();
   }
@@ -634,8 +674,16 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
                     lineStartOverride: range.start,
                     lineEndOverride: range.end,
                     extraLineIndices: _extraLines.isEmpty ? null : _extraLines,
-                    removeNikud: _removeNikud,
-                    removePunctuation: _removePunctuation,
+                    displayProfile: _profileFor(
+                      context,
+                      TextDisplaySlot.commentaryDisplay,
+                    ),
+                    copyDisplayProfile: _profileFor(
+                      context,
+                      TextDisplaySlot.commentaryDisplay.copyWith(
+                        channel: TextChannel.copy,
+                      ),
+                    ),
                     openBookCallback: (tab) => openPreparedTab(context, tab),
                     fontSize: context
                         .watch<SettingsBloc>()
@@ -823,39 +871,19 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
           widget: ResponsiveActionBar(
             overflowMenuOffset: const Offset(0, 8),
             actions: [
-              // ניקוד
+              // תצוגת הטקסט של המפרשים: לחיצה מחליפה ניקוד, החץ פותח את הפרופיל
               ActionButtonData(
-                widget: BarButton.icon(
-                  tooltip: _removeNikud ? 'הצג ניקוד' : 'הסתר ניקוד',
-                  icon: _removeNikud
-                      ? OtzariaIcons.alef_with_score_24_regular
-                      : OtzariaIcons.alef_deletion_24_regular,
+                widget: TextDisplayBarButton(
+                  removeNikud: _commentaryProfile.removeNikud,
                   compact: isCompact,
-                  onPressed: _toggleRemoveNikud,
+                  onToggleNikud: _toggleRemoveNikud,
+                  panelBuilder: _buildDisplayPanel,
                 ),
-                icon: _removeNikud
-                    ? OtzariaIcons.alef_with_score_24_regular
-                    : OtzariaIcons.alef_deletion_24_regular,
-                tooltip: _removeNikud ? 'הצג ניקוד' : 'הסתר ניקוד',
-                actionId: ToolbarActionId.nikud,
+                icon: textDisplayBarIcon(_commentaryProfile.removeNikud),
+                tooltip: textDisplayBarTooltip(_commentaryProfile.removeNikud),
+                actionId: ToolbarActionId.textDisplay,
+                toolbarWidth: BarSplitButton.toolbarWidth(isCompact),
                 onPressed: _toggleRemoveNikud,
-              ),
-              // פיסוק
-              ActionButtonData(
-                widget: BarButton.icon(
-                  tooltip: _removePunctuation ? 'הצג פיסוק' : 'הסתר פיסוק',
-                  icon: _removePunctuation
-                      ? OtzariaIcons.alef_with_punctuation_24_regular
-                      : OtzariaIcons.alef_with_eraser_24_regular,
-                  compact: isCompact,
-                  onPressed: () => _toggleRemovePunctuation(),
-                ),
-                icon: _removePunctuation
-                    ? OtzariaIcons.alef_with_punctuation_24_regular
-                    : OtzariaIcons.alef_with_eraser_24_regular,
-                tooltip: _removePunctuation ? 'הצג פיסוק' : 'הסתר פיסוק',
-                actionId: ToolbarActionId.punctuation,
-                onPressed: () => _toggleRemovePunctuation(),
               ),
               // הדפסת המפרשים המוצגים
               ActionButtonData(

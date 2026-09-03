@@ -156,25 +156,29 @@ class _FuzzyDistanceState extends State<FuzzyDistance> {
         final isFuzzy = state.configuration.searchMode == SearchMode.fuzzy;
         final String label;
         if (modeOverridesDistance) {
-          label = wordMatchMode.label;
+          label = context.settingsText(wordMatchMode.label);
         } else if (scopeOverridesDistance) {
-          label = scope.label;
+          label = context.settingsText(scope.label);
         } else if (hasCustomSpacing) {
-          label = 'מרווח בין מילים (מושבת)';
+          label = context.settingsText('מרווח בין מילים (מושבת)');
         } else if (isFuzzy) {
-          label = 'מרחק חיפוש';
+          label = context.settingsText('מרחק חיפוש');
         } else {
-          label = 'מרווח בין מילים';
+          label = context.settingsText('מרווח בין מילים');
         }
 
         final spinBox = Tooltip(
           message: modeOverridesDistance
-              ? wordMatchMode.tooltip
+              ? context.settingsText(wordMatchMode.tooltip)
               : scopeOverridesDistance
-              ? scope.tooltip
+              ? context.settingsText(scope.tooltip)
               : isFuzzy
-              ? 'קובע עד כמה מותר לתוצאה להיות שונה מהמילים שהוקלדו.'
-              : 'קובע כמה מילים יכולות להופיע בין מילות החיפוש. כאשר מוגדרים מרווחים ידניים בין מילים, השדה הזה מושבת.',
+              ? context.settingsText(
+                  'קובע עד כמה מותר לתוצאה להיות שונה מהמילים שהוקלדו.',
+                )
+              : context.settingsText(
+                  'קובע כמה מילים יכולות להופיע בין מילות החיפוש. כאשר מוגדרים מרווחים ידניים בין מילים, השדה הזה מושבת.',
+                ),
           child: Focus(
             focusNode: _focusNode,
             child: SpinBox(
@@ -305,7 +309,13 @@ class _ScopeAndMatchMenu extends StatelessWidget {
         scope == SearchScope.wordDistance && mode == WordMatchMode.all;
     final current = (scope, mode);
     return Tooltip(
-      message: 'טווח קרבה: ${scope.label} · התאמת מילים: ${mode.label}',
+      message: context.settingsText(
+        'טווח קרבה: {scope} · התאמת מילים: {mode}',
+        args: {
+          'scope': context.settingsText(scope.label),
+          'mode': context.settingsText(mode.label),
+        },
+      ),
       child: AppDropdownField<(SearchScope, WordMatchMode)>(
         value: current,
         isExpanded: false,
@@ -314,7 +324,10 @@ class _ScopeAndMatchMenu extends StatelessWidget {
         onSelected: (_) {},
         entries: [
           for (final scopeOption in SearchScope.values)
-            AppMenuEntry(value: (scopeOption, mode), label: scopeOption.label),
+            AppMenuEntry(
+              value: (scopeOption, mode),
+              label: context.settingsText(scopeOption.label),
+            ),
         ],
         selectedBuilder: (context, value) => Row(
           mainAxisSize: MainAxisSize.min,
@@ -327,7 +340,8 @@ class _ScopeAndMatchMenu extends StatelessWidget {
             const SizedBox(width: 8),
             Flexible(
               child: Text(
-                '${scope.label} · ${mode.label}',
+                '${context.settingsText(scope.label)} · '
+                '${context.settingsText(mode.label)}',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -339,17 +353,17 @@ class _ScopeAndMatchMenu extends StatelessWidget {
             buildAppSubmenuPopupMenuItem<(SearchScope, WordMatchMode)>(
               context: context,
               metrics: metrics,
-              label: scopeOption.label,
+              label: context.settingsText(scopeOption.label),
               menuChildren: [
                 for (final modeOption in WordMatchMode.values)
                   buildAppPopupMenuItem<(SearchScope, WordMatchMode)>(
                     context,
                     AppMenuEntry(
                       value: (scopeOption, modeOption),
-                      label: modeOption.label,
+                      label: context.settingsText(modeOption.label),
                       labelWidget: Tooltip(
-                        message: modeOption.tooltip,
-                        child: Text(modeOption.label),
+                        message: context.settingsText(modeOption.tooltip),
+                        child: Text(context.settingsText(modeOption.label)),
                       ),
                     ),
                     metrics,

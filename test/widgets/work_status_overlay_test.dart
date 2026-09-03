@@ -47,6 +47,24 @@ void main() {
       cubit.close();
     });
 
+    testWidgets('מעגל אחוזים כלפי מטה כדי לא להציג 100% טרם סיום', (tester) async {
+      final cubit = WorkStatusCubit();
+      cubit.upsert(
+        const WorkStatusItem(
+          id: 'indexing',
+          title: 'אינדוקס ספרים',
+          message: 'התוכנה בתהליך אינדוקס',
+          progress: 0.999,
+        ),
+      );
+
+      await tester.pumpWidget(_wrap(const WorkStatusOverlay(), cubit));
+      await tester.pump();
+
+      expect(find.text('99%'), findsOneWidget);
+      cubit.close();
+    });
+
     testWidgets('מציג progress לא-דטרמיניסטי כשאין progress', (tester) async {
       final cubit = WorkStatusCubit();
       cubit.upsert(

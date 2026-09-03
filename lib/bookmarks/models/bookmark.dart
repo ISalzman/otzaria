@@ -95,6 +95,14 @@ class Bookmark {
     return versionTitle == null ? base : '$base|version:$versionTitle';
   }
 
+  /// מפתח לזיהוי סימניה כפולה בייבוא מגיבוי של מכשיר אחר.
+  ///
+  /// למודל אין מזהה, ולכן הזהות ערכית: המיקום בספר, או טקסט החיפוש בסימניית
+  /// חיפוש. [label] אינו נכלל — אותו מיקום עם תיאור שנערך הוא אותה סימניה.
+  String get dedupeKey => isSearch
+      ? 'search:$ref'
+      : '${targetKind.name}:${bookIdentity(book)}:$index:$ref';
+
   Bookmark({
     required this.ref,
     required this.book,

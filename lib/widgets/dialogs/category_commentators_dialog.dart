@@ -5,6 +5,7 @@ import 'package:otzaria/settings/services/category_commentators_service.dart';
 import 'package:otzaria/text_book/utils/category_settings_utils.dart';
 import 'package:otzaria/widgets/controls/action_buttons.dart';
 import 'package:otzaria/widgets/dialogs/app_dialogs.dart';
+import 'package:otzaria/widgets/misc/app_menu_exports.dart';
 
 /// דיאלוג "מפרשים קבועים לקטגוריה" (issue #866): קובע את בחירת המפרשים
 /// הנוכחית כברירת המחדל לכל ספרי הקטגוריה שנבחרה, או מסיר קביעה קיימת.
@@ -44,21 +45,21 @@ Future<void> showCategoryCommentatorsDialog({
             ),
             const SizedBox(height: 16),
             if (categories.length > 1)
-              DropdownButtonFormField<String>(
-                initialValue: selectedCategory,
+              AppDropdownField<String>(
+                value: selectedCategory,
                 decoration: const InputDecoration(
                   labelText: 'בחר קטגוריה',
                   border: OutlineInputBorder(),
                 ),
-                items: categories
+                entries: categories
                     .map(
-                      (category) => DropdownMenuItem(
+                      (category) => AppMenuEntry<String>(
                         value: category,
-                        child: Text(category),
+                        label: category,
                       ),
                     )
                     .toList(),
-                onChanged: (value) {
+                onSelected: (value) {
                   if (value != null) {
                     setState(() => selectedCategory = value);
                   }

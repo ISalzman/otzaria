@@ -5,9 +5,15 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:otzaria/search/models/search_configuration.dart';
+import 'package:otzaria_search_engine/otzaria_search_engine.dart'
+    show SearchScope, WordMatchMode;
+import 'package:otzaria/search/search_query_builder.dart';
 import 'package:otzaria/settings/l10n/settings_l10n_exports.dart';
 import 'package:otzaria/settings/tabs/about_settings_data.dart';
 import 'package:otzaria/theme/app_seed_colors.dart';
+import 'package:otzaria/tools/built_in_tools_catalog.dart';
+import 'package:otzaria/tools/view/tools_launcher_panel.dart';
 import 'package:otzaria/tour/models/live_tip.dart';
 import 'package:otzaria/tour/models/tour_step.dart';
 import 'package:otzaria/tour/models/tour_steps.dart';
@@ -38,6 +44,73 @@ void main() {
     test('שמות צבעי הבסיס', () {
       for (final option in AppSeedColors.options) {
         expect(catalog, contains(option.name), reason: option.name);
+      }
+    });
+  });
+
+  group('מסכי הספרייה, החיפוש והכלים (issue #1101)', () {
+    // התיאור של כפתור עדכון הספרייה נבנה ב-libraryUpdateButtonTooltip ונמסר
+    // ל-settingsText דרך משתנה; ענפים דינמיים (state.message) נשארים עברית.
+    test('תיאורי כפתור עדכון הספרייה', () {
+      for (final tooltip in [
+        'העדכון הושלם',
+        'הספרייה מעודכנת',
+        'שגיאה בעדכון - לחץ לנסות שוב',
+        'עדכון ספרייה',
+      ]) {
+        expect(catalog, contains(tooltip), reason: tooltip);
+      }
+    });
+
+    test('אפשרויות המילה של החיפוש הרגיל', () {
+      for (final key in SearchQueryBuilder.exactWordOptionKeys) {
+        expect(catalog, contains(key), reason: key);
+      }
+    });
+
+    test('תוויות ותיאורים של מצבי החיפוש, הטווח והתאמת המילים', () {
+      for (final mode in SearchMode.values) {
+        expect(catalog, contains(mode.shortLabel), reason: mode.shortLabel);
+        expect(catalog, contains(mode.tooltip), reason: mode.tooltip);
+      }
+      for (final scope in SearchScope.values) {
+        expect(catalog, contains(scope.label), reason: scope.label);
+        expect(catalog, contains(scope.tooltip), reason: scope.tooltip);
+      }
+      for (final mode in WordMatchMode.values) {
+        expect(catalog, contains(mode.label), reason: mode.label);
+        expect(catalog, contains(mode.tooltip), reason: mode.tooltip);
+      }
+    });
+
+    test('כותרות הקבוצות ושמות הכלים המובנים בפאנל הכלים', () {
+      for (final label in [kBuiltInToolsGroupLabel, kPluginsGroupLabel]) {
+        expect(catalog, contains(label), reason: label);
+      }
+      for (final meta in kBuiltInToolsCatalog) {
+        expect(catalog, contains(meta.label), reason: meta.label);
+      }
+    });
+
+    // פעולות התפריט של קוביית כלי נמסרות דרך ToolTileAction.label; הרשימה
+    // כאן מפורשת כי _tileActions פרטי ל-State.
+    test('פעולות תפריט הקובייה בפאנל הכלים', () {
+      for (final label in [
+        'הזזה',
+        'הזז אחורה',
+        'הזז קדימה',
+        'הזז לתחילה',
+        'הזז לסוף',
+        'ניהול הרשאות',
+        'הסר מסרגל הניווט',
+        'הצמד לסרגל הניווט',
+        'הסתר מהממשק',
+        'הצג בממשק',
+        'השבת',
+        'הפעל',
+        'מחק תוסף',
+      ]) {
+        expect(catalog, contains(label), reason: label);
       }
     });
   });

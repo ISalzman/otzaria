@@ -194,6 +194,19 @@ class PluginFileServer {
     return false;
   }
 
+  /// האם [uri] הוא נתיב ההעלאה (`/w/<token>`) של העלאה פתוחה של [pluginId].
+  ///
+  /// שערי ה-WebView חוסמים כל בקשה לשרת שאינה מזוהה כשל התוסף הפונה,
+  /// ו-[isUriForPlugin] מכיר רק נתיבי קבצים (`/f/...`) — כלומר בלי הבדיקה
+  /// הזאת ה-PUT של `fs.beginBinaryWrite` נחסם בשער עוד לפני שהגיע לשרת,
+  /// וכל שמירה בינארית נופלת ב-"Failed to fetch". token שאינו מוכר אינו
+  /// מאושר: לתוסף אין מה לחפש בנתיבי העלאה שאינם שלו.
+  bool isUploadUriForPlugin(Uri uri, String pluginId) {
+    final segments = uri.pathSegments;
+    if (segments.length != 2 || segments[0] != 'w') return false;
+    return _uploads[segments[1]]?.pluginId == pluginId;
+  }
+
   /// פותח העלאה: מקצה writeToken חד-פעמי, קובץ temp ו-URL ל-PUT.
   ///
   /// הבייטים אינם עוברים בגשר ה-JS — התוסף שולח אותם ב-PUT יחיד לשרת ה-loopback,

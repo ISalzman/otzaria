@@ -20,6 +20,7 @@ import 'package:otzaria/text_book/utils/commentators_context_menu.dart';
 import 'package:otzaria/text_book/view/combined_view/combined_book_screen.dart';
 import 'package:otzaria/text_book/view/selection/enhanced_gesture_detector.dart';
 import 'package:otzaria/text_book/view/selection/selection_sync_controller.dart';
+import 'package:otzaria/text_display/text_display_exports.dart';
 import 'package:otzaria/widgets/misc/app_context_menu.dart';
 import 'package:otzaria/widgets/misc/link_context_menu_entry.dart';
 import 'package:otzaria/widgets/misc/link_preview_overlay.dart';
@@ -787,13 +788,15 @@ void main() {
     const niqqud = 'ָ';
     // אתנחתא (טעם) — נמצא בשתי הקבוצות
     const taam = '֑';
+    const showAll = TextDisplayProfile(
+      teamim: TeamimVisibility.show,
+      holyName: HolyNameDisplay.asIs,
+    );
 
-    test('מסיר פיסוק כש-removePunctuation פעיל (באג "העתק את כל הפסקה")', () {
+    test('מסיר פיסוק כשהפיסוק מוסתר (באג "העתק את כל הפסקה")', () {
       final result = applyDisplayTextPreferences(
         text: 'שלום, עולם!',
-        removeNikud: false,
-        removePunctuation: true,
-        showTeamim: true,
+        profile: showAll.copyWith(punctuation: MarkVisibility.hide),
       );
       expect(result.contains(','), isFalse);
       expect(result.contains('!'), isFalse);
@@ -801,67 +804,77 @@ void main() {
       expect(result.contains('עולם'), isTrue);
     });
 
-    test('שומר פיסוק כש-removePunctuation כבוי', () {
+    test('שומר פיסוק כשהפיסוק מוצג', () {
       final result = applyDisplayTextPreferences(
         text: 'שלום, עולם!',
-        removeNikud: false,
-        removePunctuation: false,
-        showTeamim: true,
+        profile: showAll,
       );
       expect(result, 'שלום, עולם!');
     });
 
-    test('מסיר ניקוד כש-removeNikud פעיל', () {
+    test('מסיר ניקוד כשהניקוד מוסתר', () {
       final result = applyDisplayTextPreferences(
         text: 'א$niqqudבג',
-        removeNikud: true,
-        removePunctuation: false,
-        showTeamim: true,
+        profile: showAll.copyWith(nikud: MarkVisibility.hide),
       );
       expect(result, 'אבג');
     });
 
-    test('שומר ניקוד כש-removeNikud כבוי', () {
+    test('שומר ניקוד כשהניקוד מוצג', () {
       final result = applyDisplayTextPreferences(
         text: 'א$niqqudבג',
-        removeNikud: false,
-        removePunctuation: false,
-        showTeamim: true,
+        profile: showAll,
       );
       expect(result, 'א$niqqudבג');
     });
 
-    test('מסיר טעמים בלבד כש-showTeamim כבוי (הניקוד נשמר)', () {
+    test('מסיר טעמים בלבד כשהטעמים מוסתרים (הניקוד נשמר)', () {
       final result = applyDisplayTextPreferences(
         text: 'א$niqqud$taamבג',
-        removeNikud: false,
-        removePunctuation: false,
-        showTeamim: false,
+        profile: showAll.copyWith(teamim: TeamimVisibility.hide),
       );
       expect(result.contains(taam), isFalse);
       expect(result.contains(niqqud), isTrue);
     });
 
-    test('שומר טעמים כש-showTeamim פעיל', () {
+    test('שומר טעמים כשהטעמים מוצגים', () {
       final result = applyDisplayTextPreferences(
         text: 'א$taamבג',
-        removeNikud: false,
-        removePunctuation: false,
-        showTeamim: true,
+        profile: showAll,
       );
       expect(result.contains(taam), isTrue);
+    });
+
+    test('טעמים במצב followNikud מוסרים יחד עם הניקוד', () {
+      final result = applyDisplayTextPreferences(
+        text: 'א$niqqud$taamבג',
+        profile: showAll.copyWith(
+          nikud: MarkVisibility.hide,
+          teamim: TeamimVisibility.followNikud,
+        ),
+      );
+      expect(result, 'אבג');
     });
 
     test('מסיר גם ניקוד וגם פיסוק יחד (באג "העתק טקסט מוצג")', () {
       final result = applyDisplayTextPreferences(
         text: 'א$niqqudבג, דה!',
-        removeNikud: true,
-        removePunctuation: true,
-        showTeamim: true,
+        profile: showAll.copyWith(
+          nikud: MarkVisibility.hide,
+          punctuation: MarkVisibility.hide,
+        ),
       );
       expect(result.contains(niqqud), isFalse);
       expect(result.contains(','), isFalse);
       expect(result.contains('!'), isFalse);
+    });
+
+    test('מחליף את שם הוי"ה לפי הפרופיל', () {
+      final result = applyDisplayTextPreferences(
+        text: 'ויאמר יהוה',
+        profile: showAll.copyWith(holyName: HolyNameDisplay.hehApostrophe),
+      );
+      expect(result, "ויאמר ה'");
     });
 
     test('ישות HTML (&thinsp;) שורדת הסרת פיסוק ואינה הופכת לטקסט גלוי', () {
@@ -871,9 +884,10 @@ void main() {
 
       final result = applyDisplayTextPreferences(
         text: text,
-        removeNikud: true,
-        removePunctuation: true,
-        showTeamim: true,
+        profile: showAll.copyWith(
+          nikud: MarkVisibility.hide,
+          punctuation: MarkVisibility.hide,
+        ),
       );
 
       expect(result.contains('&thinsp;'), isTrue);
@@ -882,12 +896,7 @@ void main() {
 
     test('לא משנה טקסט כשכל ההעדפות מאפשרות הצגה מלאה', () {
       const text = 'א$niqqudבג';
-      final result = applyDisplayTextPreferences(
-        text: text,
-        removeNikud: false,
-        removePunctuation: false,
-        showTeamim: true,
-      );
+      final result = applyDisplayTextPreferences(text: text, profile: showAll);
       expect(result, text);
     });
   });

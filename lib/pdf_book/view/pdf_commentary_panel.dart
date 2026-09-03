@@ -22,10 +22,13 @@ import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/bloc/tabs_event.dart';
 import 'package:otzaria/widgets/commentary/commentary_content.dart';
+import 'package:otzaria/widgets/controls/action_buttons.dart';
+import 'package:otzaria/widgets/feedback/otzaria_empty_state.dart';
 import 'package:otzaria/widgets/commentary/links_list_view.dart';
 import 'package:otzaria/widgets/feedback/scrollable_positioned_list_scrollbar.dart';
 import 'package:otzaria/text_book/models/commentator_group.dart';
 import 'package:otzaria/text_book/utils/commentary_search_utils.dart';
+import 'package:otzaria/text_display/models/text_display_profile.dart';
 import 'package:otzaria/text_book/utils/commentary_type_filter.dart';
 import 'package:otzaria/text_book/utils/commentator_group_builder.dart';
 import 'package:otzaria/text_book/utils/link_anchor_markers.dart';
@@ -263,9 +266,11 @@ class PdfCommentaryPanel extends StatefulWidget {
   /// משקף החוצה את מצב "הכל מורחב" (לכפתור הכיווץ/הרחבה בסרגל הכרטיסייה).
   final ValueNotifier<bool>? externalAllExpandedNotifier;
 
-  /// הסרת ניקוד/פיסוק מתוכן המפרשים (כמו בכרטיסיית הטקסט).
-  final bool removeNikud;
-  final bool removePunctuation;
+  /// פרופיל תצוגת המפרשים (כמו בכרטיסיית הטקסט).
+  final TextDisplayProfile displayProfile;
+
+  /// פרופיל ערוץ ההעתקה; null = כמו התצוגה.
+  final TextDisplayProfile? copyDisplayProfile;
 
   @visibleForTesting
   final Future<List<CommentaryGroup>> Function(List<Link>)?
@@ -295,8 +300,8 @@ class PdfCommentaryPanel extends StatefulWidget {
     this.externalSearchSnippetsNotifier,
     this.typeSelection,
     this.externalAllExpandedNotifier,
-    this.removeNikud = false,
-    this.removePunctuation = false,
+    this.displayProfile = TextDisplayProfile.defaults,
+    this.copyDisplayProfile,
     this.commentaryGroupsLoader,
   });
 
@@ -596,8 +601,7 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
     _resetScrollIfRangeChanged();
     // הספירות והקטעים נגזרים מהתוכן אחרי הסרת ניקוד/פיסוק, ולכן שינוי ההגדרה
     // בזמן חיפוש פעיל מחייב חישוב מחדש.
-    if (oldWidget.removeNikud != widget.removeNikud ||
-        oldWidget.removePunctuation != widget.removePunctuation) {
+    if (oldWidget.displayProfile != widget.displayProfile) {
       if (_searchQuery.isNotEmpty) _scheduleSearchCompute();
     }
 
@@ -761,7 +765,7 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
       final count = countCommentarySearchMatches(
         content: data,
         query: query,
-        removePunctuation: widget.removePunctuation,
+        displayProfile: widget.displayProfile,
         // התוכן מרונדר ב-CommentaryContent עם partialWordHighlight: true.
         partialWordMatch: true,
       );
@@ -773,8 +777,7 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
         )] = buildCommentarySearchSnippet(
           content: data,
           query: query,
-          removeNikud: widget.removeNikud,
-          removePunctuation: widget.removePunctuation,
+          displayProfile: widget.displayProfile,
         );
       } else {
         _searchSnippetsPerLink.remove(_getLinkKey(link));
@@ -934,8 +937,8 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
       link: link,
       openBookCallback: widget.openBookCallback,
       fontSize: widget.fontSize,
-      removeNikud: widget.removeNikud,
-      removePunctuation: widget.removePunctuation,
+      displayProfile: widget.displayProfile,
+      copyDisplayProfile: widget.copyDisplayProfile,
       savedSelectedText: _savedSelectedText,
       onNavigateToLink: _navigateToLink,
       onCopySelected: () => ContextMenuUtils.copyFormattedText(
@@ -1189,7 +1192,6 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
     if (!mounted) return;
 
     final bookTitle = widget.tab.book.title;
-    final removeTaamim = !context.read<SettingsBloc>().state.showTeamim;
     await showDialog<bool>(
       context: context,
       barrierDismissible: false,
@@ -1198,8 +1200,8 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
         bookId: bookTitle,
         documentTitle: bookTitle,
         prebuiltBlocks: blocks,
-        removeNikud: widget.removeNikud,
-        removeTaamim: removeTaamim,
+        removeNikud: widget.displayProfile.removeNikud,
+        removeTaamim: widget.displayProfile.removeTeamim,
       ),
     );
   }
@@ -1342,24 +1344,14 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
 
       // אין מפרשים בכלל לקטע הזה, או שיש מפרשים נבחרים אבל הם לא רלוונטיים לדף
       return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                hasCommentaryLinks
-                    ? 'לא נמצאו מפרשים מהנבחרים לדף זה'
-                    : 'לא נמצאו מפרשים לקטע הנבחר',
-                style: TextStyle(
-                  fontSize: widget.fontSize * 0.9,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              if (hasCommentaryLinks) ...[
-                const SizedBox(height: 16),
-                ElevatedButton.icon(
+        child: OtzariaEmptyState(
+          isCompact: true,
+          icon: OtzariaIcons.link_24_regular,
+          title: hasCommentaryLinks
+              ? 'לא נמצאו מפרשים מהנבחרים לדף זה'
+              : 'לא נמצאו מפרשים לקטע הנבחר',
+          action: hasCommentaryLinks
+              ? ActionButton.recommended(
                   onPressed: () {
                     if (widget.enableInternalFilter) {
                       setState(() {
@@ -1369,18 +1361,10 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
                       widget.onSelectCommentatorsRequested?.call();
                     }
                   },
-                  icon: const Icon(OtzariaIcons.apps_list_24_regular),
-                  label: const Text('בחר מפרשים'),
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 24,
-                      vertical: 12,
-                    ),
-                  ),
-                ),
-              ],
-            ],
-          ),
+                  icon: OtzariaIcons.apps_list_24_regular,
+                  text: 'בחר מפרשים',
+                )
+              : null,
         ),
       );
     }
@@ -1637,8 +1621,7 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
           onSearchResultsCountUpdate: _updateSearchResultsCount,
           getKeyForLink: _getLinkKeyObject,
           getItemSearchIndex: _getItemSearchIndex, // Pass the function
-          removeNikud: widget.removeNikud,
-          removePunctuation: widget.removePunctuation,
+          displayProfile: widget.displayProfile,
           onLinkRendered: (link, text) =>
               _renderedTextByKey[_getLinkKey(link)] = text,
           onLinkTitleRendered: (link, title) =>
@@ -1701,8 +1684,8 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
           setState(() => _selectedLinkTypes = types),
       openBookCallback: widget.openBookCallback,
       fontSize: widget.fontSize,
-      removeNikud: widget.removeNikud,
-      removePunctuation: widget.removePunctuation,
+      displayProfile: widget.displayProfile,
+      copyDisplayProfile: widget.copyDisplayProfile,
       contentScopeKey: _currentLinksScopeKey(),
       emptyMessage: 'לא נמצאו קישורים לדף זה',
     );
@@ -1982,8 +1965,7 @@ class _CollapsibleCommentaryGroup extends StatefulWidget {
   final Function(Link, int)? onSearchResultsCountUpdate;
   final Key? Function(Link)? getKeyForLink; // Support linking keys
   final int Function(Link)? getItemSearchIndex; // Support highlighting
-  final bool removeNikud;
-  final bool removePunctuation;
+  final TextDisplayProfile displayProfile;
 
   /// מדווח את הטקסט המרונדר של פריט — לשחזור מעברי שורה בהעתקה רב-שורתית.
   final void Function(Link link, String renderedPlainText)? onLinkRendered;
@@ -2009,8 +1991,7 @@ class _CollapsibleCommentaryGroup extends StatefulWidget {
     this.onSearchResultsCountUpdate,
     this.getKeyForLink,
     this.getItemSearchIndex,
-    this.removeNikud = false,
-    this.removePunctuation = false,
+    this.displayProfile = TextDisplayProfile.defaults,
     this.onLinkRendered,
     this.onLinkTitleRendered,
     this.onLinkPointerDown,
@@ -2169,8 +2150,7 @@ class _CollapsibleCommentaryGroupState
                         },
                         currentSearchIndex:
                             widget.getItemSearchIndex?.call(link) ?? -1,
-                        removeNikud: widget.removeNikud,
-                        removePunctuation: widget.removePunctuation,
+                        displayProfile: widget.displayProfile,
                         onRendered: (text) =>
                             widget.onLinkRendered?.call(link, text),
                       ),

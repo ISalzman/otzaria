@@ -11,6 +11,7 @@ import 'package:otzaria/settings/engine/settings_bloc.dart';
 import 'package:otzaria/settings/engine/settings_event.dart';
 import 'package:otzaria/settings/engine/settings_state.dart';
 import 'package:otzaria/widgets/misc/link_context_menu_entry.dart';
+import 'package:otzaria/text_display/models/text_display_profile.dart';
 
 import '../test_helpers/memory_cache_provider.dart';
 
@@ -49,8 +50,7 @@ void main() {
                   ),
                   maxContentLines: 4,
                   compact: true,
-                  removeNikud: false,
-                  removePunctuation: false,
+                  displayProfile: TextDisplayProfile.defaults,
                 ),
               ),
             ),
@@ -101,8 +101,7 @@ void main() {
                   ),
                   maxContentLines: 4,
                   compact: true,
-                  removeNikud: false,
-                  removePunctuation: false,
+                  displayProfile: TextDisplayProfile.defaults,
                 ),
               ),
             ),

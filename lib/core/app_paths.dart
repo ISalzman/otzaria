@@ -42,6 +42,9 @@ class AppPaths {
   /// שם הקובץ שבו נרשם נתיב הספרייה הפעיל עבור ה-uninstaller.
   static const String libraryPathRecordFileName = 'library_path.txt';
 
+  /// שם תיקיית ארכיוני התוספים שהמתקין מניח ליד ה-executable.
+  static const String bundledPluginsFolderName = 'bundled_plugins';
+
   static bool? _isPortableCache;
 
   static String? _documentsRootPathOverride;
@@ -266,6 +269,13 @@ class AppPaths {
   /// בתוך אחסון האפליקציה, והיא נרשמת כתיקייה מותאמת אישית רגילה.
   static Future<String> getPersonalBooksImportPath() async =>
       p.join(await getDataRootPath(), 'הספרים שלי');
+
+  /// תיקיית ארכיוני התוספים שחבילת ההתקנה ארזה, ליד ה-executable. `null`
+  /// במובייל, שאין בו חבילה כזו. התיקייה אינה קיימת כשהחבילה נבנתה בלי תוספים.
+  static String? getBundledPluginsPath() {
+    if (Platform.isAndroid || Platform.isIOS) return null;
+    return p.join(p.dirname(_resolvedExecutable), bundledPluginsFolderName);
+  }
 
   /// מזהה תיקיית ספרייה מצורפת ליד ה-executable עבור חבילות FULL.
   ///

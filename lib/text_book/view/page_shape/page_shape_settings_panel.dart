@@ -584,32 +584,28 @@ class _PageShapeSettingsPanelState extends State<PageShapeSettingsPanel> {
               if (_commentatorSaveScope == CommentatorSaveScope.category &&
                   _availableCategories.isNotEmpty) ...[
                 const SizedBox(height: 8),
-                DropdownButtonFormField<String>(
-                  initialValue: _selectedCategory,
-                  decoration: InputDecoration(
-                    labelText: 'בחר קטגוריה',
-                    border: const OutlineInputBorder(),
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 8,
-                    ),
-                    filled: true,
-                    fillColor: Theme.of(context).colorScheme.surface,
-                  ),
-                  items: _availableCategories.map((category) {
-                    return DropdownMenuItem<String>(
-                      value: category,
-                      child: Text(
-                        category,
-                        style: const TextStyle(fontSize: 13),
-                      ),
-                    );
-                  }).toList(),
-                  onChanged: (value) {
-                    setState(() {
-                      _selectedCategory = value;
-                    });
-                    _saveSettings();
+                Text(
+                  'בחר קטגוריה:',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                const SizedBox(height: 4),
+                AppDropdownField<String>(
+                  value: _selectedCategory,
+                  entries: _availableCategories
+                      .map(
+                        (category) => AppMenuEntry<String>(
+                          value: category,
+                          label: category,
+                        ),
+                      )
+                      .toList(),
+                  onSelected: (value) {
+                    if (value != null) {
+                      setState(() {
+                        _selectedCategory = value;
+                      });
+                      _saveSettings();
+                    }
                   },
                 ),
               ],
@@ -769,21 +765,9 @@ class _PageShapeSettingsPanelState extends State<PageShapeSettingsPanel> {
           style: TextStyle(fontSize: 15),
         ),
         const SizedBox(height: 6),
-        DropdownButtonFormField<String>(
-          initialValue: _bottomFontFamily,
-          decoration: const InputDecoration(
-            border: OutlineInputBorder(),
-            contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-          ),
-          items: AppFonts.buildDropdownItems(
-            selectedValue: _bottomFontFamily,
-            itemTextStyle: const TextStyle(fontSize: 13),
-          ),
-          onChanged: (value) {
-            if (value != null) {
-              _onFontChanged(value);
-            }
-          },
+        FontDropdownField(
+          value: _bottomFontFamily,
+          onChanged: _onFontChanged,
         ),
         const SizedBox(height: 20),
         const Divider(),

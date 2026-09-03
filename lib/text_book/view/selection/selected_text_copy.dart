@@ -2,6 +2,7 @@ import 'package:otzaria/models/books.dart';
 import 'package:otzaria/settings/engine/settings_state.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/utils/text/copy_utils.dart';
+import 'package:otzaria/text_display/text_display_exports.dart';
 import 'package:otzaria/utils/text/html_slice.dart';
 
 /// בוחר את תוכן ה-HTML המתאים ביותר לטקסט שנבחר: השורה המקורית כשהיא
@@ -42,6 +43,7 @@ String resolveHtmlTextForSelection({
 /// אז [headerBookOverride] הוא מקור ספר הכותרת היחיד.
 /// [removeNikud] — פעולת "העתק בלי ניקוד" (issue #851): ניקוד וטעמים
 /// מוסרים מהעותק בלבד (כולל הכותרות וה-HTML), התצוגה לא משתנה.
+/// [copyProfile] — פרופיל מלא ("העתק כ..." / קיצור דינמי) שמחליף את הדגלים.
 Future<void> copySelectedTextForBook({
   required String plainText,
   required int? selectedIndex,
@@ -53,6 +55,7 @@ Future<void> copySelectedTextForBook({
   TextBook? headerBookOverride,
   List<String>? headerContentOverride,
   bool removeNikud = false,
+  TextDisplayProfile? copyProfile,
 }) async {
   var htmlContentToUse = resolveHtmlTextForSelection(
     plainText: plainText,
@@ -94,6 +97,7 @@ Future<void> copySelectedTextForBook({
     replaceHolyNames: settingsState.replaceHolyNames,
     holyNameStyle: settingsState.holyNameStyle,
     removeNikud: removeNikud,
+    profile: copyProfile,
   );
 
   await CopyUtils.copyStyledToClipboard(

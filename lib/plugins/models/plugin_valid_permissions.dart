@@ -137,6 +137,7 @@ const Set<String> apiCallsWithoutPermission = {
   'plugin.backgroundDone',
   'ui.print',
   'ui.exportPdf',
+  'ui.setUnsavedChanges',
 };
 
 /// קריאת רשימת שולחנות העבודה ושמותיהם. נפרדת מהניהול, כי השם עצמו הוא

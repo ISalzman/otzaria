@@ -12,6 +12,7 @@ import 'package:otzaria/utils/file/markdown_to_otzaria.dart';
 import 'package:otzaria/utils/text/html_link_handler.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
 import 'package:otzaria/widgets/smart_text/exact_line_height.dart';
+import 'package:otzaria/widgets/misc/inline_link_targets.dart';
 import 'package:otzaria/widgets/smart_text/raised_markers.dart';
 import 'package:otzaria/widgets/smart_text/render_settings.dart';
 import 'package:otzaria/widgets/smart_text/simple_inline_html.dart';
@@ -280,6 +281,9 @@ class SmartTextWidget extends StatelessWidget {
           factoryBuilder: () => _SmartTextWidgetFactory(
             onAnchorHover: onAnchorHover,
             onAnchorHoverExit: onAnchorHoverExit,
+            onMiddleClickUrl: onOpenBook == null
+                ? null
+                : (url) => HtmlLinkHandler.openLinkInBackground(context, url),
           ),
           customStylesBuilder: (dom.Element element) {
             final headingWeight = AppFonts.headingFontWeightOverride(
@@ -553,9 +557,14 @@ bool _isInsideMarkdownBlock(dom.Element element) {
 class _SmartTextWidgetFactory extends WidgetFactory {
   final void Function(String url, Offset globalPosition)? onAnchorHover;
   final void Function(String url)? onAnchorHoverExit;
+  final void Function(String url)? onMiddleClickUrl;
   final _previewHrefByRecognizer = <GestureRecognizer, String>{};
 
-  _SmartTextWidgetFactory({this.onAnchorHover, this.onAnchorHoverExit});
+  _SmartTextWidgetFactory({
+    this.onAnchorHover,
+    this.onAnchorHoverExit,
+    this.onMiddleClickUrl,
+  });
 
   @override
   GestureRecognizer? buildGestureRecognizer(
@@ -566,6 +575,15 @@ class _SmartTextWidgetFactory extends WidgetFactory {
     final href = tree.element.attributes['href'];
     if (recognizer != null && href != null && isPreviewHoverableUrl(href)) {
       _previewHrefByRecognizer[recognizer] = href;
+    }
+    if (recognizer is TapGestureRecognizer &&
+        href != null &&
+        HtmlLinkHandler.opensAnotherBook(href)) {
+      registerInlineLinkRecognizer(
+        recognizer,
+        href,
+        onMiddleClick: onMiddleClickUrl,
+      );
     }
     return recognizer;
   }

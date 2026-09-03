@@ -52,9 +52,11 @@ import 'package:otzaria/shortcuts/keyboard_shortcuts.dart';
 import 'package:otzaria/shortcuts/shortcut_helper.dart';
 import 'package:otzaria/shortcuts/shortcut_validator.dart';
 import 'dart:async';
+import 'dart:convert';
 import 'package:otzaria/update/my_update_widget.dart';
 import 'package:otzaria/tools/calendar/utils/calendar_cubit.dart';
 import 'package:otzaria/widgets/dialogs/ad_popup_dialog.dart';
+import 'package:otzaria/settings/services/safer_mode_guard.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:otzaria/main.dart' show appWindowListener, presentMainWindow;
 import 'package:otzaria/core/splash_screen.dart' show SplashIcon;
@@ -1551,15 +1553,19 @@ class MainWindowScreenState extends State<MainWindowScreen>
   }) {
     NavigationDestination buildNavDataDestination(int i) {
       final item = _navData[i];
+      final shortcut =
+          ShortcutValidator.getShortcutValue(item.shortcutKey) ?? '';
+      final icon = _navigationIcon(item.icon);
       return NavigationDestination(
         tooltip: '',
-        icon: Tooltip(
-          preferBelow: false,
-          message: ShortcutHelper.formatShortcutForDisplay(
-            ShortcutValidator.getShortcutValue(item.shortcutKey) ?? '',
-          ),
-          child: _navigationIcon(item.icon),
-        ),
+        // פעולה שהמשתמש ביטל את הקיצור שלה — בלי tooltip ריק.
+        icon: shortcut.isEmpty
+            ? icon
+            : Tooltip(
+                preferBelow: false,
+                message: ShortcutHelper.formatShortcutForDisplay(shortcut),
+                child: icon,
+              ),
         selectedIcon: _navigationIcon(item.iconFilled),
         label: context.settingsText(item.label),
       );
@@ -2729,32 +2735,10 @@ class MainWindowScreenState extends State<MainWindowScreen>
               if (previous.lineHeight != current.lineHeight) {
                 dispatch(SettingsRepository.keyLineHeight, current.lineHeight);
               }
-              if (previous.showTeamim != current.showTeamim) {
-                dispatch(SettingsRepository.keyShowTeamim, current.showTeamim);
-              }
-              if (previous.defaultRemoveNikud != current.defaultRemoveNikud) {
+              if (previous.textDisplayPolicy != current.textDisplayPolicy) {
                 dispatch(
-                  SettingsRepository.keyDefaultNikud,
-                  current.defaultRemoveNikud,
-                );
-              }
-              if (previous.removeNikudFromTanach !=
-                  current.removeNikudFromTanach) {
-                dispatch(
-                  SettingsRepository.keyRemoveNikudFromTanach,
-                  current.removeNikudFromTanach,
-                );
-              }
-              if (previous.replaceHolyNames != current.replaceHolyNames) {
-                dispatch(
-                  SettingsRepository.keyReplaceHolyNames,
-                  current.replaceHolyNames,
-                );
-              }
-              if (previous.holyNameStyle != current.holyNameStyle) {
-                dispatch(
-                  SettingsRepository.keyHolyNameStyle,
-                  current.holyNameStyle.storageKey,
+                  SettingsRepository.keyTextDisplayPolicy,
+                  jsonEncode(current.textDisplayPolicy.toJson()),
                 );
               }
               if (previous.libraryViewMode != current.libraryViewMode) {
@@ -3535,7 +3519,8 @@ class MainWindowScreenState extends State<MainWindowScreen>
     context.read<NavigationBloc>().add(const NavigateToScreen(Screen.settings));
   }
 
-  void _openErrorLogFile() {
+  Future<void> _openErrorLogFile() async {
+    if (!await verifySaferModePassword(context)) return;
     ErrorLogFile.ensureExists();
     final path = ErrorLogFile.resolvePath();
     if (Platform.isWindows) {
@@ -3775,9 +3760,11 @@ class MainWindowScreenState extends State<MainWindowScreen>
     final item = _navData[index];
     final isSelected =
         selectedOverride ?? (_getActiveNavigationIndex(currentScreen) == index);
-    final tooltip = ShortcutHelper.formatShortcutForDisplay(
-      ShortcutValidator.getShortcutValue(item.shortcutKey) ?? '',
-    );
+    final shortcut = ShortcutValidator.getShortcutValue(item.shortcutKey) ?? '';
+    // פעולה שהמשתמש ביטל את הקיצור שלה — בלי tooltip ריק.
+    final tooltip = shortcut.isEmpty
+        ? null
+        : ShortcutHelper.formatShortcutForDisplay(shortcut);
 
     final step = _tourCubit.state.currentStep;
     final isTourHighlighted = _isTourNavigationItemHighlighted(

@@ -374,6 +374,7 @@ void main() {
         rawText: 'בְּרֵאשִׁ֖ית!',
         settings: const RenderSettings(
           removeNikud: true,
+          removeTeamim: true,
           removePunctuation: true,
         ),
       );
@@ -381,6 +382,7 @@ void main() {
         rawText: 'שָׁלוֹם.',
         settings: const RenderSettings(
           removeNikud: true,
+          removeTeamim: true,
           removePunctuation: true,
         ),
       );

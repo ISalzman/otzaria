@@ -65,15 +65,12 @@ class TextRendererService {
     // 0b. הסרת גוף הערות inline (<i class="footnote">...</i>) - מוצגות כמפרש בצד.
     processed = notes.stripInlineNotes(processed);
 
-    // 1. הסרת טעמים (אם נדרש)
-    if (settings.removeTeamim) {
-      processed = utils.removeTeamim(processed);
-    }
-
-    // 2. הסרת ניקוד (אם נדרש)
-    if (settings.removeNikud) {
-      processed = utils.removeVolwels(processed);
-    }
+    // 1+2. טעמים וניקוד — בנפרד, כדי ש"בלי ניקוד, עם טעמים" יהיה אפשרי.
+    processed = utils.removeMarks(
+      processed,
+      nikud: settings.removeNikud,
+      teamim: settings.removeTeamim,
+    );
 
     // 2b. הסרת סימני פיסוק (אם נדרש)
     if (settings.removePunctuation) {

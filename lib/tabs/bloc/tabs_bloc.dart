@@ -284,19 +284,34 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
         : newTabs.length;
     newTabs.insert(newIndex, event.tab);
 
+    // ברקע נשארים על הטאב הנוכחי; ההוספה היא אחריו או בסוף, ולכן האינדקס
+    // שלו אינו זז. בלי טאב פתוח אין "נוכחי" להישאר עליו.
+    final keepCurrent = event.inBackground && state.hasOpenTabs;
+    final currentIndex = keepCurrent ? state.currentTabIndex : newIndex;
     emit(
       state.copyWith(
         tabs: newTabs,
-        currentTabIndex: newIndex,
+        currentTabIndex: currentIndex,
       ),
     );
-    _scheduleSave(newTabs, newIndex);
+    _scheduleSave(newTabs, currentIndex);
   }
 
   Future<void> _onOpenOrFocusTab(
     OpenOrFocusTab event,
     Emitter<TabsState> emit,
   ) async {
+    if (event.inBackground) {
+      await _onAddTab(
+        AddTab(
+          event.tab,
+          insertAdjacent: event.insertAdjacent,
+          inBackground: true,
+        ),
+        emit,
+      );
+      return;
+    }
     final targetTitle = await _resolveTabLocationTitle(
       event.tab,
       explicitTitle: event.targetTitle,
@@ -1170,18 +1185,17 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
 
   Future<void> _onMoveTab(MoveTab event, Emitter<TabsState> emit) async {
     final newTabs = List<OpenedTab>.from(state.tabs);
-    final currentTab = newTabs[state.currentTabIndex];
     newTabs.remove(event.tab);
     newTabs.insert(event.newIndex, event.tab);
-    final newIndex = newTabs.indexOf(currentTab);
 
     emit(
       state.copyWith(
         tabs: newTabs,
-        currentTabIndex: newIndex,
+        // כמו בדפדפן: הכרטיסייה שנגררה היא שמוצגת בתום הסידור (issue #1104).
+        currentTabIndex: event.newIndex,
       ),
     );
-    _scheduleSave(newTabs, newIndex);
+    _scheduleSave(newTabs, event.newIndex);
   }
 
   Future<void> _onNavigateToNextTab(

@@ -131,3 +131,9 @@ assets/bio/biographies.tsb
 
 # הגדרות בנייה מקומיות (מפתחות) — נגזר מ-dart_defines.example.json
 dart_defines.local.json
+
+# ארכיוני התוספים שה-workflow מוריד לתוך המתקין — תוצר בנייה, לא מקור.
+installer/bundled_plugins/
+# ארכיוני התוספים המצורפים למובייל — יורדים בזמן build (ראה docs/bundled_plugins.md)
+assets/bundled_plugins/*
+!assets/bundled_plugins/.gitkeep

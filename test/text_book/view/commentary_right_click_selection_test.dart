@@ -18,6 +18,7 @@ import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/text_book/view/commentary_list_base.dart';
 import 'package:otzaria/utils/ui/context_menu_utils.dart';
+import 'package:otzaria/text_display/models/text_display_profile.dart';
 import 'package:otzaria/widgets/misc/app_menu_exports.dart';
 import 'package:otzaria/widgets/misc/progressive_scrolling.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
@@ -174,8 +175,7 @@ void main() {
                   link: makeLink(),
                   openBookCallback: (_) {},
                   fontSize: 18,
-                  removeNikud: false,
-                  removePunctuation: false,
+                  displayProfile: TextDisplayProfile.defaults,
                   savedSelectedText: savedTextAtBuild,
                   onCopySelected: () => copiedText = savedTextAtBuild,
                 );
@@ -234,8 +234,7 @@ void main() {
                   link: makeLink(),
                   openBookCallback: (_) {},
                   fontSize: 18,
-                  removeNikud: false,
-                  removePunctuation: false,
+                  displayProfile: TextDisplayProfile.defaults,
                   savedSelectedText: blank,
                   onCopySelected: () {},
                 );
@@ -265,8 +264,7 @@ void main() {
                 link: makeLink(),
                 openBookCallback: (_) {},
                 fontSize: 18,
-                removeNikud: false,
-                removePunctuation: false,
+                displayProfile: TextDisplayProfile.defaults,
                 savedSelectedText: 'קטע מסומן',
                 onCopySelected: () {},
               );
@@ -309,8 +307,7 @@ void main() {
                 link: makeLink(),
                 openBookCallback: (_) {},
                 fontSize: 18,
-                removeNikud: false,
-                removePunctuation: false,
+                displayProfile: TextDisplayProfile.defaults,
                 savedSelectedText: null,
                 onCopySelected: () {},
               );
@@ -365,8 +362,7 @@ void main() {
                 ),
                 openBookCallback: (_) {},
                 fontSize: 18,
-                removeNikud: false,
-                removePunctuation: false,
+                displayProfile: TextDisplayProfile.defaults,
                 savedSelectedText: null,
                 onCopySelected: () {},
               );
@@ -415,8 +411,7 @@ void main() {
                 link: link,
                 openBookCallback: (_) {},
                 fontSize: 18,
-                removeNikud: false,
-                removePunctuation: false,
+                displayProfile: TextDisplayProfile.defaults,
                 savedSelectedText: null,
                 onCopySelected: () {},
               );

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
+import 'package:otzaria/widgets/misc/inline_link_targets.dart';
 
 /// מזהה המצביע של אירועי הגלגלת הסינתטיים ש[MiddleClickAutoScroll] משגר.
 ///
@@ -208,6 +209,8 @@ class _MiddleClickAutoScrollState extends State<MiddleClickAutoScroll>
     for (final entry in result.path) {
       final object = entry.target;
       if (object is _RenderAutoScrollBarrier) return null;
+      // לחיצת גלגל על קישור בטקסט פותחת אותו בכרטיסייה חדשה, לא גוללת.
+      if (inlineLinkUrlOf(object) != null) return null;
       if (object is! RenderPointerListener || object.onPointerSignal == null) {
         continue;
       }

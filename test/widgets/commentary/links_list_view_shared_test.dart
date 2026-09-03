@@ -11,6 +11,7 @@ import 'package:otzaria/settings/engine/settings_bloc.dart';
 import 'package:otzaria/settings/engine/settings_event.dart';
 import 'package:otzaria/settings/engine/settings_state.dart';
 import 'package:otzaria/widgets/commentary/links_list_view.dart';
+import 'package:otzaria/text_display/models/text_display_profile.dart';
 import 'package:otzaria/widgets/feedback/scrollable_positioned_list_scrollbar.dart';
 import 'package:otzaria/widgets/lists/filter_chips_widget.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
@@ -76,6 +77,7 @@ Future<Set<String>?> _pumpWithoutTextBookBloc(
         value: _FakeSettingsBloc(),
         child: Scaffold(
           body: LinksListView(
+            displayProfile: TextDisplayProfile.defaults,
             links: links,
             chipSourceLinks: links,
             openBookTitle: 'שבת',
@@ -131,6 +133,7 @@ void main() {
             value: _FakeSettingsBloc(),
             child: Scaffold(
               body: LinksListView(
+                displayProfile: TextDisplayProfile.defaults,
                 links: const [],
                 chipSourceLinks: const [],
                 openBookTitle: 'מכות',
@@ -181,6 +184,7 @@ void main() {
             value: _FakeSettingsBloc(),
             child: Scaffold(
               body: LinksListView(
+                displayProfile: TextDisplayProfile.defaults,
                 links: [
                   _link(
                     path2: 'מסורת הש"ס',
@@ -235,6 +239,7 @@ void main() {
             value: _FakeSettingsBloc(),
             child: Scaffold(
               body: LinksListView(
+                displayProfile: TextDisplayProfile.defaults,
                 links: [
                   _link(
                     path2: 'מסורת הש"ס',
@@ -285,6 +290,7 @@ void main() {
         value: _FakeSettingsBloc(),
         child: Scaffold(
           body: LinksListView(
+            displayProfile: TextDisplayProfile.defaults,
             links: links,
             chipSourceLinks: links,
             openBookTitle: 'שבת',
@@ -346,6 +352,7 @@ void main() {
             value: _FakeSettingsBloc(),
             child: Scaffold(
               body: LinksListView(
+                displayProfile: TextDisplayProfile.defaults,
                 links: links,
                 chipSourceLinks: links,
                 openBookTitle: 'שבת',
@@ -408,6 +415,7 @@ void main() {
             value: _FakeSettingsBloc(),
             child: Scaffold(
               body: LinksListView(
+                displayProfile: TextDisplayProfile.defaults,
                 links: [link],
                 chipSourceLinks: [link],
                 openBookTitle: 'שבת',

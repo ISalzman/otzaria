@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/mockito.dart';
 import 'package:otzaria/shortcuts/shortcut_validator.dart';
 import 'package:otzaria/settings/engine/settings_repository.dart';
+import 'package:otzaria/text_display/text_display_exports.dart';
 import 'package:otzaria/theme/theme_exports.dart';
 import '../unit/mocks/mock_settings_wrapper.mocks.dart';
 
@@ -142,11 +143,13 @@ void main() {
         expect(settings['showOtzarHachochma'], false);
         expect(settings['showHebrewBooks'], false);
         expect(settings['showExternalBooks'], false);
-        expect(settings['showTeamim'], true);
-        expect(settings['replaceHolyNames'], true);
         expect(settings['autoUpdateIndex'], true);
-        expect(settings['defaultRemoveNikud'], false);
-        expect(settings['removeNikudFromTanach'], false);
+        expect(
+          settings['textDisplayPolicy'],
+          isA<TextDisplayPolicy>()
+              .having((p) => p.showTeamim, 'showTeamim', isTrue)
+              .having((p) => p.defaultRemoveNikud, 'ניקוד', isFalse),
+        );
         expect(settings['defaultContinuousReadingMode'], false);
         expect(settings['defaultSidebarOpen'], false);
         expect(settings['pinSidebar'], false);
@@ -283,11 +286,14 @@ void main() {
       expect(settings['showOtzarHachochma'], true);
       expect(settings['showHebrewBooks'], true);
       expect(settings['showExternalBooks'], true);
-      expect(settings['showTeamim'], false);
-      expect(settings['replaceHolyNames'], false);
       expect(settings['autoUpdateIndex'], false);
-      expect(settings['defaultRemoveNikud'], true);
-      expect(settings['removeNikudFromTanach'], true);
+      expect(
+        settings['textDisplayPolicy'],
+        isA<TextDisplayPolicy>()
+            .having((p) => p.showTeamim, 'showTeamim', isFalse)
+            .having((p) => p.defaultRemoveNikud, 'ניקוד', isTrue)
+            .having((p) => p.removeNikudFromTanach, 'תנ״ך', isTrue),
+      );
       expect(settings['defaultContinuousReadingMode'], true);
       expect(settings['defaultSidebarOpen'], true);
       expect(settings['pinSidebar'], true);
@@ -333,31 +339,17 @@ void main() {
       ).called(1);
     });
 
-    test(
-      'updateDefaultRemoveNikud calls setValue on settings wrapper',
-      () async {
-        await repository.updateDefaultRemoveNikud(true);
-        verify(
-          mockSettingsWrapper.setValue(
-            SettingsRepository.keyDefaultNikud,
-            true,
-          ),
-        ).called(1);
-      },
-    );
-
-    test(
-      'updateRemoveNikudFromTanach calls setValue on settings wrapper',
-      () async {
-        await repository.updateRemoveNikudFromTanach(true);
-        verify(
-          mockSettingsWrapper.setValue(
-            SettingsRepository.keyRemoveNikudFromTanach,
-            true,
-          ),
-        ).called(1);
-      },
-    );
+    test('updateTextDisplayPolicy writes the policy JSON', () async {
+      await repository.updateTextDisplayPolicy(
+        TextDisplayPolicy.empty.withLegacyDefaultRemoveNikud(true),
+      );
+      verify(
+        mockSettingsWrapper.setValue(
+          SettingsRepository.keyTextDisplayPolicy,
+          argThat(isA<String>()),
+        ),
+      ).called(1);
+    });
 
     test(
       'updateDefaultContinuousReadingMode calls setValue on settings wrapper',
@@ -550,27 +542,15 @@ void main() {
         ),
       ).called(1);
       verify(
-        mockSettingsWrapper.setValue(SettingsRepository.keyShowTeamim, true),
-      ).called(1);
-      verify(
         mockSettingsWrapper.setValue(
-          SettingsRepository.keyReplaceHolyNames,
-          true,
+          SettingsRepository.keyTextDisplayPolicy,
+          argThat(isA<String>()),
         ),
       ).called(1);
       verify(
         mockSettingsWrapper.setValue(
           SettingsRepository.keyAutoUpdateIndex,
           true,
-        ),
-      ).called(1);
-      verify(
-        mockSettingsWrapper.setValue(SettingsRepository.keyDefaultNikud, false),
-      ).called(1);
-      verify(
-        mockSettingsWrapper.setValue(
-          SettingsRepository.keyRemoveNikudFromTanach,
-          false,
         ),
       ).called(1);
       verify(

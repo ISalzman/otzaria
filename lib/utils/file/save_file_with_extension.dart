@@ -2,6 +2,9 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/widgets.dart';
+import 'package:otzaria/core/ui_snack.dart' show navigatorKey;
+import 'package:otzaria/settings/services/safer_mode_guard.dart';
 import 'package:otzaria/utils/file/file_picker_dialog_options.dart';
 
 /// שומר קובץ דרך דיאלוג המערכת ומבטיח שהנתיב מקבל את הסיומת המבוקשת.
@@ -16,7 +19,13 @@ Future<String?> saveFileWithExtension({
   required Uint8List bytes,
   String? dialogTitle,
   String? initialDirectory,
+  BuildContext? context,
 }) async {
+  final effectiveContext = context ?? navigatorKey.currentContext;
+  if (effectiveContext != null &&
+      !await verifySaferModePassword(effectiveContext)) {
+    return null;
+  }
   final uri = await FilePicker.saveFile(
     dialogTitle: dialogTitle,
     fileName: fileName,

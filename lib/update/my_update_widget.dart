@@ -8,6 +8,7 @@ import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/core/update_check_frequency.dart';
 import 'package:otzaria/core/update_source_reachability.dart';
 import 'package:otzaria/core/ui_snack.dart';
+import 'package:otzaria/tabs/utils/confirm_close_tabs.dart';
 import 'package:otzaria/core/messages/library_messages.dart';
 import 'package:otzaria/core/app_paths.dart';
 import 'package:otzaria/plugins/services/windows_arch_info.dart';
@@ -674,6 +675,8 @@ class _ManagedUpdatWidgetState extends State<_ManagedUpdatWidget> {
   );
 
   Future<void> _handleWindowClose() async {
+    // אותה הבטחה שהמאזין הראשי ממתין לה — ביטול שם מבטל גם את ההתקנה.
+    if (!await confirmAppCloseWithUnsavedChanges()) return;
     try {
       if (shouldLaunchInstallerOnExit(
         status: _status,

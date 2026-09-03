@@ -28,6 +28,7 @@ import 'package:otzaria/migration/models/alt_toc_structure.dart';
 import 'package:otzaria/text_book/text_book_repository.dart';
 import 'package:otzaria/personal_notes/repository/personal_notes_repository.dart';
 import 'package:otzaria/personal_notes/models/personal_note.dart';
+import 'package:otzaria/settings/services/safer_mode_guard.dart';
 import 'package:otzaria/core/connectivity_status_service.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/models/books.dart';
@@ -47,6 +48,7 @@ import 'package:otzaria/utils/text/text_manipulation.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/bloc/tabs_event.dart';
 import 'package:otzaria/tabs/models/combined_tab.dart';
+import 'package:otzaria/tabs/utils/confirm_close_tabs.dart';
 import 'package:otzaria/plugins/services/plugin_external_search_service.dart';
 import 'package:otzaria/plugins/services/plugin_in_book_search_service.dart';
 import 'package:otzaria/plugins/services/plugin_reader_actions.dart';
@@ -61,6 +63,7 @@ import 'package:otzaria/tools/tools_launcher_controller.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/tabs/models/pdf_tab.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
+import 'package:otzaria/text_display/models/text_display_slot.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/history/bloc/history_bloc.dart';
 import 'package:otzaria/settings/services/custom_folders/bloc/custom_folders_bloc.dart';
@@ -89,6 +92,7 @@ import 'package:otzaria/plugins/models/plugin_toolbar_item.dart';
 import 'package:otzaria/plugins/models/plugin_when_condition.dart';
 import 'package:otzaria/plugins/services/context_menu_registry.dart';
 import 'package:otzaria/plugins/services/plugin_toolbar_registry.dart';
+import 'package:otzaria/plugins/services/plugin_unsaved_changes_registry.dart';
 import 'package:otzaria/plugins/services/plugin_page_launcher.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:otzaria/plugins/services/plugin_print_service.dart';
@@ -712,6 +716,7 @@ class PluginBridgeAdapter {
     final key = (pluginId: plugin.pluginId, instanceId: instanceId);
     ContextMenuRegistry.instance.removeInstance(key);
     PluginToolbarRegistry.instance.removeInstance(key);
+    PluginUnsavedChangesRegistry.instance.removeInstance(key);
     _highlightRegistry.removeInstance(key);
     for (final cancel in _activeSearchStreams.values) {
       unawaited(cancel());
@@ -2331,8 +2336,20 @@ class PluginBridgeAdapter {
       case 'closeTab':
         // spec: closeTab({ index }) — האינדקס הוא ברשימה ש-getCurrentState
         // מחזיר, לא ב-TabsBloc. הטאב עצמו נמסר לאירוע, ולכן אין המרת אינדקס.
-        _dependencies.tabsBloc.add(RemoveTab(_pluginVisibleTabAt(args)));
-        return true;
+        {
+          final target = _pluginVisibleTabAt(args);
+          final unsaved = unsavedPluginTabs([target]);
+          if (unsaved.isNotEmpty) {
+            final confirmed = await _dependencies.showWarningDialog(
+              title: unsavedChangesDialogTitle,
+              content: unsavedChangesDialogContent(unsaved),
+              subtitle: unsavedChangesDialogSubtitle,
+            );
+            if (!confirmed) return false;
+          }
+          _dependencies.tabsBloc.add(RemoveTab(target));
+          return true;
+        }
       case 'activateTab':
         // spec: activateTab({ index }) — כאן דרוש דווקא האינדקס הגולמי, ולכן
         // הוא נגזר מזהות הטאב ולא מהאינדקס שהתוסף מסר.
@@ -2762,19 +2779,7 @@ class PluginBridgeAdapter {
           : null;
       return (
         rawText: state.content[sectionIndex],
-        settings: RenderSettings(
-          removeNikud: state.removeNikud,
-          removePunctuation: state.removePunctuation,
-          removeTeamim:
-              !(Settings.getValue<bool>(SettingsRepository.keyShowTeamim) ??
-                  true),
-          replaceHolyNames:
-              Settings.getValue<bool>(SettingsRepository.keyReplaceHolyNames) ??
-              false,
-          holyNameStyle: HolyNameStyle.fromStorage(
-            Settings.getValue<String>(SettingsRepository.keyHolyNameStyle),
-          ),
-        ),
+        settings: RenderSettings.fromProfile(state.bodyDisplayProfile),
         currentRef: snapshot?.currentRef,
       );
     }
@@ -2807,15 +2812,9 @@ class PluginBridgeAdapter {
     }
     return (
       rawText: range.lines.first,
-      settings: RenderSettings(
-        removeTeamim:
-            !(Settings.getValue<bool>(SettingsRepository.keyShowTeamim) ??
-                true),
-        replaceHolyNames:
-            Settings.getValue<bool>(SettingsRepository.keyReplaceHolyNames) ??
-            false,
-        holyNameStyle: HolyNameStyle.fromStorage(
-          Settings.getValue<String>(SettingsRepository.keyHolyNameStyle),
+      settings: RenderSettings.fromProfile(
+        SettingsRepository().loadTextDisplayPolicy().resolve(
+          TextDisplaySlot.root,
         ),
       ),
       currentRef: null,
@@ -3222,6 +3221,19 @@ class PluginBridgeAdapter {
           subtitle: args['subtitle'] as String? ?? '',
         );
         return {'confirmed': result};
+      case 'setUnsavedChanges':
+        // spec: setUnsavedChanges({ hasChanges, message? }) — סגירת הכרטיסיה
+        // תעבור דרך דיאלוג אישור כל עוד הדגל דלוק.
+        final hasChanges = args['hasChanges'];
+        if (hasChanges is! bool) {
+          throw Exception('error.invalid_params: hasChanges must be boolean');
+        }
+        PluginUnsavedChangesRegistry.instance.set(
+          (pluginId: plugin.pluginId, instanceId: instanceId),
+          hasChanges: hasChanges,
+          message: args['message'] as String?,
+        );
+        return true;
       case 'pickFolder':
         // פותח דיאלוג בחירת תיקייה. הנתיב שנבחר נרשם כתיקייה מאושרת לתוסף —
         // מכאן ואילך מותר לו לכתוב/למחוק בתוכה (download.destPath, fs.*).
@@ -3238,6 +3250,10 @@ class PluginBridgeAdapter {
         _grantedFolders.add(p.normalize(p.absolute(path)));
         return {'path': path};
       case 'print':
+        final context = navigatorKey.currentContext;
+        if (context != null && !await verifySaferModePassword(context)) {
+          return {'printed': false};
+        }
         final printer = _dependencies.printPluginPage ?? _defaultPrintPage;
         final jobName = (args['jobName'] as String?)?.trim();
         return await _runUserGatedDialog(() async {
@@ -3322,12 +3338,17 @@ class PluginBridgeAdapter {
   }
 
   /// בורר התיקיות המוגדר כברירת מחדל — דיאלוג המערכת דרך [FilePicker].
-  Future<String?> _defaultPickFolder({String? title}) =>
-      FilePicker.getDirectoryPath(
-        windowsOptions: kModalWindowsOptions,
-        linuxOptions: kModalLinuxOptions,
-        dialogTitle: title,
-      );
+  Future<String?> _defaultPickFolder({String? title}) async {
+    final context = navigatorKey.currentContext;
+    if (context != null && !await verifySaferModePassword(context)) {
+      return null;
+    }
+    return FilePicker.getDirectoryPath(
+      windowsOptions: kModalWindowsOptions,
+      linuxOptions: kModalLinuxOptions,
+      dialogTitle: title,
+    );
+  }
 
   /// דיאלוג הדפסה/שמירה פתוח כרגע עבור המופע הזה. שער חד-בו-זמנית: בלעדיו
   /// לולאה בתוסף מערימה דיאלוגים מודאליים עד שהחלון אינו שמיש.
@@ -3416,14 +3437,21 @@ class PluginBridgeAdapter {
     'legal': (215.9, 355.6),
   };
 
-  /// מפרש את ארגומנטי העימוד של `ui.exportPdf`: `pageSize`, `orientation`,
-  /// `marginMm` (מספר או מפה לפי צד) ו-`printBackgrounds`. null כשלא סופק דבר.
+  /// גבולות שפיות למידות דף חופשיות ב-`pageSize` (מ"מ). התחתון מתחת ל-0.5
+  /// אינץ' (12.7 מ"מ) והעליון מעל 200 אינץ' — מסמכי DOCX חוקיים לא ייחסמו,
+  /// ורק תשובה שאינה מידה (אפס, שלילי, אלפי מ"מ) נדחית.
+  static const _minPageMm = 10.0;
+  static const _maxPageMm = 5080.0;
+
+  /// מפרש את ארגומנטי העימוד של `ui.exportPdf`: `pageSize` (שם קבוע או מפה
+  /// `{widthMm, heightMm}` למידות חופשיות), `orientation`, `marginMm` (מספר
+  /// או מפה לפי צד) ו-`printBackgrounds`. null כשלא סופק דבר.
   PluginPdfLayout? _parsePdfLayout(Map<String, dynamic> args) {
-    final sizeName = (args['pageSize'] as String?)?.trim().toLowerCase();
+    final sizeArg = args['pageSize'];
     final orientation = (args['orientation'] as String?)?.trim().toLowerCase();
     final margin = args['marginMm'];
     final backgrounds = args['printBackgrounds'];
-    if (sizeName == null &&
+    if (sizeArg == null &&
         orientation == null &&
         margin == null &&
         backgrounds == null) {
@@ -3431,14 +3459,33 @@ class PluginBridgeAdapter {
     }
 
     (double, double)? size;
-    if (sizeName != null) {
-      size = _pdfPageSizesMm[sizeName];
+    if (sizeArg is String) {
+      size = _pdfPageSizesMm[sizeArg.trim().toLowerCase()];
       if (size == null) {
         throw Exception(
           'error.invalid_params: unknown pageSize (supported: '
-          '${_pdfPageSizesMm.keys.join(', ')})',
+          '${_pdfPageSizesMm.keys.join(', ')}, or {widthMm, heightMm})',
         );
       }
+    } else if (sizeArg is Map) {
+      double dimMm(Object? v, String name) {
+        if (v is! num || v.isNaN || v < _minPageMm || v > _maxPageMm) {
+          throw Exception(
+            'error.invalid_params: $name must be $_minPageMm-$_maxPageMm (mm)',
+          );
+        }
+        return v.toDouble();
+      }
+
+      size = (
+        dimMm(sizeArg['widthMm'], 'pageSize.widthMm'),
+        dimMm(sizeArg['heightMm'], 'pageSize.heightMm'),
+      );
+    } else if (sizeArg != null) {
+      throw Exception(
+        'error.invalid_params: pageSize must be a preset name or a '
+        '{widthMm, heightMm} map',
+      );
     }
 
     bool? landscape;
@@ -3712,6 +3759,10 @@ class PluginBridgeAdapter {
     List<String>? allowedExtensions,
     String? title,
   }) async {
+    final context = navigatorKey.currentContext;
+    if (context != null && !await verifySaferModePassword(context)) {
+      return null;
+    }
     final hasExtensions =
         allowedExtensions != null && allowedExtensions.isNotEmpty;
     final result = await FilePicker.pickFile(
@@ -3935,6 +3986,10 @@ class PluginBridgeAdapter {
     List<String>? allowedExtensions,
     String? title,
   }) async {
+    final context = navigatorKey.currentContext;
+    if (context != null && !await verifySaferModePassword(context)) {
+      return null;
+    }
     final folder = await FilePicker.getDirectoryPath(
       dialogTitle: title ?? 'בחירת תיקייה לשמירת הקובץ',
       windowsOptions: kModalWindowsOptions,
@@ -3942,10 +3997,10 @@ class PluginBridgeAdapter {
     );
     if (folder == null) return null;
 
-    final context = navigatorKey.currentContext;
-    if (context == null || !context.mounted) return null;
+    final dialogContext = navigatorKey.currentContext;
+    if (dialogContext == null || !dialogContext.mounted) return null;
     final typed = await showInputDialog(
-      context: context,
+      context: dialogContext,
       title: title ?? 'שמירת קובץ',
       labelText: 'שם הקובץ',
       initialValue: suggestedName,
@@ -5526,19 +5581,7 @@ class PluginBridgeAdapter {
       bookTitle: currentTab.title,
       sectionIndex: sectionIndex,
       rawText: state.content[sectionIndex],
-      settings: RenderSettings(
-        removeNikud: state.removeNikud,
-        removePunctuation: state.removePunctuation,
-        removeTeamim:
-            !(Settings.getValue<bool>(SettingsRepository.keyShowTeamim) ??
-                true),
-        replaceHolyNames:
-            Settings.getValue<bool>(SettingsRepository.keyReplaceHolyNames) ??
-            false,
-        holyNameStyle: HolyNameStyle.fromStorage(
-          Settings.getValue<String>(SettingsRepository.keyHolyNameStyle),
-        ),
-      ),
+      settings: RenderSettings.fromProfile(state.bodyDisplayProfile),
       renderedStartUtf16: start,
       renderedEndUtf16: end,
       currentRef: currentRef,

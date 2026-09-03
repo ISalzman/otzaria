@@ -102,6 +102,25 @@ String removeVolwels(String s) {
   return s.replaceAll(_vowelsAndCantillation, '');
 }
 
+/// סימני ניקוד בלבד, בלי טעמים: נקודות התנועה, דגש, רפה, נקודות שי"ן/שי"ן
+/// ו-U+05C7. מקף, פסק, מתג וסוף פסוק נשארים — הם שייכים לטעמים.
+final RegExp _vowelsOnly = RegExp(
+  r'[ְ-ׇּֿׁׂׅׄ]',
+);
+
+/// מסיר ניקוד בלבד ומשאיר את הטעמים במקומם.
+String removeNikudOnly(String s) => s.replaceAll(_vowelsOnly, '');
+
+/// מסיר ניקוד ו/או טעמים לפי שני הדגלים — הכניסה האחידה של כל המסלולים
+/// (תצוגה, העתקה, ייצוא). שניהם יחד = [removeVolwels], כדי לשמור על
+/// ההתנהגות המוכרת של "הסר הכול".
+String removeMarks(String s, {required bool nikud, required bool teamim}) {
+  if (nikud && teamim) return removeVolwels(s);
+  if (teamim) return removeTeamim(s);
+  if (nikud) return removeNikudOnly(s);
+  return s;
+}
+
 /// הסרת סימני פיסוק מטקסט
 /// מסיר !:;.,?-— חוץ מ . או : בסוף הקטע
 /// מסיר " ״ אלא כשזה ראשי תיבות (אות אחת אחרי הגרשיים עד גבול מילה)

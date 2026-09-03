@@ -26,6 +26,7 @@ import 'package:otzaria/settings/view/settings_screen.dart';
 import 'package:otzaria/settings/dialogs/settings_dialogs_exports.dart';
 import 'package:otzaria/settings/services/safer_mode_guard.dart';
 import 'package:otzaria/settings/services/backup_service.dart';
+import 'package:otzaria/settings/services/backup/backup_import_merge.dart';
 import 'package:otzaria/settings/services/backup/backup_maintenance.dart';
 import 'package:otzaria/settings/services/backup/backup_rotation.dart';
 import 'package:otzaria/core/ui_snack.dart';
@@ -2124,6 +2125,32 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
     await _performRestore(filePath);
   }
 
+  /// ייבוא ממזג מגיבוי של מכשיר אחר — מוסיף פריטים ואינו מוחק דבר, ולכן
+  /// דיאלוג רגיל ולא אזהרה.
+  Future<void> _importMergeFromPickedFile() async {
+    final result = await FilePicker.pickFile(
+      type: FileType.custom,
+      allowedExtensions: ['json'],
+    );
+    final filePath = result?.path;
+    if (filePath == null || !mounted) return;
+
+    final confirmed = await showTwoActionsDialog(
+      context: context,
+      title: context.settingsText('ייבוא ממכשיר אחר?'),
+      content: context.settingsText(
+        'הסימניות, ההערות, ההיסטוריה ושולחנות העבודה שבקובץ יתווספו לנתונים '
+        'הקיימים. שום דבר לא יימחק, ההגדרות והכרטיסיות הפתוחות לא ישתנו, '
+        'ושולחנות העבודה שבקובץ ייווספו כשולחנות חדשים.',
+      ),
+      cancelText: context.settingsText('ביטול'),
+      confirmText: context.settingsText('ייבא'),
+    );
+    if (confirmed != true) return;
+
+    await _performRestore(filePath, mode: BackupImportMode.merge);
+  }
+
   Future<void> _restoreBackup() async {
     final backups = await BackupService.getAvailableBackups();
     if (backups.isEmpty) {
@@ -2174,10 +2201,91 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
     await _performRestore(archivePath);
   }
 
-  Future<void> _performRestore(String filePath) async {
+  /// סיכום הייבוא הממזג — בלי הפירוט המשתמש אינו יודע אם נוסף משהו בכלל.
+  Future<void> _showImportSummary(
+    BackupImportCounts added,
+    List<String> skipped,
+  ) async {
+    final items = <String>[
+      if (added.bookmarks > 0)
+        context.settingsText(
+          '{count} סימניות',
+          args: {'count': added.bookmarks},
+        ),
+      if (added.notes > 0)
+        context.settingsText('{count} הערות', args: {'count': added.notes}),
+      if (added.notesUpdated > 0)
+        context.settingsText(
+          '{count} הערות עודכנו לגרסה חדשה יותר',
+          args: {'count': added.notesUpdated},
+        ),
+      if (added.history > 0)
+        context.settingsText(
+          '{count} רשומות היסטוריה',
+          args: {'count': added.history},
+        ),
+      if (added.workspaces > 0)
+        context.settingsText(
+          '{count} שולחנות עבודה',
+          args: {'count': added.workspaces},
+        ),
+      if (added.plugins > 0)
+        context.settingsText('{count} תוספים', args: {'count': added.plugins}),
+      if (added.shamorZachorBooks > 0)
+        context.settingsText(
+          '{count} ספרים בשמור וזכור',
+          args: {'count': added.shamorZachorBooks},
+        ),
+    ];
+
+    final content = [
+      if (items.isEmpty)
+        context.settingsText(
+          'לא נוסף דבר — כל מה שבקובץ כבר קיים במכשיר זה.',
+        )
+      else
+        context.settingsText(
+          'נוספו: {items}.',
+          args: {'items': items.join(', ')},
+        ),
+      if (skipped.isNotEmpty)
+        context.settingsText(
+          'סעיפים שלא ניתן היה לייבא: {items}.',
+          args: {'items': skipped.join(", ")},
+        ),
+      context.settingsText('האפליקציה תיטען מחדש כעת.'),
+    ].join('\n\n');
+
+    await showSingleActionDialog(
+      context: context,
+      title: context.settingsText('הייבוא הושלם'),
+      content: content,
+      confirmText: context.settingsText('טען מחדש'),
+    );
+    if (!mounted) return;
+    await resetRuntimeStateForAppRestart();
+    if (!mounted) return;
+    RestartWidget.restartApp(
+      context,
+      afterRestart: WebViewEnvironmentHolder.disposeForAppRestart,
+    );
+  }
+
+  Future<void> _performRestore(
+    String filePath, {
+    BackupImportMode mode = BackupImportMode.replace,
+  }) async {
     try {
-      final result = await BackupService.restoreFromBackup(filePath);
+      final result = await BackupService.restoreFromBackup(
+        filePath,
+        mode: mode,
+      );
       if (!mounted) return;
+      final added = result.added;
+      if (added != null) {
+        await _showImportSummary(added, result.skippedSections);
+        return;
+      }
       final skipped = result.skippedSections;
       final missingFolders = result.missingCustomFolders;
       final isPartial =
@@ -2408,6 +2516,13 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
                   label: context.settingsText('מקובץ גיבוי...'),
                   icon: FluentIcons.folder_open_24_regular,
                 ),
+                AppMenuEntry(
+                  value: 'merge',
+                  label: context.settingsText(
+                    'ייבוא ממכשיר אחר (ללא מחיקה)...',
+                  ),
+                  icon: FluentIcons.arrow_swap_24_regular,
+                ),
               ],
               onSelected: (value) {
                 if (value == 'latest') {
@@ -2416,6 +2531,8 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
                   _restoreFromArchive();
                 } else if (value == 'file') {
                   _restoreFromPickedFile();
+                } else if (value == 'merge') {
+                  _importMergeFromPickedFile();
                 }
               },
             ),

@@ -9,10 +9,17 @@ import 'package:otzaria/models/books.dart';
 import 'package:otzaria/models/links.dart';
 import 'package:otzaria/personal_notes/personal_notes_system.dart';
 import 'package:otzaria/services/target_line_links_service.dart';
+import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
+import 'package:otzaria/tabs/bloc/tabs_event.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
+import 'package:otzaria/utils/navigation/talmud_bavli_open_format.dart';
+import 'package:otzaria/utils/text/html_link_handler.dart';
+import 'package:otzaria/widgets/misc/inline_link_targets.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/text_book/view/error_report_dialog.dart';
+import 'package:otzaria/text_display/text_display_exports.dart';
+import 'package:otzaria/widgets/misc/link_context_menu_entry.dart';
 import 'package:otzaria/core/messages/text_book_messages.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
 import 'package:otzaria/utils/text/copy_utils.dart';
@@ -20,6 +27,9 @@ import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/widgets/misc/app_menu_exports.dart';
 import 'package:otzaria/widgets/misc/direct_link_menu_entries.dart';
 import 'package:otzaria/text_book/view/selection/selected_text_copy.dart';
+
+/// תווית פריט תפריט ההקשר לפתיחה ברקע — משותפת לתוצאות חיפוש ולמפרשים.
+const kOpenInNewTabLabel = 'פתח בכרטיסייה חדשה';
 
 /// פונקציות עזר לתפריטי הקשר במפרשים
 /// האם להציג את "העתק בלי ניקוד" עבור הבחירה — רק כשיש בה בפועל ניקוד
@@ -47,6 +57,10 @@ class ContextMenuUtils {
   /// "מפרשים" ו"קישורים" של קטע היעד ([TargetLineLinksService]); בלעדיו התפריט
   /// מכיל רק את פעולות ההעתקה, הפתיחה והדיווח.
   ///
+  /// [displayProfile] — פרופיל תצוגת המפרשים; [copyDisplayProfile] — פרופיל
+  /// ערוץ ההעתקה (ברירת מחדל: כמו התצוגה). [removeNikud]/[removePunctuation]
+  /// הם מסלול תאימות שנפתר מול ההגדרות הגלובליות כשאין פרופיל.
+  ///
   /// דוגמה:
   /// ```dart
   /// AppContextMenuRegion(
@@ -55,8 +69,7 @@ class ContextMenuUtils {
   ///     link: link,
   ///     openBookCallback: ...,
   ///     fontSize: fontSize,
-  ///     removeNikud: removeNikud,
-  ///     removePunctuation: removePunctuation,
+  ///     displayProfile: state.commentaryDisplayProfile,
   ///     savedSelectedText: _savedText,
   ///     onCopySelected: _copy,
   ///     onNavigateToLink: _navigateToLink,
@@ -69,14 +82,24 @@ class ContextMenuUtils {
     required Link link,
     required Function(TextBookTab) openBookCallback,
     required double fontSize,
-    required bool removeNikud,
-    required bool removePunctuation,
+    TextDisplayProfile? displayProfile,
+    TextDisplayProfile? copyDisplayProfile,
+    bool? removeNikud,
+    bool? removePunctuation,
     String? savedSelectedText,
     required VoidCallback onCopySelected,
     VoidCallback? onCopySelectedWithoutNikud,
     void Function(Link link)? onNavigateToLink,
     VoidCallback? onNoteSaved,
   }) {
+    final profile =
+        displayProfile ??
+        commentaryProfileFromLegacyFlags(
+          context.read<SettingsBloc>().state,
+          removeNikud: removeNikud,
+          removePunctuation: removePunctuation,
+        );
+    final copyProfile = copyDisplayProfile ?? profile;
     final linksService = TargetLineLinksService.instance;
     final entries = <AppContextMenuEntry>[
       AppContextMenuEntry(
@@ -122,8 +145,7 @@ class ContextMenuUtils {
           context: context,
           link: link,
           fontSize: fontSize,
-          removeNikud: removeNikud,
-          removePunctuation: removePunctuation,
+          displayProfile: copyProfile,
         ),
       ),
       if (onNavigateToLink != null) ...[
@@ -131,14 +153,14 @@ class ContextMenuUtils {
         linksService.buildCommentariesEntry(
           link: link,
           onNavigate: onNavigateToLink,
-          removeNikud: removeNikud,
-          removePunctuation: removePunctuation,
+          removeNikud: profile.removeNikud,
+          removePunctuation: profile.removePunctuation,
         ),
         linksService.buildLinksEntry(
           link: link,
           onNavigate: onNavigateToLink,
-          removeNikud: removeNikud,
-          removePunctuation: removePunctuation,
+          removeNikud: profile.removeNikud,
+          removePunctuation: profile.removePunctuation,
         ),
       ],
       const AppContextMenuEntry.divider(),
@@ -157,6 +179,11 @@ class ContextMenuUtils {
             ),
           );
         },
+      ),
+      AppContextMenuEntry(
+        label: kOpenInNewTabLabel,
+        icon: FluentIcons.tab_add_24_regular,
+        onTap: () => openLinkTargetInBackground(context, link),
       ),
     ];
 
@@ -179,6 +206,38 @@ class ContextMenuUtils {
     }
 
     return entries;
+  }
+
+  /// פותח את יעד [link] בכרטיסייה חדשה ברקע (טקסט או PDF, לפי תבנית הפתיחה).
+  static Future<void> openLinkTargetInBackground(
+    BuildContext context,
+    Link link,
+  ) async {
+    // ה-bloc נשלף לפני ההמתנה: הקשר התפריט מתפרק עם סגירתו.
+    final tabsBloc = context.read<TabsBloc>();
+    final tab = await buildLinkTargetTab(link);
+    tabsBloc.add(AddTab(tab, insertAdjacent: true, inBackground: true));
+  }
+
+  /// פריטי "פתח קישור בכרטיסייה חדשה" לתפריט הקשר של שורת טקסט, כשהלחיצה
+  /// הימנית נפלה על קישור לספר אחר; ריק כשאין שם קישור כזה.
+  static List<AppContextMenuEntry> buildInlineLinkContextMenuEntries(
+    BuildContext context,
+    Offset tapPosition,
+  ) {
+    final url = inlineLinkUrlAt(
+      tapPosition,
+      viewId: View.of(context).viewId,
+    );
+    if (url == null || !HtmlLinkHandler.opensAnotherBook(url)) return const [];
+    return [
+      AppContextMenuEntry(
+        label: 'פתח קישור בכרטיסייה חדשה',
+        icon: FluentIcons.tab_add_24_regular,
+        onTap: () => HtmlLinkHandler.openLinkInBackground(context, url),
+      ),
+      const AppContextMenuEntry.divider(),
+    ];
   }
 
   static Future<void> _createCommentaryNote({
@@ -300,13 +359,12 @@ class ContextMenuUtils {
     );
   }
 
-  /// העתקת פסקה שלמה של מפרש
+  /// העתקת פסקה שלמה של מפרש לפי [displayProfile] של ערוץ ההעתקה.
   static Future<void> copyCommentaryParagraph({
     required BuildContext context,
     required Link link,
     required double fontSize,
-    required bool removeNikud,
-    required bool removePunctuation,
+    required TextDisplayProfile displayProfile,
   }) async {
     try {
       final settingsState = context.read<SettingsBloc>().state;
@@ -319,8 +377,7 @@ class ContextMenuUtils {
 
       final processedContent = applyCommentaryDisplayFilters(
         content,
-        removeNikud: removeNikud,
-        removePunctuation: removePunctuation,
+        displayProfile,
       );
       final plainText = utils.stripHtmlIfNeeded(processedContent);
 
@@ -355,8 +412,8 @@ class ContextMenuUtils {
       final copyContent = CopyUtils.applyCopyPreferencesForClipboard(
         plainText: finalText,
         htmlText: finalHtmlText,
-        replaceHolyNames: settingsState.replaceHolyNames,
-        holyNameStyle: settingsState.holyNameStyle,
+        replaceHolyNames: displayProfile.replaceHolyNames,
+        holyNameStyle: displayProfile.holyNameStyle,
       );
 
       final htmlText = CopyUtils.buildStyledHtml(
@@ -379,17 +436,11 @@ class ContextMenuUtils {
     }
   }
 
+  /// מחיל את פרופיל התצוגה על תוכן מפרש גולמי (ניקוד, טעמים, פיסוק, שם הוי"ה).
   static String applyCommentaryDisplayFilters(
-    String content, {
-    required bool removeNikud,
-    required bool removePunctuation,
-  }) {
-    var processedContent = removeNikud ? utils.removeVolwels(content) : content;
-    if (removePunctuation) {
-      processedContent = utils.removePunctuation(processedContent);
-    }
-    return processedContent;
-  }
+    String content,
+    TextDisplayProfile displayProfile,
+  ) => applyTextDisplayProfile(content, displayProfile);
 
   /// העתקת טקסט מעוצב (HTML) ללוח
   /// [removeNikud] — "העתק בלי ניקוד" (issue #851): מסיר ניקוד וטעמים

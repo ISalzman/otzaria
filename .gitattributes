@@ -1,2 +1,5 @@
 # Generated Dart files - keep LF to avoid spurious diffs on Windows
 *.g.dart text eol=lf
+
+# Shell scripts must stay LF - bash on Linux/macOS breaks on CRLF
+*.sh text eol=lf

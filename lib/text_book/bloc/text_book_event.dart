@@ -1,5 +1,6 @@
 import 'package:equatable/equatable.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
+import 'package:otzaria/text_display/text_display_exports.dart';
 
 sealed class TextBookEvent extends Equatable {
   const TextBookEvent();
@@ -58,6 +59,29 @@ class LoadContent extends TextBookEvent {
 
 /// החלפת מצב קריאה רציף. **רינדור בלבד** — לא משנה content, search, links,
 /// selectedIndex, או visibleIndices (שנותרים ברמת שורות מקור).
+/// החלת טלאי תצוגה על [target] בתצוגה הפעילה — עקיפה זמנית של הכרטיסייה,
+/// ואופציונלית שמירה לקובץ הספר (כש"שמירת התאמות לכל ספר" מופעלת).
+class ApplyDisplayPatch extends TextBookEvent {
+  final TextTarget target;
+  final TextDisplayPatch patch;
+  final bool persistToBook;
+
+  const ApplyDisplayPatch({
+    required this.target,
+    required this.patch,
+    this.persistToBook = false,
+  });
+
+  @override
+  List<Object?> get props => [target, patch, persistToBook];
+}
+
+/// מנקה את כל העקיפות הזמניות של הכרטיסייה (גוף ומפרשים, כל התצוגות),
+/// וכשההתאמות פר-ספר פעילות — גם את טלאי התצוגה של הספר.
+class ClearDisplayOverrides extends TextBookEvent {
+  const ClearDisplayOverrides();
+}
+
 class ToggleContinuousReadingMode extends TextBookEvent {
   final bool enabled;
 
@@ -150,38 +174,6 @@ class UpdateLinkTypeFilter extends TextBookEvent {
 
   @override
   List<Object?> get props => [linkTypes];
-}
-
-class ToggleNikud extends TextBookEvent {
-  final bool remove;
-
-  /// מחיל את ההחלפה זמנית על המפרשים בלבד, בלי לשנות את הטקסט הראשי.
-  final bool applyToCommentaries;
-
-  const ToggleNikud(this.remove, {this.applyToCommentaries = false});
-
-  @override
-  List<Object?> get props => [remove, applyToCommentaries];
-}
-
-class TogglePunctuation extends TextBookEvent {
-  final bool remove;
-
-  /// כמו ב-[ToggleNikud]: מחיל את ההחלפה זמנית על המפרשים בלבד.
-  final bool applyToCommentaries;
-
-  const TogglePunctuation(this.remove, {this.applyToCommentaries = false});
-
-  @override
-  List<Object?> get props => [remove, applyToCommentaries];
-}
-
-/// מאפס את העקיפות הזמניות של כרטיסיית המפרשים בסגירתה.
-class ResetCommentaryDisplayOverrides extends TextBookEvent {
-  const ResetCommentaryDisplayOverrides();
-
-  @override
-  List<Object?> get props => [];
 }
 
 class UpdateVisibleIndecies extends TextBookEvent {

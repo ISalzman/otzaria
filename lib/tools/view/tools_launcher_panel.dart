@@ -20,6 +20,7 @@ import 'package:otzaria/plugins/view/widgets/plugin_drop_zone.dart';
 import 'package:otzaria/settings/engine/settings_bloc.dart';
 import 'package:otzaria/settings/engine/settings_event.dart';
 import 'package:otzaria/settings/engine/settings_state.dart';
+import 'package:otzaria/settings/l10n/settings_l10n_exports.dart';
 import 'package:otzaria/settings/services/safer_mode_guard.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/bloc/tabs_state.dart';
@@ -32,6 +33,7 @@ import 'package:otzaria/tools/tool_order.dart';
 import 'package:otzaria/widgets/controls/action_buttons.dart';
 import 'package:otzaria/widgets/dialogs/dialogs_exports.dart';
 import 'package:otzaria/widgets/feedback/edge_scrollbar_behavior.dart';
+import 'package:otzaria/widgets/feedback/otzaria_empty_state.dart';
 import 'package:otzaria/widgets/layout/app_card.dart';
 import 'package:otzaria/widgets/misc/app_popup_menu.dart';
 import 'package:otzaria/widgets/text/otzaria_search_field.dart';
@@ -44,7 +46,9 @@ const String kPluginsGroupLabel = 'תוספים';
 String normalizeToolSearchText(String value) {
   return value
       .replaceAll(RegExp(r'[֑-ׇ]'), '')
-      .replaceAll(RegExp(r'''["'`׳״\-–—]'''), '')
+      // לא מחרוזת גולמית משולשת-מרכאות: סורק ה-l10n אינו מזהה אותה ובולע
+      // את שאר הקובץ, וכל תרגומי הפאנל נחשבים אז "לא בשימוש".
+      .replaceAll(RegExp('["\'`׳״\\-–—]'), '')
       .replaceAll(RegExp(r'\s+'), ' ')
       .trim()
       .toLowerCase();
@@ -267,12 +271,12 @@ class _ToolsLauncherPanelState extends State<ToolsLauncherPanel> {
     final bloc = context.read<PluginSystemBloc>();
     final url = await showInputDialog(
       context: context,
-      title: 'טעינת תוסף מ-localhost',
+      title: context.settingsText('טעינת תוסף מ-localhost'),
       labelText: 'Base URL',
       hintText: 'http://localhost:3000',
       initialValue: 'http://localhost:3000',
-      cancelText: 'ביטול',
-      confirmText: 'טען',
+      cancelText: context.settingsText('ביטול'),
+      confirmText: context.settingsText('טען'),
     );
     if (url == null || url.isEmpty) return;
     bloc.add(LoadLocalhostPluginRequested(url));
@@ -681,10 +685,10 @@ class _ToolsLauncherPanelState extends State<ToolsLauncherPanel> {
   Widget _buildHeader() {
     return Row(
       children: [
-        const Expanded(
+        Expanded(
           child: Text(
-            'כלים ותוספים',
-            style: TextStyle(
+            context.settingsText('כלים ותוספים'),
+            style: const TextStyle(
               fontWeight: FontWeight.bold,
               fontSize: AppTokens.fontXL,
             ),
@@ -692,7 +696,7 @@ class _ToolsLauncherPanelState extends State<ToolsLauncherPanel> {
         ),
         IconButton(
           icon: const Icon(FluentIcons.dismiss_24_regular, size: 20),
-          tooltip: 'סגור',
+          tooltip: context.settingsText('סגור'),
           visualDensity: VisualDensity.compact,
           onPressed: widget.onClose,
         ),
@@ -705,7 +709,7 @@ class _ToolsLauncherPanelState extends State<ToolsLauncherPanel> {
       controller: _searchController,
       focusNode: _searchFocusNode,
       icon: OtzariaIcons.search_24_regular,
-      hintText: 'חיפוש כלי או תוסף',
+      hintText: context.settingsText('חיפוש כלי או תוסף'),
       onChanged: _onQueryChanged,
       onClear: () => _onQueryChanged(''),
       onSubmitted: (_) => _activateHighlighted(entries),
@@ -719,7 +723,7 @@ class _ToolsLauncherPanelState extends State<ToolsLauncherPanel> {
         const SizedBox(width: AppTokens.spaceXS),
         SquareIconButton.field(
           icon: FluentIcons.arrow_sync_24_regular,
-          tooltip: 'רענן תוספים',
+          tooltip: context.settingsText('רענן תוספים'),
           onPressed: () =>
               context.read<PluginSystemBloc>().add(RefreshPlugins()),
         ),
@@ -736,16 +740,18 @@ class _ToolsLauncherPanelState extends State<ToolsLauncherPanel> {
   }
 
   Widget _buildEmptyState(bool isOfflineMode, List<ToolCatalogEntry> all) {
-    final message = _query.trim().isNotEmpty
-        ? 'לא נמצאו כלים התואמים לחיפוש'
+    final hasQuery = _query.trim().isNotEmpty;
+    final message = hasQuery
+        ? context.settingsText('לא נמצאו כלים התואמים לחיפוש')
         : (isOfflineMode
-              ? 'אין כלים זמינים במצב מנותק'
-              : 'לא נמצאו כלים זמינים');
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(AppTokens.spaceLG),
-        child: Text(message, textAlign: TextAlign.center),
-      ),
+              ? context.settingsText('אין כלים זמינים במצב מנותק')
+              : context.settingsText('לא נמצאו כלים זמינים'));
+    return OtzariaEmptyState(
+      icon: hasQuery
+          ? OtzariaIcons.search_in_the_library_24_regular
+          : FluentIcons.toolbox_24_regular,
+      title: message,
+      message: hasQuery ? context.settingsText('נסה לחפש מילים אחרות') : null,
     );
   }
 
@@ -826,7 +832,7 @@ class _ToolsLauncherPanelState extends State<ToolsLauncherPanel> {
             ),
             sliver: SliverToBoxAdapter(
               child: Text(
-                group.label,
+                context.settingsText(group.label),
                 style: theme.textTheme.titleSmall?.copyWith(
                   color: theme.colorScheme.secondary,
                   fontWeight: FontWeight.bold,
@@ -976,18 +982,18 @@ class _PluginsToolbar extends StatelessWidget {
         children: [
           SquareIconButton.toolbar(
             icon: FluentIcons.add_24_regular,
-            tooltip: 'התקן תוסף חדש',
+            tooltip: context.settingsText('התקן תוסף חדש'),
             onPressed: onInstall,
           ),
           if (showDevTools) ...[
             SquareIconButton.toolbar(
               icon: FluentIcons.folder_add_24_regular,
-              tooltip: 'טען תיקיית תוסף',
+              tooltip: context.settingsText('טען תיקיית תוסף'),
               onPressed: onLoadFolder,
             ),
             SquareIconButton.toolbar(
               icon: FluentIcons.globe_add_24_regular,
-              tooltip: 'טען תוסף מ-localhost',
+              tooltip: context.settingsText('טען תוסף מ-localhost'),
               onPressed: onLoadLocalhost,
             ),
           ],
@@ -1241,7 +1247,7 @@ class _ToolDragFeedback extends StatelessWidget {
                 : Icon(entry.icon, size: 18),
             const SizedBox(width: 8),
             Text(
-              entry.label,
+              context.settingsText(entry.label),
               style: const TextStyle(fontWeight: FontWeight.w500),
             ),
           ],
@@ -1322,7 +1328,7 @@ class ToolTile extends StatelessWidget {
                       const SizedBox(height: AppTokens.spaceXS),
                       Flexible(
                         child: Text(
-                          entry.label,
+                          context.settingsText(entry.label),
                           textAlign: TextAlign.center,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
@@ -1343,7 +1349,7 @@ class ToolTile extends StatelessWidget {
               PositionedDirectional(
                 top: 0,
                 end: 0,
-                child: _buildMenuButton(cs),
+                child: _buildMenuButton(context, cs),
               ),
             if (entry.isDevelopment)
               PositionedDirectional(
@@ -1367,12 +1373,12 @@ class ToolTile extends StatelessWidget {
     );
   }
 
-  Widget _buildMenuButton(ColorScheme cs) {
+  Widget _buildMenuButton(BuildContext context, ColorScheme cs) {
     return SizedBox(
       width: menuButtonSize,
       height: menuButtonSize,
       child: AppPopupMenuButton<VoidCallback>(
-        tooltip: 'אפשרויות נוספות',
+        tooltip: context.settingsText('אפשרויות נוספות'),
         icon: Icon(
           FluentIcons.more_vertical_24_regular,
           size: menuIconSize,
@@ -1412,7 +1418,7 @@ class ToolTile extends StatelessWidget {
       return buildAppSubmenuPopupMenuItem<VoidCallback>(
         context: context,
         metrics: metrics,
-        label: action.label,
+        label: context.settingsText(action.label),
         icon: action.icon,
         menuChildren: [
           for (final child in children) _menuItem(context, metrics, child),
@@ -1424,7 +1430,7 @@ class ToolTile extends StatelessWidget {
       context,
       AppMenuEntry<VoidCallback>(
         value: action.onTap ?? () {},
-        label: action.label,
+        label: context.settingsText(action.label),
         icon: action.icon,
         enabled: action.onTap != null,
         isDestructive: action.isDestructive,

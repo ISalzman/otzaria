@@ -89,7 +89,7 @@ void main() {
       expect(item.actions, isEmpty);
     });
 
-    test('שלב האיחוד עם התקדמות: אחוז בפירוט ומד מוגדר', () {
+    test('שלב האיחוד עם התקדמות: מד מוגדר ופירוט סיום ספרים', () {
       final item = indexingWorkStatusItem(
         const IndexingInProgress(
           booksProcessed: 100,
@@ -102,7 +102,7 @@ void main() {
       );
 
       expect(item.message, 'מסיים ומאחד את קבצי האינדקס');
-      expect(item.detail, contains('42%'));
+      expect(item.detail, 'כל הספרים אונדקסו');
       expect(item.progress, 0.427);
       expect(item.actions, isEmpty);
     });

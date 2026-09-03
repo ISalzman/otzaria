@@ -332,6 +332,7 @@ void main() {
         'feedback.hasReporterEmail',
         'ui.print',
         'ui.exportPdf',
+        'ui.setUnsavedChanges',
       };
       final missing = PluginExtendedValidator.knownApiMethods
           .where((m) => !noManifestPermission.contains(m))

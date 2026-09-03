@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/models/links.dart';
 import 'package:otzaria/settings/settings_exports.dart';
+import 'package:otzaria/text_display/models/text_display_profile.dart';
 import 'package:otzaria/theme/app_tokens.dart';
 import 'package:otzaria/widgets/misc/app_selection_area.dart';
 import 'package:otzaria/widgets/misc/link_context_menu_entry.dart';
@@ -31,6 +32,7 @@ class LinkPreviewOverlay {
   /// [onOpen] — לחיצה על כותרת החלונית (פתיחת היעד); הסגירה באחריות הקורא.
   /// [hoverMode] — חלונית שנפתחה מריחוף: בלי מחסום-הקשות מאחוריה (שלא תחסום
   /// את הלחיצה הבאה), והסגירה מתוזמנת דרך [scheduleHide] כשהסמן עוזב את העוגן.
+  /// [removeNikud]/[removePunctuation] — מסלול תאימות; העדיפו [displayProfile].
   static void show(
     BuildContext context, {
     required Link link,
@@ -38,6 +40,7 @@ class LinkPreviewOverlay {
     VoidCallback? onDismissed,
     VoidCallback? onOpen,
     bool hoverMode = false,
+    TextDisplayProfile? displayProfile,
     bool? removeNikud,
     bool? removePunctuation,
   }) {
@@ -48,6 +51,7 @@ class LinkPreviewOverlay {
         maxContentLines: 4,
         compact: true,
         onOpen: onOpen,
+        displayProfile: displayProfile,
         removeNikud: removeNikud,
         removePunctuation: removePunctuation,
       ),
@@ -223,16 +227,19 @@ class _PanelStyle {
 }
 
 /// תוכן תצוגה מקדימה להערה המוטמעת בגוף הספר.
+/// [removeNikud]/[removePunctuation] — מסלול תאימות; העדיפו [displayProfile].
 class InlineBookNotePreviewContent extends StatelessWidget {
   final String content;
-  final bool removeNikud;
-  final bool removePunctuation;
+  final TextDisplayProfile? displayProfile;
+  final bool? removeNikud;
+  final bool? removePunctuation;
 
   const InlineBookNotePreviewContent({
     super.key,
     required this.content,
-    required this.removeNikud,
-    required this.removePunctuation,
+    this.displayProfile,
+    this.removeNikud,
+    this.removePunctuation,
   });
 
   @override
@@ -243,12 +250,13 @@ class InlineBookNotePreviewContent extends StatelessWidget {
         child: SingleChildScrollView(
           child: SmartTextWidget(
             text: content,
-            settings: RenderSettings(
-              removeNikud: removeNikud,
-              removePunctuation: removePunctuation,
-              removeTeamim: !settings.showTeamim,
-              replaceHolyNames: settings.replaceHolyNames,
-              holyNameStyle: settings.holyNameStyle,
+            settings: RenderSettings.fromProfile(
+              displayProfile ??
+                  commentaryProfileFromLegacyFlags(
+                    settings,
+                    removeNikud: removeNikud,
+                    removePunctuation: removePunctuation,
+                  ),
               fontSize: settings.commentatorsFontSize,
               fontFamily: settings.commentatorsFontFamily,
               fontWeight: settings.commentatorsFontBold

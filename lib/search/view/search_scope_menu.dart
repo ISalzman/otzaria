@@ -18,6 +18,7 @@ import 'package:otzaria/search/utils/find_match_utils.dart';
 import 'package:otzaria/search/utils/foundational_book_classifier.dart';
 import 'package:otzaria/search/utils/scope_tree.dart';
 import 'package:otzaria/services/commentary_service.dart';
+import 'package:otzaria/settings/l10n/settings_l10n_exports.dart';
 import 'package:otzaria/theme/app_tokens.dart';
 import 'package:otzaria/widgets/misc/rtl_icon.dart';
 import 'package:otzaria/widgets/text/rtl_text_field.dart';
@@ -306,7 +307,7 @@ class _SearchScopeMenuButtonState extends State<SearchScopeMenuButton> {
             isDense: true,
             filled: true,
             fillColor: colorScheme.surfaceContainerHigh,
-            hintText: 'סינון לפי ספר או מחבר',
+            hintText: context.settingsText('סינון לפי ספר או מחבר'),
             hintStyle: TextStyle(
               fontSize: 14,
               color: colorScheme.onSurfaceVariant,

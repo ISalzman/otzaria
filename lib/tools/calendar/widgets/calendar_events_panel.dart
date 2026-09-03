@@ -161,7 +161,11 @@ class _CalendarEventsPanelState extends State<CalendarEventsPanel> {
     final events = _resolveVisibleCalendarEvents(widget.state, cubit);
 
     if (events.isEmpty) {
-      return Center(child: Text(_resolveEmptyEventsMessage(widget.state)));
+      return OtzariaEmptyState(
+        isCompact: true,
+        icon: OtzariaIcons.calendar_24_regular,
+        title: _resolveEmptyEventsMessage(widget.state),
+      );
     }
 
     final scheme = Theme.of(context).colorScheme;

@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:html/dom.dart' as dom;
 import 'package:html/parser.dart' as html_parser;
 import 'package:otzaria/theme/app_fonts.dart';
+import 'package:otzaria/utils/text/html_link_handler.dart';
+import 'package:otzaria/widgets/misc/inline_link_targets.dart';
 import 'package:otzaria/text_book/utils/link_anchor_variants.dart';
 import 'package:otzaria/text_book/utils/link_preview_utils.dart';
 import 'package:otzaria/plugins/services/plugin_highlight_renderer.dart';
@@ -89,6 +91,7 @@ List<InlineSpan> buildInlineHtmlSpans(
   TextStyle? linkStyle,
   Color? anchorActiveBackground,
   List<TapGestureRecognizer>? recognizerSink,
+  void Function(String url)? onMiddleClickUrl,
   bool hideRaisedMarkers = true,
 }) {
   final fragment = _parseFragmentCached(htmlText);
@@ -101,6 +104,7 @@ List<InlineSpan> buildInlineHtmlSpans(
     linkStyle: linkStyle,
     anchorActiveBackground: anchorActiveBackground,
     recognizerSink: recognizerSink,
+    onMiddleClickUrl: onMiddleClickUrl,
     hideRaisedMarkers: hideRaisedMarkers,
   );
 }
@@ -111,6 +115,9 @@ class ContinuousReadingParagraph extends StatefulWidget {
   final ValueChanged<int> onLineTap;
   final ValueChanged<int>? onLineSecondaryTap;
   final ContinuousReadingUrlTap? onTapUrl;
+
+  /// לחיצת גלגל על קישור לספר אחר — פתיחה בכרטיסייה חדשה ברקע.
+  final void Function(String url)? onMiddleClickUrl;
   final ContinuousReadingAnchorHover? onAnchorHover;
   final ContinuousReadingAnchorExit? onAnchorExit;
   final TextStyle? linkStyle;
@@ -126,6 +133,7 @@ class ContinuousReadingParagraph extends StatefulWidget {
     required this.onLineTap,
     this.onLineSecondaryTap,
     this.onTapUrl,
+    this.onMiddleClickUrl,
     this.onAnchorHover,
     this.onAnchorExit,
     this.linkStyle,
@@ -243,6 +251,7 @@ class _ContinuousReadingParagraphState
       linkStyle: widget.linkStyle,
       anchorActiveBackground: widget.anchorActiveBackground,
       recognizerSink: _linkRecognizers,
+      onMiddleClickUrl: widget.onMiddleClickUrl,
     );
   }
 
@@ -298,6 +307,7 @@ List<InlineSpan> _nodesToSpans(
   TextStyle? linkStyle,
   Color? anchorActiveBackground,
   List<TapGestureRecognizer>? recognizerSink,
+  void Function(String url)? onMiddleClickUrl,
   bool hideRaisedMarkers = true,
 }) {
   final spans = <InlineSpan>[];
@@ -312,6 +322,7 @@ List<InlineSpan> _nodesToSpans(
         linkStyle: linkStyle,
         anchorActiveBackground: anchorActiveBackground,
         recognizerSink: recognizerSink,
+        onMiddleClickUrl: onMiddleClickUrl,
         hideRaisedMarkers: hideRaisedMarkers,
       ),
     );
@@ -328,6 +339,7 @@ List<InlineSpan> _nodeToSpans(
   TextStyle? linkStyle,
   Color? anchorActiveBackground,
   List<TapGestureRecognizer>? recognizerSink,
+  void Function(String url)? onMiddleClickUrl,
   bool hideRaisedMarkers = true,
 }) {
   if (node is dom.Text) {
@@ -402,6 +414,7 @@ List<InlineSpan> _nodeToSpans(
         linkStyle: linkStyle,
         anchorActiveBackground: anchorActiveBackground,
         recognizerSink: recognizerSink,
+        onMiddleClickUrl: onMiddleClickUrl,
         hideRaisedMarkers: hideRaisedMarkers,
       );
       final recognizer = TapGestureRecognizer()
@@ -409,6 +422,13 @@ List<InlineSpan> _nodeToSpans(
           onTapUrl(href);
         };
       recognizerSink?.add(recognizer);
+      if (HtmlLinkHandler.opensAnotherBook(href)) {
+        registerInlineLinkRecognizer(
+          recognizer,
+          href,
+          onMiddleClick: onMiddleClickUrl,
+        );
+      }
       // קישורי עוגן והערה מקבלים תצוגה מקדימה בריחוף.
       final isHoverableAnchor =
           isPreviewHoverableUrl(href) &&
@@ -465,6 +485,7 @@ List<InlineSpan> _nodeToSpans(
     linkStyle: linkStyle,
     anchorActiveBackground: anchorActiveBackground,
     recognizerSink: recognizerSink,
+    onMiddleClickUrl: onMiddleClickUrl,
     hideRaisedMarkers: hideRaisedMarkers,
   );
 }

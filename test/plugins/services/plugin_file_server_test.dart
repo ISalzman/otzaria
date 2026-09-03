@@ -141,6 +141,25 @@ void main() {
     });
   });
 
+  group('isUploadUriForPlugin — נתיב ההעלאה עובר את שער ה-WebView', () {
+    Uri uri(String path) => Uri.parse('http://127.0.0.1:1234$path');
+
+    test('נתיב /w/ של העלאה פתוחה מאושר לתוסף שפתח אותה בלבד', () async {
+      final ticket = await server.beginUpload(pluginId: 'pA');
+      final token = Uri.parse(ticket.uploadUrl).pathSegments.last;
+
+      expect(server.isUploadUriForPlugin(uri('/w/$token'), 'pA'), isTrue);
+      // תוסף אחר אינו מקבל לשלוח בייטים להעלאה שאינה שלו.
+      expect(server.isUploadUriForPlugin(uri('/w/$token'), 'pB'), isFalse);
+    });
+
+    test('token לא מוכר או נתיב אחר — נדחה', () {
+      expect(server.isUploadUriForPlugin(uri('/w/unknown'), 'pA'), isFalse);
+      expect(server.isUploadUriForPlugin(uri('/w/a/b'), 'pA'), isFalse);
+      expect(server.isUploadUriForPlugin(uri('/f/pA/tok'), 'pA'), isFalse);
+    });
+  });
+
   test('CORS מוחזר ל-origin של file:// בלבד', () async {
     final file = await writeFile('doc.txt', 'x');
     final reg = await server.register(pluginId: 'p1', canonicalPath: file.path);

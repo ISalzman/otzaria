@@ -179,10 +179,24 @@ class Link {
   /// נשמר גם בקישור-טווח שמובחן ברמה האחרונה ("יח, י, ב–ג").
   static const int _minPartsToDropLastLevel = 4;
 
-  String get _displayHeRef {
+  String _displayHeRefFor(String targetTitle) {
     final trimmed = heRef.trim();
     final end = heRefEnd?.trim();
     if (end != null && end.isNotEmpty && end != trimmed) return trimmed;
+
+    // כתובת בפורמט המופרד ("<שם הספר>, <רמות>") נמדדת לפי רמות המיקום בלבד:
+    // פסיק בתוך שם הספר ("שולחן ערוך, אורח חיים") אינו רמה, ובלעדי ההפרדה
+    // הזו קיצוץ לפי ספירת פסיקים גולמית היה מוחק סעיף/הלכה אמיתיים.
+    final separated = '$targetTitle, ';
+    if (targetTitle.isNotEmpty && trimmed.startsWith(separated)) {
+      final locationParts = trimmed.substring(separated.length).split(',');
+      if (locationParts.length < 3) return trimmed;
+      return separated +
+          locationParts
+              .sublist(0, locationParts.length - 1)
+              .join(',')
+              .trimRight();
+    }
 
     final parts = trimmed.split(',');
     if (parts.length < _minPartsToDropLastLevel) return trimmed;
@@ -211,7 +225,7 @@ class Link {
     final targetTitle = utils.getTitleFromPath(path2);
     return formatDisplayReference(
           bookTitle: targetTitle,
-          fallbackRef: _displayHeRef,
+          fallbackRef: _displayHeRefFor(targetTitle),
         ) +
         _rangeDisplaySuffix;
   }
@@ -241,7 +255,7 @@ class Link {
     if (index2 <= 0) {
       return formatDisplayReference(
             bookTitle: targetTitle,
-            fallbackRef: _displayHeRef,
+            fallbackRef: _displayHeRefFor(targetTitle),
           ) +
           _rangeDisplaySuffix;
     }
@@ -261,13 +275,13 @@ class Link {
       return formatDisplayReference(
             bookTitle: targetTitle,
             resolvedRef: resolvedRef,
-            fallbackRef: _displayHeRef,
+            fallbackRef: _displayHeRefFor(targetTitle),
           ) +
           _rangeDisplaySuffix;
     } catch (_) {
       return formatDisplayReference(
             bookTitle: targetTitle,
-            fallbackRef: _displayHeRef,
+            fallbackRef: _displayHeRefFor(targetTitle),
           ) +
           _rangeDisplaySuffix;
     }

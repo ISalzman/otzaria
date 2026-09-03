@@ -4,6 +4,8 @@ import 'package:otzaria/shortcuts/shortcut_helper.dart';
 import 'package:otzaria/shortcuts/shortcut_validator.dart';
 import 'package:otzaria/settings/engine/settings_wrapper.dart';
 import 'package:otzaria/settings/l10n/settings_language.dart';
+import 'package:otzaria/text_display/text_display_exports.dart';
+import 'package:otzaria/utils/text/text_manipulation.dart' show HolyNameStyle;
 import 'package:crypto/crypto.dart';
 import 'dart:convert';
 
@@ -33,6 +35,10 @@ class SettingsRepository {
   static const String keyRemoveNikudFromTanach = 'key-remove-nikud-tanach';
   static const String keyDefaultRemovePunctuation =
       'key-default-remove-punctuation';
+
+  /// המדיניות המאוחדת של תצוגת הטקסט (JSON). מקור האמת; ששת המפתחות הישנים
+  /// (ניקוד/תנ"ך/פיסוק/טעמים/שם הוי"ה) משוקפים ממנה לתאימות.
+  static const String keyTextDisplayPolicy = 'key-text-display-policy';
   static const String keyContinuousReadingMode = 'key-continuous-reading-mode';
   static const String keyDefaultSidebarOpen = 'key-default-sidebar-open';
   static const String keyDefaultCommentaryOpen = 'key-default-commentary-open';
@@ -115,6 +121,10 @@ class SettingsRepository {
   /// CSV של מזהי כלים מובנים שהמשתמש הסתיר מהממשק (לשונית הכלים).
   static const String keyHiddenBuiltInToolIds = 'key-hidden-builtin-tool-ids';
 
+  /// CSV של מזהי התוספים המצורפים למתקין שכבר נרשמו. בלעדיו תוסף מצורף
+  /// שהמשתמש הסיר היה חוזר ונרשם בעלייה הבאה.
+  static const String keySeededBundledPlugins = 'key-seeded-bundled-plugins';
+
   /// CSV של מזהי כלים מובנים שהמשתמש הצמיד לסרגל הניווט הראשי.
   static const String keyBuiltInToolsPinnedToNavRail =
       'key-builtin-tools-pinned-to-nav-rail';
@@ -162,6 +172,10 @@ class SettingsRepository {
       'key-google-calendar-sync-future-days';
   static const String keyGoogleCalendarLastSync =
       'key-google-calendar-last-sync';
+
+  // מנויים ליומנים חיצוניים בפורמט ICS (רשימת JSON)
+  static const String keyCalendarIcsSubscriptions =
+      'key-calendar-ics-subscriptions';
   static const String keySettingsLanguage = 'key-settings-language';
 
   /// כל מפתחות ההגדרות המוצהרים במחלקה זו.
@@ -193,6 +207,7 @@ class SettingsRepository {
     keyDefaultNikud,
     keyRemoveNikudFromTanach,
     keyDefaultRemovePunctuation,
+    keyTextDisplayPolicy,
     keyContinuousReadingMode,
     keyDefaultSidebarOpen,
     keyDefaultCommentaryOpen,
@@ -241,6 +256,7 @@ class SettingsRepository {
     keyReadingTabsColumnWidth,
     keyReadingTabsColumnCollapsed,
     keyHiddenBuiltInToolIds,
+    keySeededBundledPlugins,
     keyBuiltInToolsPinnedToNavRail,
     keyBuiltInToolsOrder,
     keyProtectedModeEnabled,
@@ -259,6 +275,7 @@ class SettingsRepository {
     keyGoogleCalendarSyncPastDays,
     keyGoogleCalendarSyncFutureDays,
     keyGoogleCalendarLastSync,
+    keyCalendarIcsSubscriptions,
     keySettingsLanguage,
   ];
 
@@ -332,34 +349,11 @@ class SettingsRepository {
         keyShowExternalBooks,
         defaultValue: false,
       ),
-      'showTeamim': _settings.getValue<bool>(
-        keyShowTeamim,
-        defaultValue: true,
-      ),
-      'replaceHolyNames': _settings.getValue<bool>(
-        keyReplaceHolyNames,
-        defaultValue: true,
-      ),
-      'holyNameStyle': _settings.getValue<String>(
-        keyHolyNameStyle,
-        defaultValue: 'kuf',
-      ),
       'autoUpdateIndex': _settings.getValue<bool>(
         keyAutoUpdateIndex,
         defaultValue: true,
       ),
-      'defaultRemoveNikud': _settings.getValue<bool>(
-        keyDefaultNikud,
-        defaultValue: false,
-      ),
-      'removeNikudFromTanach': _settings.getValue<bool>(
-        keyRemoveNikudFromTanach,
-        defaultValue: false,
-      ),
-      'defaultRemovePunctuation': _settings.getValue<bool>(
-        keyDefaultRemovePunctuation,
-        defaultValue: false,
-      ),
+      'textDisplayPolicy': loadTextDisplayPolicy(),
       'defaultContinuousReadingMode': _settings.getValue<bool>(
         keyContinuousReadingMode,
         defaultValue: false,
@@ -566,6 +560,12 @@ class SettingsRepository {
         defaultValue: 0,
       ),
 
+      // מנויים ליומנים חיצוניים (ICS)
+      'calendarIcsSubscriptions': _settings.getValue<String>(
+        keyCalendarIcsSubscriptions,
+        defaultValue: '[]',
+      ),
+
       // שפת מסך ההגדרות בלבד. משתמש קיים שאין לו את המפתח מקבל זיהוי אוטומטי.
       'settingsLanguageCode': _settings.getValue<String>(
         keySettingsLanguage,
@@ -638,32 +638,58 @@ class SettingsRepository {
     await _settings.setValue(keyShowExternalBooks, value);
   }
 
-  Future<void> updateShowTeamim(bool value) async {
-    await _settings.setValue(keyShowTeamim, value);
-  }
-
-  Future<void> updateReplaceHolyNames(bool value) async {
-    await _settings.setValue(keyReplaceHolyNames, value);
-  }
-
-  Future<void> updateHolyNameStyle(String value) async {
-    await _settings.setValue(keyHolyNameStyle, value);
-  }
-
   Future<void> updateAutoUpdateIndex(bool value) async {
     await _settings.setValue(keyAutoUpdateIndex, value);
   }
 
-  Future<void> updateDefaultRemoveNikud(bool value) async {
-    await _settings.setValue(keyDefaultNikud, value);
+  /// טוען את מדיניות תצוגת הטקסט; בהיעדרה נבנית מהמפתחות הישנים (מיגרציה
+  /// שקטה — נשמרת בכתיבה הראשונה דרך [updateTextDisplayPolicy]).
+  TextDisplayPolicy loadTextDisplayPolicy() {
+    final raw = _settings.getValue<String>(
+      keyTextDisplayPolicy,
+      defaultValue: '',
+    );
+    if (raw.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(raw);
+        if (decoded is Map) {
+          return TextDisplayPolicy.fromJson(
+            Map<String, dynamic>.from(decoded),
+          );
+        }
+      } catch (_) {
+        // JSON פגום — נופלים למפתחות הישנים.
+      }
+    }
+    return TextDisplayPolicy.fromLegacy(
+      defaultRemoveNikud: _settings.getValue<bool>(
+        keyDefaultNikud,
+        defaultValue: false,
+      ),
+      removeNikudFromTanach: _settings.getValue<bool>(
+        keyRemoveNikudFromTanach,
+        defaultValue: false,
+      ),
+      defaultRemovePunctuation: _settings.getValue<bool>(
+        keyDefaultRemovePunctuation,
+        defaultValue: false,
+      ),
+      showTeamim: _settings.getValue<bool>(keyShowTeamim, defaultValue: true),
+      replaceHolyNames: _settings.getValue<bool>(
+        keyReplaceHolyNames,
+        defaultValue: true,
+      ),
+      holyNameStyle: HolyNameStyle.fromStorage(
+        _settings.getValue<String>(keyHolyNameStyle, defaultValue: 'kuf'),
+      ),
+    );
   }
 
-  Future<void> updateRemoveNikudFromTanach(bool value) async {
-    await _settings.setValue(keyRemoveNikudFromTanach, value);
-  }
-
-  Future<void> updateDefaultRemovePunctuation(bool value) async {
-    await _settings.setValue(keyDefaultRemovePunctuation, value);
+  Future<void> updateTextDisplayPolicy(TextDisplayPolicy policy) async {
+    await _settings.setValue(
+      keyTextDisplayPolicy,
+      jsonEncode(policy.toJson()),
+    );
   }
 
   Future<void> updateDefaultContinuousReadingMode(bool value) async {
@@ -965,6 +991,10 @@ class SettingsRepository {
     await _settings.setValue(keyGoogleCalendarLastSync, value);
   }
 
+  Future<void> updateCalendarIcsSubscriptions(String value) async {
+    await _settings.setValue(keyCalendarIcsSubscriptions, value);
+  }
+
   Future<Map<String, String>> getShortcuts() async {
     // Start with the default shortcuts
     final shortcuts = Map<String, String>.from(
@@ -1114,11 +1144,8 @@ class SettingsRepository {
     await _settings.setValue(keyShowOtzarHachochma, false);
     await _settings.setValue(keyShowHebrewBooks, false);
     await _settings.setValue(keyShowExternalBooks, false);
-    await _settings.setValue(keyShowTeamim, true);
-    await _settings.setValue(keyReplaceHolyNames, true);
+    await updateTextDisplayPolicy(TextDisplayPolicy.empty);
     await _settings.setValue(keyAutoUpdateIndex, true);
-    await _settings.setValue(keyDefaultNikud, false);
-    await _settings.setValue(keyRemoveNikudFromTanach, false);
     await _settings.setValue(keyContinuousReadingMode, false);
     await _settings.setValue(keyDefaultSidebarOpen, false);
     await _settings.setValue(keyDefaultCommentaryOpen, false);
@@ -1165,6 +1192,9 @@ class SettingsRepository {
     await _settings.setValue(keyGoogleCalendarSyncPastDays, 60);
     await _settings.setValue(keyGoogleCalendarSyncFutureDays, 365);
     await _settings.setValue(keyGoogleCalendarLastSync, 0);
+
+    // מנויים ליומנים חיצוניים (ICS)
+    await _settings.setValue(keyCalendarIcsSubscriptions, '[]');
 
     // Protected Mode defaults
     await _settings.setValue(keyProtectedModeEnabled, false);

@@ -281,11 +281,16 @@ class _AppTopBarState extends State<AppTopBar>
         // החלונית לשורת הכרטיסיות.
         final dragPane = PaneDragHandleScope.paneOf(context);
 
-        // במסך מלא לחצן היציאה משולב כפריט ראשון בסרגל (ולא כלחצן צף),
-        // כדי שלא יכסה ולא יחסום לחיצות על פריטים אחרים.
         final leadingItems = [
           if (dragPane != null)
             AppTopBarItem(widget: PaneDragHandleButton(pane: dragPane)),
+          ...widget.leadingItems,
+        ];
+
+        // במסך מלא לחצן היציאה משולב כפריט האחרון בסרגל (ולא כלחצן צף) —
+        // בקצה השמאלי, באותה פינה שבה יושב לחצן הכניסה למסך מלא בשורת הכותרת.
+        final trailingItems = [
+          ...widget.trailingItems,
           if (settingsState.isFullscreen)
             AppTopBarItem(
               widget: BarButton.icon(
@@ -298,7 +303,6 @@ class _AppTopBarState extends State<AppTopBar>
                 ),
               ),
             ),
-          ...widget.leadingItems,
         ];
 
         final leadingWidget = leadingItems.isEmpty
@@ -308,13 +312,13 @@ class _AppTopBarState extends State<AppTopBar>
                 children: _itemsToWidgets(context, leadingItems),
               );
 
-        final trailingWidget = widget.trailingItems.isEmpty
+        final trailingWidget = trailingItems.isEmpty
             ? null
             : Row(
                 mainAxisSize: MainAxisSize.min,
                 children: _itemsToWidgets(
                   context,
-                  widget.trailingItems,
+                  trailingItems,
                 ),
               );
 

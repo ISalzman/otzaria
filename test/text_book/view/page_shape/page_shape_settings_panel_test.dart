@@ -15,6 +15,7 @@ import 'package:otzaria/text_book/view/page_shape/page_shape_settings_panel.dart
 import 'package:otzaria/text_book/view/page_shape/utils/page_shape_commentary_selection.dart';
 import 'package:otzaria/text_book/view/page_shape/utils/page_shape_settings_manager.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' as text_utils;
+import 'package:otzaria/widgets/misc/app_menu_exports.dart';
 
 import '../../../test_helpers/memory_cache_provider.dart';
 
@@ -33,6 +34,7 @@ void main() {
     VoidCallback? onSettingsChanged,
     String? currentWorkspaceId,
     String? currentRight,
+    String? heCategories,
     List<String> availableCommentators = const ['רש"י על בראשית'],
   }) async {
     await tester.pumpWidget(
@@ -44,6 +46,7 @@ void main() {
               child: PageShapeSettingsPanel(
                 availableCommentators: availableCommentators,
                 bookTitle: 'בראשית',
+                heCategories: heCategories,
                 currentWorkspaceId: currentWorkspaceId,
                 currentRight: currentRight,
                 onSettingsChanged: onSettingsChanged,
@@ -160,10 +163,10 @@ void main() {
     var notified = 0;
     await pumpPanel(tester, onSettingsChanged: () => notified++);
 
-    final dropdown = find.byType(DropdownButtonFormField<String>).last;
-    await tester.ensureVisible(dropdown);
+    final fontField = find.byType(FontDropdownField);
+    await tester.ensureVisible(fontField);
     await tester.pump();
-    await tester.tap(dropdown);
+    await tester.tap(fontField);
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('כתר').last);
@@ -171,6 +174,33 @@ void main() {
 
     expect(Settings.getValue<String>('page_shape_bottom_font'), 'KeterYG');
     expect(notified, greaterThan(0));
+  });
+
+  testWidgets('בחירת קטגוריה נשמרת לקטגוריה ומפעילה עדכון חי', (tester) async {
+    var notified = 0;
+    await pumpPanel(
+      tester,
+      heCategories: 'סדר מועד, מסכת שבת',
+      onSettingsChanged: () => notified++,
+    );
+
+    // מעבר לשמירה בתחום קטגוריה
+    await tester.tap(find.text('קטגוריה'));
+    await tester.pumpAndSettle();
+
+    // בדיקה ששדה בחירת הקטגוריה מופיע
+    expect(find.text('בחר קטגוריה:'), findsOneWidget);
+
+    // פתיחת התפריט ובחירת "מסכת שבת"
+    final categoryField = find.widgetWithText(FilledButton, 'סדר מועד');
+    await tester.tap(categoryField);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('מסכת שבת').last);
+    await tester.pumpAndSettle();
+
+    expect(notified, greaterThan(0));
+    expect(find.widgetWithText(FilledButton, 'מסכת שבת'), findsOneWidget);
   });
 
   testWidgets('הגדלת גודל הגופן נשמרת מיידית ומפעילה עדכון חי', (tester) async {

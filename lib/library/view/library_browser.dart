@@ -20,6 +20,7 @@ import 'package:otzaria/models/books.dart';
 import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/tools/calendar/helpers/daf_yomi_navigation.dart';
 import 'package:otzaria/library_update/bloc/library_update_bloc.dart';
+import 'package:otzaria/library/view/library_breadcrumb_bar.dart';
 import 'package:otzaria/library/view/library_daf_yomi.dart';
 import 'package:otzaria/settings/services/custom_folders/bloc/custom_folders_bloc.dart';
 import 'package:otzaria/widgets/feedback/edge_scrollbar_behavior.dart';
@@ -627,7 +628,9 @@ class _LibraryBrowserState extends State<LibraryBrowser>
         dividerBefore: true,
         widget: BarButton.icon(
           compact: isCompact,
-          tooltip: previewSelected ? 'הסתר תצוגה מקדימה' : 'הצג תצוגה מקדימה',
+          tooltip: previewSelected
+              ? context.settingsText('הסתר תצוגה מקדימה')
+              : context.settingsText('הצג תצוגה מקדימה'),
           icon: previewSelected
               ? FluentIcons.eye_24_filled
               : FluentIcons.eye_24_regular,
@@ -643,7 +646,9 @@ class _LibraryBrowserState extends State<LibraryBrowser>
           valueListenable: _settingsPanelOpen,
           builder: (context, isOpen, _) => BarButton.icon(
             compact: isCompact,
-            tooltip: isOpen ? 'סגור הגדרות ספרייה' : 'הגדרות ספרייה',
+            tooltip: isOpen
+                ? context.settingsText('סגור הגדרות ספרייה')
+                : context.settingsText('הגדרות ספרייה'),
             icon: isOpen
                 ? FluentIcons.settings_24_filled
                 : FluentIcons.settings_24_regular,
@@ -863,8 +868,10 @@ class _LibraryBrowserState extends State<LibraryBrowser>
               focusNode: focusRepository.librarySearchFocusNode,
               autofocus: true,
               slim: isCompact,
-              hintText:
-                  'איתור ספר או מחבר ב${state.currentCategory?.title ?? ""}',
+              hintText: context.settingsText(
+                'איתור ספר או מחבר ב{category}',
+                args: {'category': state.currentCategory?.title ?? ''},
+              ),
               maxWidth: isCompact ? 500 : 400,
               onChanged: (value) {
                 context.read<LibraryBloc>().add(UpdateSearchQuery(value));
@@ -983,9 +990,10 @@ class _LibraryBrowserState extends State<LibraryBrowser>
                     fieldFocusNode: context
                         .read<FocusRepository>()
                         .librarySearchFocusNode,
-                    hint: 'לחיצה תחליף את הטקסט שהוקלד',
+                    hint: context.settingsText('לחיצה תחליף את הטקסט שהוקלד'),
                     onApplied: _applyLibraryLayoutFix,
                   ),
+                  ?_buildBreadcrumbBar(context, state, settingsState),
                   Expanded(child: _buildContent(state)),
                 ],
               );
@@ -1030,6 +1038,37 @@ class _LibraryBrowserState extends State<LibraryBrowser>
     );
   }
 
+  // ── Breadcrumb bar ────────────────────────────────────────────────────────
+
+  /// שרשרת הקטגוריות מהעליונה ועד הנוכחית, ללא קטגוריית השורש.
+  List<Category> _breadcrumbChain(LibraryState state) {
+    final chain = <Category>[];
+    for (
+      Category? c = state.currentCategory;
+      c != null && !identical(c, state.library) && !identical(c, c.parent);
+      c = c.parent
+    ) {
+      chain.insert(0, c);
+    }
+    return chain;
+  }
+
+  /// נתיב הניווט המלא בקטלוג (issue #1086); מוסתר בשורש ובתוצאות חיפוש.
+  Widget? _buildBreadcrumbBar(
+    BuildContext context,
+    LibraryState state,
+    SettingsState settingsState,
+  ) {
+    if (state.searchResults != null) return null;
+    final chain = _breadcrumbChain(state);
+    if (chain.isEmpty) return null;
+    return LibraryBreadcrumbBar(
+      chain: chain,
+      onNavigate: _openCategory,
+      onNavigateHome: () => _handleNavigateHome(context, state, settingsState),
+    );
+  }
+
   // ── Loading overlay ───────────────────────────────────────────────────────
 
   Widget _buildLoadingOverlay(BuildContext context) {
@@ -1071,7 +1110,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
           final isBusy = state.isBusy;
           return BarButton.icon(
             compact: compact,
-            tooltip: libraryUpdateButtonTooltip(state),
+            tooltip: ctx.settingsText(libraryUpdateButtonTooltip(state)),
             icon: libraryUpdateButtonIcon(state.status),
             // ספינר מסתובב בזמן עדכון — אינדיקציית פעילות רציפה (ticker עצמאי),
             // כי בשלב ה-apply הארוך אין שינויי state שיבנו מחדש את הכפתור.
@@ -1097,7 +1136,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
         },
       ),
       icon: FluentIcons.arrow_sync_24_regular,
-      tooltip: 'עדכון ספרייה',
+      tooltip: context.settingsText('עדכון ספרייה'),
       actionId: ToolbarActionId.sync,
       onPressed: () {
         final b = context.read<LibraryUpdateBloc>();
@@ -1124,7 +1163,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
     return [
       ActionButtonData.simple(
         compact: compact,
-        tooltip: 'חזרה לתיקיה הקודמת',
+        tooltip: context.settingsText('חזרה לתיקיה הקודמת'),
         icon: FluentIcons.arrow_up_24_regular,
         actionId: ToolbarActionId.navigateUp,
         onPressed: isLibraryEmpty
@@ -1133,7 +1172,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
       ),
       ActionButtonData.simple(
         compact: compact,
-        tooltip: 'חזרה לתיקיה הראשית',
+        tooltip: context.settingsText('חזרה לתיקיה הראשית'),
         icon: FluentIcons.home_24_regular,
         actionId: ToolbarActionId.navigateHome,
         onPressed: isLibraryEmpty
@@ -1144,7 +1183,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
         _buildSyncActionButton(compact: compact),
       ActionButtonData.simple(
         compact: compact,
-        tooltip: 'טעינה מחדש',
+        tooltip: context.settingsText('טעינה מחדש'),
         icon: FluentIcons.arrow_clockwise_24_regular,
         actionId: ToolbarActionId.refresh,
         onPressed: isLibraryEmpty ? null : _refreshWithPersonalFolders,
@@ -1162,7 +1201,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
     return [
       ActionButtonData.simple(
         compact: compact,
-        tooltip: 'חזרה לתיקיה הקודמת',
+        tooltip: context.settingsText('חזרה לתיקיה הקודמת'),
         icon: FluentIcons.arrow_up_24_regular,
         actionId: ToolbarActionId.navigateUp,
         onPressed: isLibraryEmpty
@@ -1173,7 +1212,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
         _buildSyncActionButton(compact: compact),
       ActionButtonData.simple(
         compact: compact,
-        tooltip: 'חזרה לתיקיה הראשית',
+        tooltip: context.settingsText('חזרה לתיקיה הראשית'),
         icon: FluentIcons.home_24_regular,
         actionId: ToolbarActionId.navigateHome,
         onPressed: isLibraryEmpty
@@ -1182,7 +1221,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
       ),
       ActionButtonData.simple(
         compact: compact,
-        tooltip: 'טעינה מחדש',
+        tooltip: context.settingsText('טעינה מחדש'),
         icon: FluentIcons.arrow_clockwise_24_regular,
         actionId: ToolbarActionId.refresh,
         onPressed: isLibraryEmpty ? null : _refreshWithPersonalFolders,
@@ -1330,8 +1369,11 @@ class _LibraryBrowserState extends State<LibraryBrowser>
     final isDeepLink = _isDeepLinkText(searchText);
 
     final message = searchText.isNotEmpty
-        ? 'אין תוצאות עבור "$searchText"'
-        : 'אין פריטים להצגה בתיקייה זו';
+        ? context.settingsText(
+            'אין תוצאות עבור "{query}"',
+            args: {'query': searchText},
+          )
+        : context.settingsText('אין פריטים להצגה בתיקייה זו');
 
     final action = libraryEmptyStateAction(
       hasSearchText: searchText.isNotEmpty,
@@ -1827,7 +1869,10 @@ class _LibraryBrowserState extends State<LibraryBrowser>
           bottom: 10,
         ),
         child: Text(
-          'הצג עוד ${books.length - _kCategoryBooksCap} פריטים',
+          context.settingsText(
+            'הצג עוד {count} פריטים',
+            args: {'count': books.length - _kCategoryBooksCap},
+          ),
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
             color: Theme.of(context).colorScheme.secondary,
           ),
@@ -2306,12 +2351,12 @@ class _LibraryBrowserState extends State<LibraryBrowser>
       // של הלייבל, וה-Spacer שבשורת הפריט נופל על רוחב לא-חסום.
       menuBuilder: (_, _) => [
         AppContextMenuEntry(
-          label: 'פתיחה כטקסט',
+          label: context.settingsText('פתיחה כטקסט'),
           icon: OtzariaIcons.book_alef_24_regular,
           onTap: () => _openBookInReader(book, index, forcePdf: false),
         ),
         AppContextMenuEntry(
-          label: 'פתיחה כ-PDF',
+          label: context.settingsText('פתיחה כ-PDF'),
           icon: OtzariaIcons.book_pdf_24_regular,
           onTap: () => _openBookInReader(book, index, forcePdf: true),
         ),
@@ -2469,7 +2514,10 @@ class _LibraryBrowserState extends State<LibraryBrowser>
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(
-          'כל הספרים (${books.length})',
+          ctx.settingsText(
+            'כל הספרים ({count})',
+            args: {'count': books.length},
+          ),
         ),
         content: SizedBox(
           width: 600,
@@ -2482,7 +2530,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('סגור'),
+            child: Text(ctx.settingsText('סגור')),
           ),
         ],
       ),
@@ -2691,7 +2739,7 @@ class _SearchingIndicator extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         Text(
-          'מחפש...',
+          context.settingsText('מחפש...'),
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
             color: cs.onSurfaceVariant,
           ),
@@ -2742,8 +2790,9 @@ class _LoadingDotsTextState extends State<_LoadingDotsText>
             : v < 0.75
             ? 2
             : 3;
+        final label = context.settingsText('טוען ספרייה');
         return Text(
-          'טוען ספרייה${'.' * dots}${' ' * (3 - dots)}',
+          '$label${'.' * dots}${' ' * (3 - dots)}',
           style: Theme.of(context).textTheme.bodyMedium,
         );
       },

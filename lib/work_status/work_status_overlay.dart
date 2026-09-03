@@ -114,7 +114,7 @@ class _PrimaryItemRow extends StatelessWidget {
     final progress = item.progress?.clamp(0.0, 1.0).toDouble();
     final percentLabel = progress == null
         ? '...'
-        : '${(progress * 100).round()}%';
+        : '${(progress * 100).floor()}%';
 
     return InkWell(
       onTap: item.onTap,

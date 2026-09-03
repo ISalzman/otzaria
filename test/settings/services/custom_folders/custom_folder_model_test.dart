@@ -99,6 +99,7 @@ void main() {
 
       expect(a, isNot(equals(a.copyWith(addToDatabase: true))));
       expect(a, isNot(equals(a.copyWith(mergeIntoLibrary: false))));
+      expect(a, isNot(equals(a.copyWith(hidden: true))));
     });
 
     test('נתיבים שונים אינם שווים', () {
@@ -377,6 +378,62 @@ void main() {
       expect(updated[0].mergeIntoLibrary, isFalse);
       expect(updated[1].mergeIntoLibrary, isFalse);
       expect(updated[2].mergeIntoLibrary, isTrue);
+    });
+  });
+
+  group('CustomFolder הסתרה מהספרייה', () {
+    test('ברירת המחדל גלויה, ורשומה ישנה ללא המפתח נטענת כגלויה', () {
+      expect(folder('/books').hidden, isFalse);
+      final restored = CustomFolder.fromJson({
+        'path': '/books',
+        'addedAt': DateTime(2026).toIso8601String(),
+      });
+      expect(restored.hidden, isFalse);
+    });
+
+    test('הלוך-ושוב ב-JSON משמר הסתרה, וגלויה לא כותבת את המפתח', () {
+      final hidden = folder('/books').copyWith(hidden: true);
+      expect(CustomFolder.fromJson(hidden.toJson()).hidden, isTrue);
+      expect(folder('/books').toJson().containsKey('hidden'), isFalse);
+    });
+
+    test('updateFolderHiddenSetting מסתיר ומחזיר תיקיות בעלות אותו שם יחד', () {
+      final folders = [
+        folder('/alpha/shared'),
+        folder('/beta/shared'),
+        folder('/gamma/other'),
+      ];
+
+      final hidden = CustomFoldersManager.updateFolderHiddenSetting(
+        folders,
+        '/alpha/shared',
+        true,
+      );
+      expect(hidden.map((f) => f.hidden), [true, true, false]);
+
+      final shown = CustomFoldersManager.updateFolderHiddenSetting(
+        hidden,
+        '/beta/shared',
+        false,
+      );
+      expect(shown.map((f) => f.hidden), [false, false, false]);
+    });
+
+    test('updateFolderHiddenSetting עם נתיב לא מוכר לא משנה דבר', () {
+      final folders = [folder('/a')];
+      expect(
+        CustomFoldersManager.updateFolderHiddenSetting(folders, '/zzz', true),
+        folders,
+      );
+    });
+
+    test('hiddenFolderNames — שם נעלם רק כשכל התיקיות שלו מוסתרות', () {
+      final names = CustomFoldersManager.hiddenFolderNames([
+        folder('/alpha/shared').copyWith(hidden: true),
+        folder('/beta/shared'),
+        folder('/gamma/other').copyWith(hidden: true),
+      ]);
+      expect(names, {'other'});
     });
   });
 }

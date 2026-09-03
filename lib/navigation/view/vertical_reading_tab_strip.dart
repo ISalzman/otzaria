@@ -258,52 +258,55 @@ class _VerticalTabRow extends StatelessWidget {
               fontSize: 14,
               fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
             ),
-            child: collapsed
-                // במצב מכווץ מוצג אייקון בלבד, ולכן ה-tooltip הוא המקור היחיד לשם.
-                ? Tooltip(
-                    message: tab.title,
-                    child: Center(
-                      child: leading ?? buildTabFallbackIcon(context),
-                    ),
-                  )
-                : Row(
-                    children: [
-                      if (leading != null) ...[
-                        leading,
-                        const SizedBox(width: 6),
-                      ],
-                      if (tab.isPinned) ...[
-                        const Icon(FluentIcons.pin_24_filled, size: 14),
-                        const SizedBox(width: 4),
-                      ],
-                      Expanded(
-                        child: TabTitleTooltip(
-                          message: tab.title,
-                          title: tab.title,
-                          child: buildFadedTabTitle(context, tab.title),
-                        ),
+            child: LiveTabTitleBuilder(
+              tab: tab,
+              builder: (context, displayTitle, tooltipMessage) => collapsed
+                  // במצב מכווץ מוצג אייקון בלבד, ולכן ה-tooltip הוא המקור היחיד לשם.
+                  ? Tooltip(
+                      message: tooltipMessage,
+                      child: Center(
+                        child: leading ?? buildTabFallbackIcon(context),
                       ),
-                      if (showClose)
-                        IconButton(
-                          style: IconButton.styleFrom(
-                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            padding: EdgeInsets.zero,
-                          ),
-                          constraints: const BoxConstraints(
-                            minWidth: 24,
-                            minHeight: 24,
-                            maxWidth: 24,
-                            maxHeight: 24,
-                          ),
-                          tooltip: context.settingsText('סגור כרטיסיה'),
-                          onPressed: onClose,
-                          icon: const Icon(
-                            FluentIcons.dismiss_24_regular,
-                            size: 12,
+                    )
+                  : Row(
+                      children: [
+                        if (leading != null) ...[
+                          leading,
+                          const SizedBox(width: 6),
+                        ],
+                        if (tab.isPinned) ...[
+                          const Icon(FluentIcons.pin_24_filled, size: 14),
+                          const SizedBox(width: 4),
+                        ],
+                        Expanded(
+                          child: TabTitleTooltip(
+                            message: tooltipMessage,
+                            title: displayTitle,
+                            child: buildFadedTabTitle(context, displayTitle),
                           ),
                         ),
-                    ],
-                  ),
+                        if (showClose)
+                          IconButton(
+                            style: IconButton.styleFrom(
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              padding: EdgeInsets.zero,
+                            ),
+                            constraints: const BoxConstraints(
+                              minWidth: 24,
+                              minHeight: 24,
+                              maxWidth: 24,
+                              maxHeight: 24,
+                            ),
+                            tooltip: context.settingsText('סגור כרטיסיה'),
+                            onPressed: onClose,
+                            icon: const Icon(
+                              FluentIcons.dismiss_24_regular,
+                              size: 12,
+                            ),
+                          ),
+                      ],
+                    ),
+            ),
           ),
         ),
       ),
