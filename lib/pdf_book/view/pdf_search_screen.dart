@@ -165,6 +165,29 @@ class PdfBookSearchView extends StatefulWidget {
     return RegExp(sources.join('|'), caseSensitive: false, unicode: true);
   }
 
+  /// שכבת הטקסט של PDF סרוק נשמרת לא פעם בסדר ויזואלי — המילים בכל שורה
+  /// הפוכות — ולכן התבנית חייבת להתאים גם לסדר המילים ההפוך.
+  @visibleForTesting
+  static LiteralSearchPattern? buildSimpleSearchPattern(
+    String query, {
+    bool wholeWord = true,
+  }) {
+    final forward = buildLiteralPattern(query, wholeWord: wholeWord);
+    if (forward == null) return null;
+
+    final normalized = normalizeLiteralQuery(query);
+    final words = normalized.split(' ');
+    if (words.length < 2) return forward;
+    final reversedQuery = words.reversed.join(' ');
+    if (reversedQuery == normalized) return forward;
+
+    final backward = buildLiteralPattern(reversedQuery, wholeWord: wholeWord);
+    if (backward == null) return forward;
+
+    final source = '(?:${forward.source})|(?:${backward.source})';
+    return LiteralSearchPattern(source, compileLiteralPattern(source));
+  }
+
   @override
   State<PdfBookSearchView> createState() => PdfBookSearchViewState();
 }
@@ -534,7 +557,10 @@ class PdfBookSearchViewState extends State<PdfBookSearchView> {
       _pdfHighlightDebounce?.cancel();
       _pendingSimpleSearchScrollFor = query;
       // תבנית סובלנית-ניקוד מהמנוע, כדי שגם PDF ששכבת הטקסט שלו מנוקדת יודגש.
-      final literal = buildLiteralPattern(query, wholeWord: _wholeWord);
+      final literal = PdfBookSearchView.buildSimpleSearchPattern(
+        query,
+        wholeWord: _wholeWord,
+      );
       _lastPdfHighlightSource = literal?.source ?? query;
       widget.textSearcher.startTextSearch(
         literal?.regExp ?? query,
@@ -704,7 +730,7 @@ class PdfBookSearchViewState extends State<PdfBookSearchView> {
 
                   _schedulePdfHighlight(
                     _isSimpleSearch
-                        ? buildLiteralPattern(
+                        ? PdfBookSearchView.buildSimpleSearchPattern(
                             widget.searchController.text,
                             wholeWord: _wholeWord,
                           )?.regExp

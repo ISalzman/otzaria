@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/pdf_book/view/pdf_search_screen.dart';
+import 'package:otzaria/search/utils/literal_search_pattern.dart';
 
 import '../support/search_engine_test_init.dart';
 
@@ -90,6 +91,104 @@ Future<void> main() async {
         expect(pattern.hasMatch(_term(0)), isTrue);
         expect(pattern.hasMatch(_term(49)), isTrue);
         expect(pattern.hasMatch(_term(59)), isFalse);
+      });
+    }, skip: engineReady ? false : searchEngineSkipReason);
+  });
+
+  group('buildSimpleSearchPattern - סדר מילים הפוך בשכבת טקסט של PDF סרוק', () {
+    test('שאילתה ריקה מחזירה null', () {
+      expect(PdfBookSearchView.buildSimpleSearchPattern('   '), isNull);
+    });
+
+    group('עם המנוע', () {
+      test('מילה אחת — התבנית זהה לתבנית הליטרלית הרגילה', () {
+        expect(
+          PdfBookSearchView.buildSimpleSearchPattern('רבנן')!.source,
+          buildLiteralPattern('רבנן')!.source,
+        );
+      });
+
+      test('ביטוי מתאים גם לסדר המילים ההפוך', () {
+        final pattern = PdfBookSearchView.buildSimpleSearchPattern(
+          'תנו רבנן',
+        )!.regExp;
+
+        expect(pattern.hasMatch('תנו רבנן שלושה'), isTrue);
+        expect(pattern.hasMatch('שלושה רבנן תנו'), isTrue);
+        expect(pattern.hasMatch('תנו לו רבנן'), isFalse);
+      });
+
+      test('שלוש מילים — רק הסדר המלא ההפוך, לא תמורות אחרות', () {
+        final pattern = PdfBookSearchView.buildSimpleSearchPattern(
+          'אמר רבא אביי',
+        )!.regExp;
+
+        expect(pattern.hasMatch('אמר רבא אביי'), isTrue);
+        expect(pattern.hasMatch('אביי רבא אמר'), isTrue);
+        expect(pattern.hasMatch('רבא אמר אביי'), isFalse);
+        expect(pattern.hasMatch('אמר אביי רבא'), isFalse);
+      });
+
+      test('שאילתה סימטרית אינה מכפילה את התבנית', () {
+        expect(
+          PdfBookSearchView.buildSimpleSearchPattern('אמר רבא אמר')!.source,
+          buildLiteralPattern('אמר רבא אמר')!.source,
+        );
+      });
+
+      test('מילה כפולה בשאילתה — ההתאמה נשארת נכונה בשני הכיוונים', () {
+        final pattern = PdfBookSearchView.buildSimpleSearchPattern(
+          'אמר אמר רבא',
+        )!.regExp;
+
+        expect(pattern.hasMatch('אמר אמר רבא'), isTrue);
+        expect(pattern.hasMatch('רבא אמר אמר'), isTrue);
+        expect(pattern.hasMatch('אמר רבא אמר'), isFalse);
+      });
+
+      test('נשמרת הסובלנות לניקוד גם בסדר ההפוך', () {
+        final pattern = PdfBookSearchView.buildSimpleSearchPattern(
+          'תנו רבנן',
+        )!.regExp;
+
+        expect(pattern.hasMatch('רַבָּנַן תָּנוּ'), isTrue);
+      });
+
+      test('רווחים מובילים/כפולים אינם שוברים את פיצול המילים', () {
+        final pattern = PdfBookSearchView.buildSimpleSearchPattern(
+          '  תנו   רבנן  ',
+        )!.regExp;
+
+        expect(pattern.hasMatch('תנו רבנן שלושה'), isTrue);
+        expect(pattern.hasMatch('שלושה רבנן תנו'), isTrue);
+      });
+
+      test('תו regex מיוחד במילה — מוברח בשני הכיוונים', () {
+        final pattern = PdfBookSearchView.buildSimpleSearchPattern(
+          'אמר (רבא',
+        )!.regExp;
+
+        expect(pattern.hasMatch('אמר (רבא'), isTrue);
+        expect(pattern.hasMatch('(רבא אמר'), isTrue);
+      });
+
+      test('גרשיים במילה האחרונה — נצרך כשהמילה נעשית ראשונה בסדר ההפוך', () {
+        final pattern = PdfBookSearchView.buildSimpleSearchPattern(
+          'תנו רבנן"',
+        )!.regExp;
+
+        expect(pattern.hasMatch('שלושה רבנן" תנו'), isTrue);
+        expect(pattern.hasMatch('תנו רבנן" שלושה'), isTrue);
+      });
+
+      test('דגלי הרגקס זהים לתבנית הליטרלית הרגילה', () {
+        final pattern = PdfBookSearchView.buildSimpleSearchPattern(
+          'תנו רבנן',
+        )!.regExp;
+        final forward = buildLiteralPattern('תנו רבנן')!.regExp;
+
+        expect(pattern.isCaseSensitive, forward.isCaseSensitive);
+        expect(pattern.isUnicode, forward.isUnicode);
       });
     }, skip: engineReady ? false : searchEngineSkipReason);
   });
