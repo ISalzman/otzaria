@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:otzaria/shortcuts/shortcut_helper.dart';
 import 'package:otzaria/settings/l10n/settings_l10n_exports.dart';
 import 'package:otzaria/tour/bloc/tour_cubit.dart';
 import 'package:otzaria/tour/models/live_tip.dart';
@@ -36,7 +37,11 @@ void main() {
 
   setUp(() async {
     await Settings.init(cacheProvider: MemorySettingsCache());
+    // הקיצורים מוצגים עם ⌘ ב-macOS; בלי הקיבוע הטסטים עוברים רק מחוץ ל-Mac.
+    ShortcutHelper.isMacForTesting = false;
   });
+
+  tearDown(() => ShortcutHelper.isMacForTesting = null);
 
   test('בונה סיור מלא עם 19 שלבים כאשר הספרייה טעונה', () {
     final steps = TourSteps.build(libraryLoaded: true);
