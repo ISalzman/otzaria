@@ -143,6 +143,33 @@ class PdfBookSearchView extends StatefulWidget {
     return PdfMessages.bookNotInSearchIndex;
   }
 
+  /// אותיות עבריות, כולל הסופיות — טווח רצוף אחד ביוניקוד.
+  static final RegExp _hebrewLetter = RegExp(r'[א-ת]');
+
+  /// האם בטקסט שנדגם מהעמודים יש עברית שאפשר לחפש בה.
+  ///
+  /// שכבת הטקסט של PDF סרוק אינה ריקה — היא מכילה פיסוק וספרות — ולכן
+  /// הקריטריון הוא אפס אותיות עבריות, לא טקסט ריק.
+  @visibleForTesting
+  static bool hasSearchableHebrewText(Iterable<String> pageTexts) =>
+      pageTexts.any(_hebrewLetter.hasMatch);
+
+  /// העמודים שנדגמים לבדיקת קיום טקסט: העמוד שהמשתמש רואה ועוד שניים
+  /// פרושׂים על הספר — עמוד בודד עלול להיות שער או לוח תמונות.
+  @visibleForTesting
+  static List<int> textLayerProbePages({
+    required int currentPage,
+    required int totalPages,
+  }) {
+    if (totalPages <= 0) return const [];
+    int clamped(int page) => page.clamp(1, totalPages);
+    return <int>{
+      clamped(currentPage),
+      clamped((totalPages / 3).ceil()),
+      clamped((totalPages * 2 / 3).ceil()),
+    }.toList();
+  }
+
   /// תקרת מונחים ייחודיים לתבנית ההדגשה, כדי שהרגקס לא יתנפח.
   static const int _maxHighlightTerms = 50;
 
@@ -215,6 +242,10 @@ class PdfBookSearchViewState extends State<PdfBookSearchView> {
   Timer? _pdfHighlightDebounce;
   String _lastPdfHighlightSource = '';
   int _searchGeneration = 0;
+
+  /// הדור שעבורו כבר נבדק אם לספר יש טקסט — הסריקה מודיעה על כל עמוד,
+  /// והבדיקה צריכה לרוץ פעם אחת בסיומה.
+  int _textLayerCheckedGeneration = -1;
 
   /// התבנית שנבנתה מהמונחים שהמנוע מצא בפועל — לשימוש חוזר בלחיצה על תוצאה.
   RegExp? _lastAdvancedHighlightPattern;
@@ -405,8 +436,40 @@ class PdfBookSearchViewState extends State<PdfBookSearchView> {
             _scheduleScrollToCurrentPage();
           }
         }
+
+        if (!_isSearching &&
+            _searchResults.isEmpty &&
+            _searchErrorMessage == null &&
+            _textLayerCheckedGeneration != _searchGeneration &&
+            _searchableQuery(widget.searchController.text) != null) {
+          _textLayerCheckedGeneration = _searchGeneration;
+          unawaited(_checkTextLayer(_searchGeneration));
+        }
       }
     }
+  }
+
+  /// בסיום סריקה ללא תוצאות — בודקת אם לספר בכלל יש טקסט לחפש בו, כדי
+  /// שספר סרוק לא יציג "אין תוצאות" מטעה על מילה שרואים על העמוד.
+  Future<void> _checkTextLayer(int generation) async {
+    final pdfState = context.read<PdfBookBloc>().state;
+    final pages = PdfBookSearchView.textLayerProbePages(
+      currentPage: pdfState is PdfBookLoaded ? pdfState.currentPageNumber : 1,
+      totalPages: pdfState is PdfBookLoaded ? pdfState.totalPages : 1,
+    );
+
+    final texts = <String>[];
+    for (final page in pages) {
+      final pageText = await widget.textSearcher.loadText(pageNumber: page);
+      if (pageText != null) texts.add(pageText.fullText);
+    }
+
+    if (!mounted || generation != _searchGeneration) return;
+    // בלי טקסט כלל אי אפשר להכריע (המסמך עדיין לא נטען) — נשארים ב"אין תוצאות".
+    if (texts.isEmpty || PdfBookSearchView.hasSearchableHebrewText(texts)) {
+      return;
+    }
+    setState(() => _searchErrorMessage = PdfMessages.noTextLayer);
   }
 
   void _scheduleScrollToCurrentPage() {
