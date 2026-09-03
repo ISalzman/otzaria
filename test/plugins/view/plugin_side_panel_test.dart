@@ -194,6 +194,9 @@ base class _FakePlatformFile extends PlatformFile {
   Future<int> length() async => 0;
 
   @override
+  int? lengthSync() => 0;
+
+  @override
   Future<Uint8List> readAsBytes() async => Uint8List(0);
 
   @override
