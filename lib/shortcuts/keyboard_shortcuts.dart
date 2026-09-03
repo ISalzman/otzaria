@@ -361,13 +361,22 @@ class _KeyboardShortcutsState extends State<KeyboardShortcuts> {
       return KeyEventResult.handled;
     }
 
-    if (isReadingScreen &&
-        ShortcutHelper.matchesShortcut(event, restoreClosedTabShortcut)) {
+    // ⚠️ **אינו** מוגדר ל-`isReadingScreen`, בשונה משאר קיצורי הכרטיסיות.
+    //
+    // "שחזר את מה שסגרתי" תקף מכל מסך: משתמש שסגר חלון וחזר למסך הספרייה
+    // לחץ `Ctrl+Shift+T` ושום דבר לא קרה — הקיצור נחסם בדיוק בתרחיש
+    // שבשבילו הוא נוסף. שחזור כרטיסיה מנווט למסך הקריאה, כי שם היא נמצאת.
+    if (ShortcutHelper.matchesShortcut(event, restoreClosedTabShortcut)) {
       // כמו בדפדפן: קודם כרטיסיה שנסגרה, ורק אם אין כזו — חלון שנסגר.
       // הסדר חשוב, כי הכרטיסיה היא הפעולה השכיחה בהרבה.
       final tabsBloc = context.read<TabsBloc>();
       if (tabsBloc.hasRecentlyClosedTabs) {
         tabsBloc.add(const RestoreLastClosedTab());
+        if (!isReadingScreen) {
+          context.read<NavigationBloc>().add(
+            const NavigateToScreen(Screen.reading),
+          );
+        }
       } else {
         unawaited(const MultiWindowService().restoreLastClosedWindow());
       }

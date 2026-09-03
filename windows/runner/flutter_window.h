@@ -74,13 +74,21 @@ class FlutterWindow : public Win32Window {
   // מטען JSON, וה-runner פותח חלון נוסף על thread ייעודי משלו.
   std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>>
       multiwindow_channel_;
-  // מטענים שממתינים לפתיחת חלון. נכתבים בטיפול בערוץ ונקראים בלולאת
-  // ההודעות של אותו thread, ולכן אין כאן גישה חוצת-threads.
-  std::queue<std::string> pending_secondary_payloads_;
-  // מידות שהחלון הבא יורש מהחלון הזה. נכתבות בטיפול בערוץ ונקראות
-  // בלולאת ההודעות של אותו thread.
-  int pending_secondary_width_ = 0;
-  int pending_secondary_height_ = 0;
+  // בקשת פתיחת חלון שממתינה לאיטרציה הבאה של לולאת ההודעות.
+  //
+  // ⚠️ ה-`result` נשמר ונענה **אחרי** שהחלון נוצר בפועל. קודם לכן הערוץ
+  // החזיר `true` מיד אחרי ההכנסה לתור, וערך ההחזרה של היצירה עצמה נזרק —
+  // כלומר Dart קיבל "הצלחה" על חלון שאולי לא קם, ומחק את הכרטיסיה על סמך
+  // התשובה הזו.
+  struct PendingSecondaryWindow {
+    std::string payload;
+    int width = 0;
+    int height = 0;
+    std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result;
+  };
+  // נכתב בטיפול בערוץ ונקרא בלולאת ההודעות של אותו thread, ולכן אין כאן
+  // גישה חוצת-threads.
+  std::queue<PendingSecondaryWindow> pending_secondary_windows_;
   // ערוץ לסגירת חלון ה-splash הנייטיב (otzaria/splash) — Dart קורא "close"
   // בעת חשיפת החלון הראשי.
   std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>>

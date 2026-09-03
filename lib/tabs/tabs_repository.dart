@@ -6,8 +6,6 @@ import 'package:otzaria/core/windowing/window_bus.dart';
 import 'package:otzaria/core/windowing/window_role.dart';
 import 'package:otzaria/tabs/models/combined_tab.dart';
 import 'package:otzaria/tabs/models/tab.dart';
-import 'package:otzaria/tabs/models/commentators_tab.dart';
-import 'package:otzaria/tabs/models/pdf_commentators_tab.dart';
 import 'package:otzaria/utils/file/hive_utils.dart';
 import 'package:flutter/foundation.dart';
 
@@ -133,7 +131,7 @@ class TabsRepository {
         () => changed = true,
       );
       if (!changed) return tab;
-      return _tabFromJson(castMap(remappedJson)) ?? tab;
+      return OpenedTab.fromJson(castMap(remappedJson));
     }).toList();
   }
 
@@ -181,8 +179,7 @@ class TabsRepository {
       final tabs = <OpenedTab>[];
       for (final e in rawTabs) {
         try {
-          final tab = _tabFromJson(castMap(e));
-          if (tab != null) tabs.add(tab);
+          tabs.add(OpenedTab.fromJson(castMap(e)));
         } catch (tabError) {
           debugPrint('⚠️ Skipping tab that failed to restore: $tabError');
         }
@@ -192,17 +189,6 @@ class TabsRepository {
       debugPrint('⚠️ Error loading tabs from disk: $e');
       return [];
     }
-  }
-
-  /// כמו OpenedTab.fromJson אבל תומך גם ב-CommentatorsTab וב-PdfCommentatorsTab.
-  OpenedTab? _tabFromJson(Map<String, dynamic> json) {
-    if (json['type'] == 'CommentatorsTab') {
-      return CommentatorsTab.fromJson(json);
-    }
-    if (json['type'] == 'PdfCommentatorsTab') {
-      return PdfCommentatorsTab.fromJson(json);
-    }
-    return OpenedTab.fromJson(json);
   }
 
   int loadCurrentTabIndex() {

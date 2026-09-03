@@ -1,7 +1,5 @@
 import 'package:flutter/foundation.dart';
 import 'package:otzaria/tabs/models/tab.dart';
-import 'package:otzaria/tabs/models/commentators_tab.dart';
-import 'package:otzaria/tabs/models/pdf_commentators_tab.dart';
 import 'package:otzaria/utils/file/hive_utils.dart';
 
 /// טאב המציג בדיוק שתי חלוניות זו לצד זו, עם מפריד ניתן לגרירה.
@@ -97,14 +95,7 @@ class CombinedTab extends OpenedTab {
 OpenedTab decodeCombinedTab(Map<String, dynamic> json) {
   OpenedTab? decodePane(dynamic raw) {
     try {
-      final map = castMap(raw);
-      if (map['type'] == 'PdfCommentatorsTab') {
-        return PdfCommentatorsTab.fromJson(map);
-      }
-      if (map['type'] == 'CommentatorsTab') {
-        return CommentatorsTab.fromJson(map);
-      }
-      return OpenedTab.fromJson(map);
+      return OpenedTab.fromJson(castMap(raw));
     } catch (e) {
       debugPrint('⚠️ Skipping split pane that failed to restore: $e');
       return null;

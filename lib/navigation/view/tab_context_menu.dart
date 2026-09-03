@@ -159,11 +159,11 @@ List<AppContextMenuEntry> buildTabContextMenuEntries(
     // תת-תפריט של החלונות הפתוחים האחרים, בדיוק כמו "הצג לצד". מופיע רק
     // כשיש לאן להעביר — פריט מושבת לא היה מוסיף מידע.
     if (MultiWindowService.isSupported &&
-        MultiWindowService.knownPeers.isNotEmpty)
+        MultiWindowService.transferTargets.isNotEmpty)
       AppContextMenuEntry(
         label: context.settingsText('העבר לחלון קיים'),
         children: [
-          for (final peer in MultiWindowService.knownPeers)
+          for (final peer in MultiWindowService.transferTargets)
             AppContextMenuEntry(
               label: peer.tabCount > 1
                   ? '${peer.title}  (${peer.tabCount} כרטיסיות)'

@@ -1,7 +1,6 @@
 import 'package:equatable/equatable.dart';
 import 'package:flutter/foundation.dart';
 import 'package:otzaria/tabs/models/tab.dart';
-import 'package:otzaria/tabs/models/commentators_tab.dart';
 import 'package:otzaria/tabs/models/combined_tab.dart';
 import 'package:otzaria/tabs/models/pdf_commentators_tab.dart';
 import 'package:otzaria/utils/file/hive_utils.dart';
@@ -87,12 +86,12 @@ class Workspace extends Equatable {
 
   factory Workspace.fromJson(Map<String, dynamic> json) {
     OpenedTab? decodeTab(Map<String, dynamic> map) {
-      // הסינון לפני הפענוח, כי `OpenedTab.fromJson` אינו מכיר את הטיפוס.
+      // ⚠️ סינון מדיניות ולא מגבלת מפענח: `OpenedTab.fromJson` **כן** מכיר
+      // את הטיפוס, אבל שחזור טאב מפרשי PDF בשולחן עבודה בונה `sourceTab`
+      // חדש במקום להתחבר לספר החי (ראו [_withoutPdfCommentators]).
       if (map['type'] == 'PdfCommentatorsTab') return null;
       try {
-        return map['type'] == 'CommentatorsTab'
-            ? CommentatorsTab.fromJson(map)
-            : OpenedTab.fromJson(map);
+        return OpenedTab.fromJson(map);
       } catch (e) {
         // טאב בודד פגום (למשל טיפוס מגרסה חדשה יותר) לא יפיל את פענוח
         // שולחן העבודה כולו.

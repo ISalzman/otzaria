@@ -2,6 +2,8 @@ import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/core/windowing/multi_window_service.dart';
+import 'package:otzaria/core/windowing/window_bus.dart';
+import 'package:otzaria/tabs/models/combined_tab.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/tabs/models/tool_tab.dart';
 
@@ -99,6 +101,43 @@ void main() {
       // ⚠️ זו ההגנה מפני אובדן: בלעדיה כרטיסיה שלא ניתנת לשחזור הייתה
       // נעלמת מהחלון המקורי ולא נפתחת בחדש.
       expect(MultiWindowService.canTransfer(_UnserializableTab()), isFalse);
+    });
+
+    test('טאב מפוצל שאיבד חלונית נחסם — "לא זרק" אינו "נאמן"', () {
+      // ⚠️ `decodeCombinedTab` בולע חלונית שנכשלה ומחזיר את השורדת. זו
+      // התנהגות נכונה בשחזור מדיסק — עדיף חצי ספר מכלום — ואובדן מידע
+      // בהעברה, כי הכרטיסיה כבר נמחקת מהמקור. הבדיקה הקודמת בדקה רק
+      // שהסריאליזציה אינה זורקת, ולכן פיצול חצי היה עובר אותה.
+      final half = CombinedTab(
+        rightTab: ToolTab(toolId: 'acronyms', title: 'ראשי תיבות'),
+        leftTab: _UnserializableTab(),
+      );
+      expect(MultiWindowService.canTransfer(half), isFalse);
+    });
+
+    test('טאב מפוצל ששתי חלוניותיו שורדות עובר', () {
+      final whole = CombinedTab(
+        rightTab: ToolTab(toolId: 'acronyms', title: 'ראשי תיבות'),
+        leftTab: ToolTab(toolId: 'gematria', title: 'גימטריה'),
+      );
+      expect(MultiWindowService.canTransfer(whole), isTrue);
+    });
+  });
+
+  group('transferTargets', () {
+    tearDown(() => MultiWindowService.knownPeers = const []);
+
+    test('חלון מוסתר אינו יעד להעברה', () {
+      // ⚠️ חלון שהמשתמש סגר מוסתר ולא נהרס וממשיך לענות על האפיק, ולכן
+      // הופיע ב"העבר לחלון קיים", אישר קבלה, והמקור מחק את הכרטיסיה.
+      MultiWindowService.knownPeers = const [
+        WindowPeer(slot: 2, title: 'פתוח', tabCount: 1),
+        WindowPeer(slot: 3, title: 'סגור', tabCount: 4, isVisible: false),
+      ];
+      expect(
+        MultiWindowService.transferTargets.map((p) => p.slot),
+        [2],
+      );
     });
   });
 }

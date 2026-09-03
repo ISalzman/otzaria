@@ -28,7 +28,7 @@ import 'package:otzaria/tabs/bloc/tabs_event.dart';
 import 'package:otzaria/tabs/models/pdf_tab.dart';
 import 'package:otzaria/tabs/models/combined_tab.dart';
 import 'package:otzaria/tabs/models/searching_tab.dart';
-import 'package:otzaria/core/ui_snack.dart';
+import 'package:otzaria/core/windowing/cross_window_tab_drag.dart';
 import 'package:otzaria/core/windowing/multi_window_service.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/tabs/models/tool_tab.dart';
@@ -592,18 +592,14 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
       // רק אם הוא משתהה מעל כרטיסיה אחרת.
       onDragStarted: (draggedTab) {
         _pendingTabSelection = null;
-        _draggedTabTitle = draggedTab.title;
-        // התצוגה הנייטיבית מתחילה כאן ומסתיימת בכל מסלולי הסיום — היא
-        // מוצגת רק כשהסמן יוצא מהחלון, ולכן אין כפילות מול ה-feedback.
-        unawaited(const MultiWindowService().beginTabDrag(draggedTab.title));
-        _startCrossWindowDragTracking();
+        _crossWindowDrag.begin(draggedTab.title);
       },
-      onDragFinishedAnywhere: () {
-        _stopCrossWindowDragTracking();
-        unawaited(const MultiWindowService().endTabDrag());
-      },
+      onDragFinishedAnywhere: _crossWindowDrag.end,
       onDroppedOutside: MultiWindowService.isSupported
-          ? (tab) => _handleTabDroppedOutside(context, tab)
+          ? (tab) => _crossWindowDrag.handleDroppedOutside(
+              tab,
+              context.read<TabsBloc>(),
+            )
           : null,
       onSpringOpen: (tab) {
         // ה-state שנתפס ב-build עלול להיות מיושן באמצע גרירה, ורק קריאה
@@ -1279,125 +1275,13 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
     );
   }
 
+  /// גרירת כרטיסיה מחוץ לחלון — ראו [CrossWindowTabDrag].
+  final CrossWindowTabDrag _crossWindowDrag = CrossWindowTabDrag();
+
   @override
   void dispose() {
-    // ⚠️ הטיימר חייב להיעצר: הוא שולח בקשות אפיק כל 60ms, ולולאה שנשארה
-    // אחרי שהחלון נסגר מציפה חלונות אחרים בהודעות גרירה על גרירה שאיננה.
-    _crossWindowDragTimer?.cancel();
+    _crossWindowDrag.dispose();
     super.dispose();
-  }
-
-  /// כותרת הכרטיסיה הנגררת כרגע, לשליחה לחלון היעד.
-  String? _draggedTabTitle;
-
-  /// עוקב אחרי הגרירה ומודיע לחלון שמתחת לסמן.
-  Timer? _crossWindowDragTimer;
-
-  /// החלון שקיבל את ההודעה האחרונה, כדי לנקות את החיווי כשעוזבים אותו.
-  int? _lastDragOverSlot;
-
-  /// מיקום ההכנסה שהחלון היעד דיווח עליו, לשימוש בשחרור.
-  int? _remoteDropIndex;
-
-  /// מתחיל להודיע לחלונות אחרים על גרירה שעוברת מעליהם.
-  ///
-  /// ⚠️ קצב קבוע ולא `onDragUpdate`: `Draggable` מדווח עשרות עדכונים
-  /// בשנייה, וכל אחד היה קריאת ערוץ ובקשת אפיק. 60ms מספיקים כדי שהחיווי
-  /// ירגיש רציף, ומורידים את התעבורה בסדר גודל.
-  void _startCrossWindowDragTracking() {
-    if (!MultiWindowService.isSupported) return;
-    _crossWindowDragTimer?.cancel();
-    _crossWindowDragTimer = Timer.periodic(
-      const Duration(milliseconds: 60),
-      (_) => unawaited(_reportDragPosition()),
-    );
-  }
-
-  void _stopCrossWindowDragTracking() {
-    _crossWindowDragTimer?.cancel();
-    _crossWindowDragTimer = null;
-    final last = _lastDragOverSlot;
-    if (last != null) const MultiWindowService().notifyDragLeave(last);
-    _lastDragOverSlot = null;
-    _draggedTabTitle = null;
-    // ⚠️ `_remoteDropIndex` **אינו** מתאפס כאן: `onDragFinishedAnywhere`
-    // יורה לפני `onDroppedOutside`, וזה האחרון צריך את המיקום.
-  }
-
-  Future<void> _reportDragPosition() async {
-    final title = _draggedTabTitle;
-    if (title == null) return;
-    final service = const MultiWindowService();
-    final target = await service.windowAtCursor();
-    final slot = target.isSelf ? null : target.slot;
-
-    if (_lastDragOverSlot != null && _lastDragOverSlot != slot) {
-      service.notifyDragLeave(_lastDragOverSlot!);
-      _remoteDropIndex = null;
-    }
-    _lastDragOverSlot = slot;
-    if (slot == null) return;
-
-    _remoteDropIndex = await service.notifyDragOver(
-      slot,
-      target.x,
-      target.y,
-      title,
-    );
-  }
-
-  /// כרטיסיה שוחררה מחוץ לכל יעד הפלה — ייתכן מחוץ לחלון.
-  ///
-  /// ⚠️ Flutter אינו יודע דבר מחוץ לחלון שלו, ולכן השאלה "לאן שוחררה"
-  /// נשאלת מ-Win32: מה נמצא תחת הסמן ברגע השחרור.
-  ///
-  /// שלוש תוצאות:
-  /// * מעל החלון הזה עצמו — שחרור בתוך החלון שלא פגע ביעד. אין לעשות דבר,
-  ///   אחרת כל גרירה שהתפספסה הייתה פותחת חלון.
-  /// * מעל חלון אוצריא אחר — הכרטיסיה עוברת אליו.
-  /// * מעל שולחן העבודה או תוכנה אחרת — נפתח חלון חדש, כמו בדפדפן.
-  Future<void> _handleTabDroppedOutside(
-    BuildContext context,
-    OpenedTab tab,
-  ) async {
-    final tabsBloc = context.read<TabsBloc>();
-    final service = const MultiWindowService();
-
-    final target = await service.windowAtCursor();
-    if (target.isSelf) return;
-
-    // ⚠️ נבדק לפני כל ניסיון העברה. כרטיסיה שאינה שורדת סריאליזציה הייתה
-    // נעלמת מכאן ולא נפתחת שם.
-    if (!MultiWindowService.canTransfer(tab)) {
-      UiSnack.showError('לא ניתן להעביר את הכרטיסיה הזו לחלון אחר');
-      return;
-    }
-
-    // כרטיסיה אחרונה בחלון: גרירתה החוצה הייתה משאירה חלון ריק ופותחת
-    // חדש — תזוזה בלי תועלת.
-    if (target.slot == null && tabsBloc.state.tabs.length <= 1) return;
-
-    // מיקום ההכנסה שהחלון היעד דיווח עליו בזמן הגרירה — כך השחרור על
-    // רצועת הכרטיסיות שלו ממזג למקום מדויק ולא רק מוסיף בסוף.
-    final dropIndex = _remoteDropIndex;
-    _remoteDropIndex = null;
-
-    final moved = target.slot != null
-        ? await service.sendTabToWindow(target.slot!, tab, index: dropIndex)
-        : await service.openWindow(tab: tab);
-
-    if (moved) {
-      tabsBloc.add(RemoveTab(tab));
-      return;
-    }
-    final info = await service.windowCount();
-    if (info.count >= info.max) {
-      UiSnack.show(
-        'אפשר לפתוח עד ${info.max} חלונות. סגור חלון כדי לפתוח חדש.',
-      );
-    } else {
-      UiSnack.showError('העברת הכרטיסיה נכשלה');
-    }
   }
 
   List<AppContextMenuEntry> _buildTabContextMenuEntries(

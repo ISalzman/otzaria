@@ -570,6 +570,21 @@ bool FlutterWindow::OnCreate() {
               flutter::EncodableValue(static_cast<int>(cursor.x));
           info[flutter::EncodableValue("y")] =
               flutter::EncodableValue(static_cast<int>(cursor.y));
+          // ⚠️ שורת המשימות מדווחת בנפרד. היא נגישה גם כשהחלון ממוקסם,
+          // ולכן שחרור עליה הוא כמעט תמיד החטאה ולא בקשה לפתוח חלון —
+          // ומשתמש בחלון יחיד שאינו מכיר את הפיצ'ר גילה פתאום חלון שני.
+          wchar_t class_name[64] = {0};
+          if (under) {
+            ::GetClassNameW(under, class_name,
+                            sizeof(class_name) / sizeof(class_name[0]));
+          }
+          const bool is_shell_tray =
+              ::wcscmp(class_name, L"Shell_TrayWnd") == 0 ||
+              ::wcscmp(class_name, L"Shell_SecondaryTrayWnd") == 0 ||
+              ::wcscmp(class_name, L"TopLevelWindowForOverflowXamlIsland") == 0;
+          info[flutter::EncodableValue("isShellTray")] =
+              flutter::EncodableValue(is_shell_tray);
+
           const auto& slots = WindowSlots();
           const auto it = slots.find(under);
           if (it != slots.end() && ::IsWindowVisible(under)) {
@@ -643,6 +658,23 @@ bool FlutterWindow::OnCreate() {
           result->Success();
           return;
         }
+        // אילו חלונות אוצריא **מוצגים** על המסך כרגע.
+        //
+        // ⚠️ נדרש כי חלון שהמשתמש סגר מוסתר ולא נהרס, וה-isolate שלו
+        // ממשיך לענות על האפיק. בלי ההבחנה הזו חלון סגור המשיך להופיע
+        // ב"העבר לחלון קיים", אישר קבלת כרטיסיה, והמקור מחק אותה. חלון
+        // מוסתר אינו יודע שהוסתר, ולכן התשובה חייבת לבוא מכאן.
+        if (call.method_name() == "visibleSlots") {
+          flutter::EncodableList slots;
+          for (const auto& entry : WindowSlots()) {
+            if (::IsWindow(entry.first) && ::IsWindowVisible(entry.first)) {
+              slots.push_back(flutter::EncodableValue(entry.second));
+            }
+          }
+          result->Success(flutter::EncodableValue(slots));
+          return;
+        }
+
         if (call.method_name() != "openWindow") {
           result->NotImplemented();
           return;
@@ -652,9 +684,7 @@ bool FlutterWindow::OnCreate() {
           return;
         }
         // הארגומנט הוא מפה: המטען, ומידות שהחלון החדש יורש מהפותח.
-        std::string payload;
-        int width = 0;
-        int height = 0;
+        PendingSecondaryWindow pending;
         if (const auto* args =
                 std::get_if<flutter::EncodableMap>(call.arguments())) {
           const auto payload_it =
@@ -662,28 +692,33 @@ bool FlutterWindow::OnCreate() {
           if (payload_it != args->end()) {
             if (const auto* value =
                     std::get_if<std::string>(&payload_it->second)) {
-              payload = *value;
+              pending.payload = *value;
             }
           }
           const auto w_it = args->find(flutter::EncodableValue("width"));
           if (w_it != args->end()) {
-            if (const auto* v = std::get_if<int>(&w_it->second)) width = *v;
+            if (const auto* v = std::get_if<int>(&w_it->second)) {
+              pending.width = *v;
+            }
           }
           const auto h_it = args->find(flutter::EncodableValue("height"));
           if (h_it != args->end()) {
-            if (const auto* v = std::get_if<int>(&h_it->second)) height = *v;
+            if (const auto* v = std::get_if<int>(&h_it->second)) {
+              pending.height = *v;
+            }
           }
         }
-        pending_secondary_width_ = width;
-        pending_secondary_height_ = height;
         // ⚠️ הבקשה מתפרסמת ל-thread של החלון ואינה מבוצעת כאן ישירות.
         // הקריאה מגיעה מתוך טיפול בערוץ, כלומר מתוך ריצת ה-Dart של החלון
         // הזה; יצירת מנוע נוסף באמצע היא ריאנטרנטית. `PostMessage` דוחה
         // אותה לאיטרציה הבאה של לולאת ההודעות, כשה-isolate כבר לא בתוך
         // הקריאה.
-        pending_secondary_payloads_.push(payload);
+        //
+        // ⚠️ ה-`result` נוסע איתה ונענה שם. Dart מוחק את הכרטיסיה על סמך
+        // התשובה הזו, ולכן היא חייבת לתאר את מה שקרה בפועל.
+        pending.result = std::move(result);
+        pending_secondary_windows_.push(std::move(pending));
         ::PostMessageW(GetHandle(), kMsgOpenSecondaryWindow, 0, 0);
-        result->Success(flutter::EncodableValue(true));
       });
 
   process_control_channel_ =
@@ -890,6 +925,18 @@ void FlutterWindow::OnDestroy() {
   // before the main window is revealed). The splash is closed via the
   // "otzaria/splash" channel when Dart reveals the main window (or its 8s
   // failsafe). On process exit the OS tears down the splash thread/window.
+  // ⚠️ בקשות פתיחה שלא בוצעו חייבות לקבל תשובה. `MethodResult` שנהרס בלי
+  // מענה משאיר את ה-`Future` בצד Dart תלוי לנצח, ואיתו את מסלול העברת
+  // הכרטיסיה שממתין לו.
+  while (!pending_secondary_windows_.empty()) {
+    auto pending = std::move(pending_secondary_windows_.front());
+    pending_secondary_windows_.pop();
+    if (pending.result) {
+      pending.result->Success(flutter::EncodableValue(false));
+    }
+  }
+  if (const HWND self = GetHandle()) WindowSlots().erase(self);
+
   splash_channel_.reset();
   multiwindow_channel_.reset();
   jumplist_channel_.reset();
@@ -995,14 +1042,17 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
   // נפתח לפני שמעבירים ל-Flutter: זו הודעה פרטית שלנו, ואין לתוספים מה
   // לעשות איתה.
   if (message == kMsgOpenSecondaryWindow) {
-    std::string payload;
-    if (!pending_secondary_payloads_.empty()) {
-      payload = pending_secondary_payloads_.front();
-      pending_secondary_payloads_.pop();
+    if (pending_secondary_windows_.empty()) return 0;
+    PendingSecondaryWindow pending =
+        std::move(pending_secondary_windows_.front());
+    pending_secondary_windows_.pop();
+    const bool created = CreateSecondaryWindowOnThisThread(
+        project_, pending.payload, pending.width, pending.height);
+    // ⚠️ **כאן** נענה Dart, ולא בטיפול בערוץ. זו התשובה שעל פיה הוא מוחק
+    // את הכרטיסיה מהחלון המקורי.
+    if (pending.result) {
+      pending.result->Success(flutter::EncodableValue(created));
     }
-    CreateSecondaryWindowOnThisThread(project_, payload,
-                                      pending_secondary_width_,
-                                      pending_secondary_height_);
     return 0;
   }
 

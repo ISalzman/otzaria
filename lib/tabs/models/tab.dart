@@ -6,6 +6,8 @@ import 'package:otzaria/tabs/models/pdf_tab.dart';
 import 'package:otzaria/tabs/models/searching_tab.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/tabs/models/combined_tab.dart';
+import 'package:otzaria/tabs/models/commentators_tab.dart';
+import 'package:otzaria/tabs/models/pdf_commentators_tab.dart';
 import 'package:otzaria/tabs/models/tool_tab.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
@@ -209,9 +211,18 @@ abstract class OpenedTab {
     throw UnsupportedError("Unsupported book type: ${book.runtimeType}");
   }
 
+  /// המפענח **היחיד** של טאב שמור.
+  ///
+  /// ⚠️ קודם לכן הוא הכיר חמישה טיפוסים בלבד, ושלושה קוראים עקפו אותו עם
+  /// מפענחים מקבילים משלהם (`TabsRepository`, `Workspace.fromJson`,
+  /// `decodeCombinedTab`). התוצאה: כרטיסיית מפרשים לא הייתה ניתנת להעברה
+  /// בין חלונות — `canTransfer` חסם אותה — בעוד אותה כרטיסיה בדיוק כן
+  /// נטענה מהדיסק, כי המסלול הזה עבר במפענח אחר. שכפול של טבלת טיפוסים
+  /// מתיישן בכיוונים שונים, וזו בדיוק הדרך שבה זה קרה.
+  ///
   /// טיפוס לא מוכר זורק ולא נופל בשקט ל-[SearchingTab]: נפילה כזו יצרה טאב
   /// רפאים בשם הכלי/הספר בכל ירידת גרסה, וההצפה נשמרה חזרה לדיסק. הקוראים
-  /// (`TabsRepository.loadTabs`, `Workspace.decodeTab`) מדלגים על טאב שנכשל.
+  /// (`TabsRepository.loadTabs`, `Workspace.fromJson`) מדלגים על טאב שנכשל.
   factory OpenedTab.fromJson(Map<String, dynamic> json) {
     String type = json['type'];
     if (type == 'TextBookTab') {
@@ -224,6 +235,10 @@ abstract class OpenedTab {
       return ToolTab.fromJson(json);
     } else if (type == 'SearchingTabWindow' || type == 'SearchingTab') {
       return SearchingTab.fromJson(json);
+    } else if (type == 'CommentatorsTab') {
+      return CommentatorsTab.fromJson(json);
+    } else if (type == 'PdfCommentatorsTab') {
+      return PdfCommentatorsTab.fromJson(json);
     }
     throw FormatException('Unknown tab type: $type');
   }

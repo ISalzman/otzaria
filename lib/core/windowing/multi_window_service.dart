@@ -7,17 +7,33 @@ import 'package:flutter/services.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:hive_ce/hive.dart';
 import 'package:otzaria/core/windowing/window_bus.dart';
+import 'package:otzaria/tabs/models/combined_tab.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 
 /// פותח חלונות אוצריא נוספים.
 ///
-/// כל חלון הוא `FlutterEngine` נפרד, ב-isolate נפרד, על thread ייעודי משלו —
-/// **באותו תהליך** (מודל A; ראו `docs/P-0-stage3-result.md`). ה-runner הוא
-/// שיוצר את החלון, כי יצירת thread ולולאת הודעות אינן זמינות מ-Dart.
+/// כל חלון הוא `FlutterEngine` נפרד, ב-isolate נפרד, **באותו תהליך**
+/// (מודל A; ראו `docs/P-0-stage3-result.md`). ה-runner הוא שיוצר את החלון,
+/// כי יצירת חלון ולולאת הודעות אינן זמינות מ-Dart.
 ///
-/// ⚠️ ה-thread הייעודי אינו פרט מימוש שאפשר לוותר עליו: ב-Flutter 3.47
-/// ה-platform thread וה-UI thread ממוזגים, ולכן שני מנועים על אותו thread
-/// חוסמים זה את זה. נמדד 2092ms הקפאה מול 102ms כשיש thread לכל מנוע.
+/// ## ⚠️ כל המנועים חולקים את ה-thread הראשי. זהו חוב פתוח.
+///
+/// ההכרעה במודל A נשענה על thread ייעודי לכל מנוע — נמדד 102ms השהיה מול
+/// 2,092ms ב-thread משותף, פי 20. **המימוש לא הצליח לספק אותו:** יצירת
+/// מנוע על thread ייעודי קורסת בעקביות ברגע שהחלון הראשון רץ
+/// (`Isolate main is already scheduled on mutator thread`), וזהו גם מה
+/// שעושה `desktop_multi_window`. ראו ההערה ב-
+/// `CreateSecondaryWindowOnThisThread`.
+///
+/// המשמעות המעשית: **חלון עסוק יכול להקפיא את השני.** התוכנה רצה בתצורת
+/// הבקרה, זו של 2,092ms. גרסה קודמת של התיעוד כאן הצהירה על ה-thread
+/// הייעודי כעל עובדה ש"אינה פרט מימוש שאפשר לוותר עליו", וה-runner אמר את
+/// ההפך המדויק — כלומר קוד היצור ניתב את המתחזק אל טענה שגויה.
+///
+/// זו המשימה הראשונה בהמשך: למדוד p95 זמן פריים בחלון סרק בזמן שהשני עסוק
+/// (בדיקה 10 של P-2, שטרם הורצה מול המימוש). שתי דרכים לא-בדוקות אם
+/// ההרעה גדולה מפי 2: יצירה על ה-thread הראשי ואז העברת בעלות ל-thread
+/// ייעודי, או הדגל `RunOnSeparateThread` — שעובד אך המנוע מכריז שיוסר.
 class MultiWindowService {
   const MultiWindowService();
 
@@ -36,8 +52,12 @@ class MultiWindowService {
 
   /// פותח חלון חדש, ואם [tab] אינו null — עם אותו טאב פתוח בו.
   ///
-  /// מחזיר true אם הבקשה נמסרה ל-runner. הצלחת המסירה אינה מבטיחה שהחלון
-  /// עלה: הוא נוצר על thread אחר ובאופן אסינכרוני.
+  /// מחזיר true רק אחרי שהחלון **נוצר בפועל** (או שחלון מוסתר הוחזר
+  /// לשימוש). ה-runner עונה מלולאת ההודעות שלו, אחרי היצירה.
+  ///
+  /// ⚠️ קודם לכן הוא החזיר true מיד אחרי הכנסת הבקשה לתור, וערך ההחזרה של
+  /// היצירה עצמה נזרק. שני אתרי הקריאה מוחקים את הכרטיסיה על סמך התשובה
+  /// הזו — כלומר כרטיסיה נמחקה על סמך הצלחה שלא נבדקה.
   Future<bool> openWindow({OpenedTab? tab}) async {
     if (!isSupported) return false;
     try {
@@ -50,12 +70,18 @@ class MultiWindowService {
       } catch (_) {
         // בלי מידות ה-runner ייצור בגודל ברירת מחדל.
       }
-      final opened = await _channel.invokeMethod<bool>('openWindow', {
-        'payload': _encodePayload(tab),
-        if (inherited != null) 'width': inherited.width.round(),
-        if (inherited != null) 'height': inherited.height.round(),
-      });
-      // false פירושו שהתקרה הושגה — ה-runner הוא מקור האמת למספר החלונות.
+      final opened = await _channel
+          .invokeMethod<bool>('openWindow', {
+            'payload': _encodePayload(tab),
+            if (inherited != null) 'width': inherited.width.round(),
+            if (inherited != null) 'height': inherited.height.round(),
+          })
+          // ⚠️ רשת ביטחון. התשובה מגיעה מלולאת ההודעות של ה-runner,
+          // ואם החלון הפותח נהרס לפני שההודעה טופלה — אין מי שיענה.
+          // בלי ה-timeout מסלול העברת הכרטיסיה נשאר תלוי לנצח.
+          .timeout(const Duration(seconds: 20), onTimeout: () => false);
+      // false פירושו שהתקרה הושגה, או שהיצירה נכשלה — ה-runner הוא מקור
+      // האמת לשניהם.
       return opened ?? false;
     } on PlatformException catch (e) {
       debugPrint('openWindow failed: ${e.code} ${e.message}');
@@ -63,6 +89,25 @@ class MultiWindowService {
     } on MissingPluginException {
       // ה-runner בגרסה זו אינו מכיר את הערוץ — למשל בבדיקות widget.
       return false;
+    }
+  }
+
+  /// המשבצות של חלונות אוצריא **שמוצגים על המסך** כרגע.
+  ///
+  /// ⚠️ "עונה על האפיק" אינו "פתוח": חלון שהמשתמש סגר מוסתר ולא נהרס,
+  /// וה-isolate שלו ממשיך לענות. הנראות נמדדת בנייטיב, כי חלון מוסתר אינו
+  /// יודע שהוסתר.
+  ///
+  /// מחזיר null כשלא ניתן היה לברר — אז אין לסנן, כי סינון על סמך מידע
+  /// חסר היה מסתיר חלונות פתוחים מהתפריט.
+  Future<Set<int>?> visibleSlots() async {
+    if (!isSupported) return null;
+    try {
+      final slots = await _channel.invokeListMethod<int>('visibleSlots');
+      return slots?.toSet();
+    } catch (e) {
+      debugPrint('visibleSlots failed: $e');
+      return null;
     }
   }
 
@@ -183,24 +228,33 @@ class MultiWindowService {
   /// [slot] הוא משבצת חלון אוצריא, או null כשהסמן מעל שולחן העבודה או מעל
   /// תוכנה אחרת. [isSelf] מבדיל בין שחרור מעל החלון שממנו גוררים לבין
   /// שחרור מעל חלון אחר.
-  Future<({int? slot, bool isSelf, int x, int y})> windowAtCursor() async {
-    if (!isSupported) return (slot: null, isSelf: false, x: 0, y: 0);
+  ///
+  /// [isShellTray] הוא שורת המשימות של Windows (או חלון קופץ שלה). היא
+  /// מדווחת בנפרד כי שחרור מעליה אינו מחווה של "פתח חלון כאן": היא נגישה
+  /// גם בחלון ממוקסם, וקודם לכן שחרור עליה פתח חלון שני והכרטיסיה עזבה.
+  Future<({int? slot, bool isSelf, bool isShellTray, int x, int y})>
+  windowAtCursor() async {
+    if (!isSupported) return _noTarget;
     try {
       final info = await _channel.invokeMapMethod<String, dynamic>(
         'windowAtCursor',
       );
-      if (info == null) return (slot: null, isSelf: false, x: 0, y: 0);
+      if (info == null) return _noTarget;
       return (
         slot: info['slot'] as int?,
         isSelf: info['isSelf'] == true,
+        isShellTray: info['isShellTray'] == true,
         x: (info['x'] as int?) ?? 0,
         y: (info['y'] as int?) ?? 0,
       );
     } catch (e) {
       debugPrint('windowAtCursor failed: $e');
-      return (slot: null, isSelf: false, x: 0, y: 0);
+      return _noTarget;
     }
   }
+
+  static const ({int? slot, bool isSelf, bool isShellTray, int x, int y})
+  _noTarget = (slot: null, isSelf: false, isShellTray: false, x: 0, y: 0);
 
   /// סוגר את החלון הנוכחי בלי לסיים את התהליך.
   ///
@@ -332,8 +386,22 @@ class MultiWindowService {
     return result == true;
   }
 
-  /// החלונות האחרים הפתוחים, לתצוגה בתת-תפריט.
-  Future<List<WindowPeer>> otherWindows() => WindowBus.instance.peers();
+  /// החלונות האחרים שעונים על האפיק, עם סימון נראות.
+  ///
+  /// ⚠️ שני מקורות, ובמכוון: מי **עונה** נקבע באפיק (רק חלון חי עונה), ומי
+  /// **מוצג** נקבע בנייטיב. חלון סגור עונה ואינו מוצג, ולכן אסור להציע
+  /// אותו כיעד לכרטיסיה — הוא היה מאשר קבלה, המקור היה מוחק, והכרטיסיה
+  /// הייתה נמחקת כשהחלון יוחזר לשימוש.
+  Future<List<WindowPeer>> otherWindows() async {
+    final peers = await WindowBus.instance.peers();
+    if (peers.isEmpty) return peers;
+    final visible = await visibleSlots();
+    if (visible == null) return peers;
+    return [
+      for (final peer in peers)
+        peer.copyWith(isVisible: visible.contains(peer.slot)),
+    ];
+  }
 
   /// הרשימה האחרונה שנסרקה, לשימוש מקוד **סינכרוני**.
   ///
@@ -342,6 +410,14 @@ class MultiWindowService {
   /// מסוכנת: שליחה לחלון שנסגר בינתיים נכשלת ומדווחת למשתמש, ולא מאבדת
   /// את הכרטיסיה.
   static List<WindowPeer> knownPeers = const [];
+
+  /// החלונות שאפשר להעביר אליהם כרטיסיה — מוצגים על המסך בלבד.
+  ///
+  /// ⚠️ זה הסינון שמונע את מסלול האובדן: חלון שהמשתמש סגר עדיין עונה
+  /// באפיק, ולכן הופיע בתפריט, אישר קבלה, והמקור מחק את הכרטיסיה. היא חיה
+  /// בחלון בלתי-נראה ונמחקה סופית כשהוא הוחזר לשימוש.
+  static List<WindowPeer> get transferTargets =>
+      knownPeers.where((peer) => peer.isVisible).toList();
 
   /// האם המטען מכיל כרטיסיה, בלי לפענח אותה.
   ///
@@ -362,9 +438,22 @@ class MultiWindowService {
   /// ⚠️ נבדק **לפני** שמסירים אותה מהחלון המקורי. כרטיסיה שאינה ניתנת
   /// לשחזור הייתה נעלמת מהמקור ולא נפתחת ביעד — כלומר אובדן מידע. עדיף
   /// לא להעביר מאשר לאבד.
+  ///
+  /// ⚠️ "לא זרק" אינו "נאמן". טאב מפוצל עובר את הבדיקה גם כשחלונית אחת
+  /// נכשלה: `decodeCombinedTab` בולע אותה ומחזיר את השורדת — התנהגות
+  /// נכונה בשחזור מדיסק (עדיף חצי ספר מכלום), ואובדן מידע בהעברה (הכרטיסיה
+  /// כבר נמחקת מהמקור). לכן נבדק גם **מבנה** התוצאה ולא רק היעדר חריגה.
   static bool canTransfer(OpenedTab tab) {
     try {
-      OpenedTab.fromJson(Map<String, dynamic>.from(tab.toJson()));
+      final restored = OpenedTab.fromJson(
+        Map<String, dynamic>.from(tab.toJson()),
+      );
+      if (tab is CombinedTab && restored is! CombinedTab) {
+        debugPrint(
+          'canTransfer: טאב מפוצל איבד חלונית בסריאליזציה — לא מועבר',
+        );
+        return false;
+      }
       return true;
     } catch (e) {
       debugPrint('canTransfer failed for ${tab.runtimeType}: $e');
