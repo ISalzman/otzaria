@@ -818,6 +818,7 @@ dart format lib/file.dart    # Format ONLY files you modified
 | Area | Test File |
 |------|-----------|
 | Navigation BLoC | `test/navigation/navigation_bloc_test.dart` |
+| תפריט ההקשר של כרטיסיה (משותף לרצועה העליונה ולעמודה) | `test/navigation/tab_context_menu_test.dart` |
 | Startup guard / auto-reindex | `test/navigation/startup_work_gate_test.dart`, `…startup_auto_reindex_test.dart`, `…new_books_indexing_guard_test.dart` |
 
 **Other Features**

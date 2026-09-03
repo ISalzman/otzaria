@@ -119,10 +119,7 @@ List<AppContextMenuEntry> buildTabContextMenuEntries(
     ),
     AppContextMenuEntry(
       label: context.settingsText('סגור את האחרים'),
-      onTap: () {
-        final current = state.currentTab;
-        if (current != null) closeOtherTabsConfirmed(context, current);
-      },
+      onTap: () => closeOtherTabsConfirmed(context, tab),
     ),
     if (tab is! ToolTab || tab.isBuiltIn)
       AppContextMenuEntry(
