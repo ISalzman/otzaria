@@ -3,6 +3,7 @@ import 'dart:isolate';
 
 import 'package:archive/archive_io.dart';
 import 'package:otzaria/utils/file/archive_extractor.dart';
+import 'package:otzaria/utils/text/byte_size_text.dart';
 import 'package:path/path.dart' as path;
 import 'package:logging/logging.dart';
 
@@ -72,7 +73,10 @@ class ZipExtractorService {
         final fileSizeMB = (fileSize / 1024 / 1024).toStringAsFixed(1);
         _log.info('גודל קובץ ZIP: $fileSize bytes ($fileSizeMB MB)');
 
-        onProgress?.call(0.1, 'מתחיל חילוץ ($fileSizeMB MB)...');
+        onProgress?.call(
+          0.1,
+          'מתחיל חילוץ (${formatMegabytesLtr(fileSize)})...',
+        );
 
         // חילוץ בזרימה מהקובץ, בלי לטעון את הארכיון כולו לזיכרון.
         try {
@@ -81,7 +85,10 @@ class ZipExtractorService {
           onProgress?.call(0.95, 'משלים חילוץ...');
         } catch (e) {
           _log.severe('שגיאה בחילוץ בזרימה, מנסה שיטה חלופית', e);
-          onProgress?.call(0.1, 'קורא קובץ דחוס ($fileSizeMB MB)...');
+          onProgress?.call(
+            0.1,
+            'קורא קובץ דחוס (${formatMegabytesLtr(fileSize)})...',
+          );
           await _extractManuallyInIsolate(zipFile.path, targetDir, onProgress);
         }
 
@@ -197,8 +204,7 @@ class ZipExtractorService {
       }
     }
 
-    final totalMB = (totalBytes / 1024 / 1024).toStringAsFixed(1);
-    onProgress?.call(0.22, 'מחלץ $totalMB MB...');
+    onProgress?.call(0.22, 'מחלץ ${formatMegabytesLtr(totalBytes)}...');
 
     for (final file in archive) {
       final filename = file.name;
@@ -236,11 +242,10 @@ class ZipExtractorService {
                 : 0.0;
             final progress =
                 0.25 + (0.65 * ((bytesProgress + filesProgress) / 2));
-            final mb = (processedBytes / 1024 / 1024).toStringAsFixed(1);
-            final totalMb = (totalBytes / 1024 / 1024).toStringAsFixed(1);
             onProgress?.call(
               progress,
-              'מחלץ: ${path.basename(filename)}\n$mb MB מתוך $totalMb MB',
+              'מחלץ: ${path.basename(filename)}\n'
+              '${formatMegabytesProgressHebrew(processedBytes, totalBytes)}',
             );
           }
 

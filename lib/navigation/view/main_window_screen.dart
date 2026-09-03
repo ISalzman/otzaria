@@ -840,6 +840,11 @@ class MainWindowScreenState extends State<MainWindowScreen>
     tryStartDeferredStartupWork(
       gate: _startupWorkGate,
       startBackgroundSync: _initializeBackgroundSync,
+      isLibraryInstalled: () {
+        final navigationState = context.read<NavigationBloc>().state;
+        return navigationState.hasCheckedLibrary &&
+            !navigationState.isLibraryEmpty;
+      },
       isAutoSyncEnabled: () =>
           Settings.getValue<bool>(SettingsRepository.keyAutoSync) ?? true,
       canUseSoftwareAndBookUpdates: () =>

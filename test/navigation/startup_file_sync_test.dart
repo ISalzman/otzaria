@@ -24,6 +24,7 @@ void main() {
 
   bool tryStart({
     required StartupWorkGate gate,
+    bool libraryInstalled = true,
     bool autoSyncEnabled = true,
     bool updatesAllowed = true,
     bool updateCheckDue = true,
@@ -31,6 +32,7 @@ void main() {
     return tryStartDeferredStartupWork(
       gate: gate,
       startBackgroundSync: () => backgroundSyncCalls++,
+      isLibraryInstalled: () => libraryInstalled,
       isAutoSyncEnabled: () => autoSyncEnabled,
       canUseSoftwareAndBookUpdates: () => updatesAllowed,
       isLibraryUpdateCheckDue: () => updateCheckDue,
@@ -76,6 +78,17 @@ void main() {
     gate.markIndexingDecisionResolved(expectIndexing: false);
 
     expect(tryStart(gate: gate, autoSyncEnabled: false), isTrue);
+
+    expect(backgroundSyncCalls, 1);
+    verifyNever(() => libraryUpdateBloc.add(const StartLibraryUpdate()));
+  });
+
+  test('לא בודק עדכון ספרייה כשאין ספרייה מותקנת', () {
+    final gate = StartupWorkGate();
+    gate.markLibraryLoaded();
+    gate.markIndexingDecisionResolved(expectIndexing: false);
+
+    expect(tryStart(gate: gate, libraryInstalled: false), isTrue);
 
     expect(backgroundSyncCalls, 1);
     verifyNever(() => libraryUpdateBloc.add(const StartLibraryUpdate()));
