@@ -299,7 +299,11 @@ build\windows\x64\runner\Debug\otzaria.exe
   `RegisterWithRegistrar` — כלומר רישום המנוע השני מנתב **גם** קולבקים של
   החלון הראשון ל-isolate שנרשם אחרון. עדיף שהדפסה מחלון משני תיכשל מיד
   מאשר שתשבור את הראשון.
-* **macOS ו-Linux** — הצד הנייטיב הוא Windows בלבד. פרק 12.
+* **macOS ו-Linux** — הצד הנייטיב הוא Windows בלבד. פרק 12 הוכרע
+  ב-`docs/P-12-macos-linux.md`: ~90% מהעבודה כבר נייד (כל `lib/`), 19
+  מתודות הערוץ מופו לשלוש הפלטפורמות, ו-Wayland דורש **מנגנון אחר**
+  לגרירה בין חלונות — לא חיקוי של Windows. לא נכתבה שורת קוד לפלטפורמה,
+  כי אין כאן toolchain לקמפל אותה.
 * **פרק 3 (`ProcessServiceHost`)** לא נבנה, ולא ייבנה במודל A: אין host.
   `SharedHiveStore` + `WindowBus` מכסים את מה שנדרש בפועל.
 * **T-G1.1 (`NativeWindowManager`)** — נדרש לשלושה דברים שמפורטים
