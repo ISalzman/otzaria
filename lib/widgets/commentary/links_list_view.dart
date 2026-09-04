@@ -693,8 +693,10 @@ class _LinksListViewState extends State<LinksListView> {
         }
         // אותו מונה של חיפוש המפרשים: מתעלם מניקוד ומפיסוק כמו כל משטחי
         // החיפוש, ותואם את ההדגשה ש-SmartTextWidget מרנדר על אותו תוכן.
+        // הפענוח קודם לספירה — `&nbsp;` בין מילים היה חוסם ביטוי שהמשתמש רואה
+        // כרווח רגיל.
         final matches = countCommentarySearchMatches(
-          content: content,
+          content: utils.stripHtmlIfNeeded(content),
           query: _searchQuery,
           displayProfile: widget.displayProfile,
           partialWordMatch: true,

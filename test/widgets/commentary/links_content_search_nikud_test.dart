@@ -122,4 +122,42 @@ void main() {
       expect(find.text('לא נמצאו קישורים התואמים לחיפוש'), findsNothing);
     });
   });
+
+  group('חיפוש בתוכן הקישורים — HTML', () {
+    testWidgets('ישות HTML בין המילים אינה חוסמת ביטוי', (tester) async {
+      final links = [
+        _ContentLink(
+          heRef: 'הפניה',
+          index1: 5,
+          path2: 'ספר',
+          index2: 1,
+          connectionType: LinkTypes.quotation,
+          content: 'ודר&nbsp;שאל בעניין זה',
+        ),
+      ];
+
+      await _pump(tester, links);
+      await _searchInContent(tester, 'ודר שאל');
+
+      expect(find.text('לא נמצאו קישורים התואמים לחיפוש'), findsNothing);
+    });
+
+    testWidgets('תגית inline בתוך הביטוי אינה חוסמת אותו', (tester) async {
+      final links = [
+        _ContentLink(
+          heRef: 'הפניה',
+          index1: 5,
+          path2: 'ספר',
+          index2: 1,
+          connectionType: LinkTypes.quotation,
+          content: 'אמר <b>רבי</b> יוסי',
+        ),
+      ];
+
+      await _pump(tester, links);
+      await _searchInContent(tester, 'אמר רבי');
+
+      expect(find.text('לא נמצאו קישורים התואמים לחיפוש'), findsNothing);
+    });
+  });
 }
