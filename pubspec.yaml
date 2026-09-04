@@ -42,7 +42,7 @@ dependencies:
   hive_ce: ^2.19.3
   path_provider: ^2.1.6
   html: ^0.15.7
-  pdfrx: ^2.5.0
+  pdfrx: ^2.6.1
   url_launcher: ^6.3.2
   flutter_widget_from_html: ^0.17.3
   scrollable_positioned_list: ^0.3.8
