@@ -1547,6 +1547,99 @@ void main() {
     });
   });
 
+  group('הפס שבין הכרטיסיה לתוכן', () {
+    /// ⚠️ הפס הזה הופיע גם כשלא היה שום גבול, צל או מפריד: גוף הכרטיסיה
+    /// הוא 32 והסרגל 40, והכרטיסיה ממורכזת בו — כלומר נשארו ארבעה
+    /// פיקסלים של **צבע הרצועה** בין הכרטיסיה לתוכן שמתחתיה.
+    ///
+    /// ⚠️ הבדיקה מודדת את **הערך שהקוד מצייר בו**
+    /// ([kTabBackgroundBottomOffset]) מול הפריסה שנמדדה, ולא היסט שהיא
+    /// מחשבת בעצמה. הגרסה הראשונה כאן חישבה בעצמה, ולכן עברה גם כשהקוד
+    /// צייר בהיסט 0 — כלומר אימתה את החשבון שלה מול עצמו.
+    testWidgets('הכרטיסיה הפעילה מגיעה בציור עד תחתית הסרגל', (tester) async {
+      final tabs = [_makeTextTab('ספר א'), _makeTextTab('ספר ב')];
+      final tabsBloc = _TestTabsBloc(
+        TabsState(tabs: tabs, currentTabIndex: 0),
+      );
+      final navigationBloc = _TestNavigationBloc(
+        const NavigationState(currentScreen: Screen.reading),
+      );
+      final settingsBloc = _TestSettingsBloc(SettingsState.initial());
+
+      addTearDown(() async {
+        for (final tab in tabs) {
+          tab.dispose();
+        }
+        await tabsBloc.close();
+        await navigationBloc.close();
+        await settingsBloc.close();
+      });
+
+      await _setSurfaceSize(tester, const Size(1200, 800));
+      await _pumpTitleBar(
+        tester,
+        tabsBloc: tabsBloc,
+        navigationBloc: navigationBloc,
+        settingsBloc: settingsBloc,
+      );
+
+      // הצייר של הכרטיסיה הפעילה — היחיד מסוגו כשאין בחירה מרובה וריחוף.
+      final painted = tester
+          .widgetList<CustomPaint>(find.byType(CustomPaint))
+          .where(
+            (w) => w.painter.runtimeType.toString() == '_TabBackgroundPainter',
+          )
+          .toList();
+      expect(painted, hasLength(1), reason: 'רק הכרטיסיה הפעילה נצבעת');
+
+      final tabRect = tester.getRect(
+        find.byWidget(painted.first),
+      );
+      final barRect = tester.getRect(find.byType(CustomTitleBar));
+
+      // ⚠️ ההצהרה עצמה: הציור נמשך מתחת לגוף הכרטיסיה **בדיוק** עד
+      // תחתית הסרגל. פחות מזה — נשאר פס; יותר — הכרטיסיה נכנסת לתוכן.
+      final painterBottom = tabRect.bottom + kTabBackgroundBottomOffset;
+      expect(
+        painterBottom,
+        moreOrLessEquals(barRect.bottom, epsilon: 0.01),
+        reason:
+            'הציור נעצר ב-$painterBottom והסרגל מסתיים ב-${barRect.bottom} — '
+            'ההפרש הוא הפס שנראה בין הכרטיסיה לתוכן',
+      );
+    });
+
+    testWidgets('הסרגל אינו מתארך כדי לפנות מקום לציור', (tester) async {
+      // ⚠️ זה הכיוון שנכשל קודם: הרחבת הסרגל דחפה את התוכן למטה והגדילה
+      // את הפער במקום לסגור אותו.
+      final tab = _makeTextTab('ספר א');
+      final tabsBloc = _TestTabsBloc(
+        TabsState(tabs: [tab], currentTabIndex: 0),
+      );
+      final navigationBloc = _TestNavigationBloc(
+        const NavigationState(currentScreen: Screen.reading),
+      );
+      final settingsBloc = _TestSettingsBloc(SettingsState.initial());
+
+      addTearDown(() async {
+        tab.dispose();
+        await tabsBloc.close();
+        await navigationBloc.close();
+        await settingsBloc.close();
+      });
+
+      await _setSurfaceSize(tester, const Size(1200, 800));
+      await _pumpTitleBar(
+        tester,
+        tabsBloc: tabsBloc,
+        navigationBloc: navigationBloc,
+        settingsBloc: settingsBloc,
+      );
+
+      expect(tester.getSize(find.byType(CustomTitleBar)).height, 40);
+    });
+  });
+
   group('סגירת טאב בלחיצה על כפתור ה-X', () {
     testWidgets('לחיצה על ה-X סוגרת מיד — בלי המתנה ל-timeout של לחיצה כפולה', (
       tester,

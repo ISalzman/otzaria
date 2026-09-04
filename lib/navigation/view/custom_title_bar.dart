@@ -101,6 +101,40 @@ const double _kTabContentMinWidth = 12.0;
 /// גובה גוף הכרטיסיה, בלי המפריד שלצדה.
 const double _kTabBodyHeight = 32.0;
 
+/// כמה הכרטיסיה הפעילה מציירת **מתחת** לגוף שלה, עד תחתית הסרגל.
+///
+/// ## מה זה מתקן
+///
+/// גוף הכרטיסיה הוא [_kTabBodyHeight] והסרגל [_kTopBarHeight], והכרטיסיה
+/// ממורכזת בו — כלומר מתחת לכרטיסיה נשארו ארבעה פיקסלים של **צבע הרצועה**,
+/// בין הכרטיסיה לתוכן שמתחתיה. זה הפס שהמשתמש ראה, והוא הופיע גם כשהכול
+/// היה "נכון": לא גבול, לא צל, לא מפריד — פשוט השטח שנשאר מהמירכוז.
+///
+/// ## למה **נגזר** ולא 4
+///
+/// זה חצי מרווח המירכוז, לא מספר שנבחר. אילו היה כתוב `4.0`, שינוי של גובה
+/// הסרגל או של גובה הכרטיסיה היה מחזיר את הפס — או מותח את הכרטיסיה לתוך
+/// התוכן — בלי שאיש יקשר בין השניים.
+///
+/// ⚠️ הערך הזה **אינו** מרחיב את הסרגל. גרסה קודמת הוסיפה חמשה פיקסלים
+/// לגובהו כדי "להזמין מקום" לגשר, והתוצאה הייתה ההפוכה: רצועה בצבע הרצועה
+/// בכל הרוחב, חוץ ממתחת לכרטיסיה הפעילה — כלומר הפער גדל. כאן הציור נשאר
+/// בתוך גבולות הסרגל, ולכן אין למה להזמין מקום.
+///
+/// ⚠️ חשוף לבדיקה במכוון. בדיקה שמחשבת את ההיסט בעצמה מאמתת את החשבון
+/// שלה מול עצמו, ועוברת גם כשהקוד מצייר במקום הלא נכון — בדיוק מה שקרה
+/// בגרסה הראשונה של הבדיקה כאן.
+@visibleForTesting
+const double kTabBackgroundBottomOffset =
+    (_kTopBarHeight - _kTabBodyHeight) / 2;
+
+/// גובה הסרגל העליון.
+///
+/// ⚠️ חשוף כקבוע ולא כמספר בשורת ה-`SizedBox`, כי
+/// [kTabBackgroundBottomOffset] נגזר ממנו. שינוי כאן בלי שינוי שם
+/// היה מחזיר את הפס שבין הכרטיסיה לתוכן.
+const double _kTopBarHeight = 40.0;
+
 /// רוחבי הטאבים בשורה: הנבחר עשוי להיות רחב מהשאר (ראה [_kTabSelectedMinWidth]).
 typedef _TabWidths = ({double selected, double unselected});
 
@@ -234,22 +268,17 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
                 navState.currentScreen == Screen.search ||
                 (navState.currentScreen == Screen.reading &&
                     context.select((TabsBloc bloc) => bloc.state.hasOpenTabs));
-            // ⚠️ הסרגל מזמין את חמשת הפיקסלים שהכרטיסיה הפעילה מציירת
-            // **מתחת** לעצמה כדי להתמזג בגוף (`_TabBackgroundPainter`,
-            // `bottomOffset`).
+            // ⚠️ **גובה אחד, בלי "גשר".** גרסה קודמת הוסיפה כאן חמשה
+            // פיקסלים כדי שהכרטיסיה תוכל לצייר מתחת לעצמה, והתוצאה הייתה
+            // ההפוכה: הסרגל התארך, התוכן נדחף למטה, והרצועה שבין הכרטיסיות
+            // לתוכן רק גדלה.
             //
-            // הגשר הזה נכתב כדי שהכרטיסיה תיראה חלק אחד עם התוכן, והוא
-            // **מעולם לא נראה**: `CustomTitleBar` יושב ב-`Column` לפני
-            // התוכן, ולכן התוכן נצבע מעליו. מה שהמשתמש ראה זה קו דק במקום
-            // מיזוג.
-            //
-            // התיקון כאן ולא בסדר הצביעה שב-`main_window_screen`: גובה
-            // הסרגל אינו קבוע (במצב כרטיסיות מוערמות נוספת שורה), ולכן
-            // `Stack` עם ריווח קשיח שם היה נכון בדיוק במצב אחד. כשהסרגל
-            // מזמין את השטח, שום דבר אינו יכול לצבוע מעליו.
-            const bridge = _TabBackgroundPainter.bottomOffset;
+            // הפס נסגר מבפנים, ולא בהרחבה: הכרטיסיה מציירת עד תחתית הסרגל
+            // (`kTabBackgroundBottomOffset`), וזה בתוך הגבולות
+            // הקיימים — ולכן שום דבר אינו צריך להזמין מקום, ושום דבר אינו
+            // נצבע מעליה.
             final topBar = SizedBox(
-              height: useReaderStyle ? 40 + bridge : 40,
+              height: _kTopBarHeight,
               child: Stack(
                 clipBehavior: Clip.none,
                 children: [
@@ -271,95 +300,86 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
                               ),
                             ),
                     ),
-                    // ⚠️ ה-`Container` ממלא את כל הגובה כדי שהרקע שלו יכסה
-                    // גם את רצועת הגשר, וה-`Row` מוגבל ל-40 — אחרת
-                    // ה-`crossAxisAlignment: center` שלו היה מרכז את
-                    // הכרטיסיות בתוך 45 ומזיז אותן 2.5 פיקסלים למטה.
-                    child: Padding(
-                      padding: EdgeInsets.only(
-                        bottom: useReaderStyle ? bridge : 0,
-                      ),
-                      child: Row(
-                        children: [
-                          // כפתורי פעולה (היסטוריה וכו') - תמיד מוצגים
+                    child: Row(
+                      children: [
+                        // כפתורי פעולה (היסטוריה וכו') - תמיד מוצגים
+                        SizedBox(
+                          height: 40,
+                          child: Center(
+                            child: _buildActionButtons(context),
+                          ),
+                        ),
+
+                        // תוכן הכותרת (טאבים או כותרת רגילה)
+                        Expanded(
+                          child: _buildContent(
+                            context,
+                            navState,
+                            settingsState,
+                          ),
+                        ),
+
+                        // כפתורי חלון (רק בדסקטופ)
+                        if (!kIsWeb &&
+                            (Platform.isWindows ||
+                                Platform.isLinux ||
+                                Platform.isMacOS))
                           SizedBox(
-                            height: 40,
-                            child: Center(
-                              child: _buildActionButtons(context),
-                            ),
-                          ),
-
-                          // תוכן הכותרת (טאבים או כותרת רגילה)
-                          Expanded(
-                            child: _buildContent(
-                              context,
-                              navState,
-                              settingsState,
-                            ),
-                          ),
-
-                          // כפתורי חלון (רק בדסקטופ)
-                          if (!kIsWeb &&
-                              (Platform.isWindows ||
-                                  Platform.isLinux ||
-                                  Platform.isMacOS))
-                            SizedBox(
-                              height: 50,
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  const ManagedUpdateTitleBarIndicator(),
-                                  _buildFullscreenCaptionButton(
-                                    context,
-                                    settingsState,
-                                  ),
-                                  if (settingsState.isFullscreen)
-                                    _CaptionActionButton(
-                                      brightness: Theme.of(context).brightness,
-                                      tooltip: 'מזער',
-                                      icon: FluentIcons.subtract_24_regular,
-                                      onPressed: () async {
-                                        // נלקח לפני ה-await: אחריו ה-context
-                                        // עלול כבר לא להיות מותקן.
-                                        final window =
-                                            AppWindowScope.controllerOf(
-                                              context,
-                                            );
-                                        await FullscreenHelper.toggleFullscreen(
-                                          context,
-                                          false,
-                                        );
-                                        await window.minimize();
-                                      },
-                                    ),
-                                  if (settingsState.isFullscreen)
-                                    _CaptionActionButton(
-                                      brightness: Theme.of(context).brightness,
-                                      tooltip: 'סגור',
-                                      icon: FluentIcons.dismiss_24_regular,
-                                      // סגירה מנומסת — עוברת דרך ה-handshake
-                                      // של onWindowClose ולא הורגת מיד.
-                                      onPressed: () =>
+                            height: 50,
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const ManagedUpdateTitleBarIndicator(),
+                                _buildFullscreenCaptionButton(
+                                  context,
+                                  settingsState,
+                                ),
+                                if (settingsState.isFullscreen)
+                                  _CaptionActionButton(
+                                    brightness: Theme.of(context).brightness,
+                                    tooltip: 'מזער',
+                                    icon: FluentIcons.subtract_24_regular,
+                                    onPressed: () async {
+                                      // נלקח לפני ה-await: אחריו ה-context
+                                      // עלול כבר לא להיות מותקן.
+                                      final window =
                                           AppWindowScope.controllerOf(
                                             context,
-                                          ).close(),
-                                    ),
-                                  if (!settingsState.isFullscreen)
-                                    SizedBox(
-                                      width: _kWindowCaptionButtonsWidth,
-                                      height: 50,
-                                      child: WindowCaption(
-                                        brightness: Theme.of(
+                                          );
+                                      await FullscreenHelper.toggleFullscreen(
+                                        context,
+                                        false,
+                                      );
+                                      await window.minimize();
+                                    },
+                                  ),
+                                if (settingsState.isFullscreen)
+                                  _CaptionActionButton(
+                                    brightness: Theme.of(context).brightness,
+                                    tooltip: 'סגור',
+                                    icon: FluentIcons.dismiss_24_regular,
+                                    // סגירה מנומסת — עוברת דרך ה-handshake
+                                    // של onWindowClose ולא הורגת מיד.
+                                    onPressed: () =>
+                                        AppWindowScope.controllerOf(
                                           context,
-                                        ).brightness,
-                                        backgroundColor: Colors.transparent,
-                                      ),
+                                        ).close(),
+                                  ),
+                                if (!settingsState.isFullscreen)
+                                  SizedBox(
+                                    width: _kWindowCaptionButtonsWidth,
+                                    height: 50,
+                                    child: WindowCaption(
+                                      brightness: Theme.of(
+                                        context,
+                                      ).brightness,
+                                      backgroundColor: Colors.transparent,
                                     ),
-                                ],
-                              ),
+                                  ),
+                              ],
                             ),
-                        ],
-                      ),
+                          ),
+                      ],
                     ),
                   ),
                 ],
@@ -731,7 +751,7 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
         if (!state.hasOpenTabs) return const SizedBox.shrink();
         return Container(
           color: AppSurfaces.readerBackground(context),
-          height: 40,
+          height: _kTopBarHeight,
           child: _buildScrollableTabsArea(state),
         );
       },
@@ -1338,13 +1358,6 @@ class _TabBackgroundPainter extends CustomPainter {
 
   _TabBackgroundPainter(this.color);
 
-  /// כמה הכרטיסיה מציירת **מתחת** לגובה שלה, כדי להתמזג בגוף.
-  ///
-  /// ⚠️ חשוף כי הסרגל חייב **להזמין** את השטח הזה. הגשר צויר מחוץ לגבולות
-  /// ה-widget, ולכן התוכן — שיושב אחריו ב-`Column` — נצבע מעליו, והמיזוג
-  /// מעולם לא נראה. מה שנראה זה קו דק.
-  static const double bottomOffset = 5.0;
-
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
@@ -1355,10 +1368,13 @@ class _TabBackgroundPainter extends CustomPainter {
     const topRadius = 8.0;
     const bottomRadius = 15.0;
 
-    path.moveTo(-bottomRadius, size.height + bottomOffset);
+    // הצורה נמשכת [kTabBackgroundBottomOffset] מתחת לגוף הכרטיסיה, עד
+    // ראו ההסבר שם. הציור נשאר בתוך גבולות הסרגל, ולכן דבר אינו נצבע
+    // מעליו.
+    path.moveTo(-bottomRadius, size.height + kTabBackgroundBottomOffset);
 
     path.arcToPoint(
-      Offset(0, size.height + bottomOffset - bottomRadius),
+      Offset(0, size.height + kTabBackgroundBottomOffset - bottomRadius),
       radius: const Radius.circular(bottomRadius),
       clockwise: false,
     );
@@ -1377,15 +1393,21 @@ class _TabBackgroundPainter extends CustomPainter {
       radius: const Radius.circular(topRadius),
     );
 
-    path.lineTo(size.width, size.height + bottomOffset - bottomRadius);
+    path.lineTo(
+      size.width,
+      size.height + kTabBackgroundBottomOffset - bottomRadius,
+    );
 
     path.arcToPoint(
-      Offset(size.width + bottomRadius, size.height + bottomOffset),
+      Offset(
+        size.width + bottomRadius,
+        size.height + kTabBackgroundBottomOffset,
+      ),
       radius: const Radius.circular(bottomRadius),
       clockwise: false,
     );
 
-    path.lineTo(-bottomRadius, size.height + bottomOffset);
+    path.lineTo(-bottomRadius, size.height + kTabBackgroundBottomOffset);
 
     path.close();
     canvas.drawPath(path, paint);
