@@ -33,11 +33,15 @@
 | API | id | type | bookId | bookUid |
 |-----|-----|------|--------|---------|
 | `library.findBooks` | ✓ | ✓ | ✓ | ✓ |
+| `library.resolveRef` | ✓* | ✓* | ✓ | ✓* |
 | `library.getBookMetadata` | ✓ | ✓ | ✓ | ✓ |
 | `library.listRecentBooks` | ✓ | ✓ | ✓ | ✓ |
 | `library.getTree` | ✓ | ✓ | ✓ | ✓ |
 | `reader.openBook` | קלט | קלט | קלט | קלט |
 | `reader.openBookAtRef` | קלט | קלט | קלט | קלט |
+
+\* ב-`library.resolveRef` השדות `id`/`type`/`bookUid` חסרים כשההתאמה היא ספר
+אישי או PDF ממערכת הקבצים — ראה את האזהרה בתיאור המתודה.
 | `reader.getCurrentState` | ✓ | ✓ | ✓ | ✓ |
 | `reader.getCurrentRef` | ✓ | ✓ | ✓ | ✓ |
 | `reader.getSelection` | ✓ | ✓ | ✓ | ✓ |
@@ -136,6 +140,7 @@ if (response.success) {
 | `fonts.resolveFamilies` | 0.9.97 |
 | `fonts.listInstalled` | 0.9.97 |
 | `library.findBooks` | 0.9.89 |
+| `library.resolveRef` | 0.9.97 |
 | `library.getBookMetadata` | 0.9.89 |
 | `library.resolveBooks` | 0.9.97 |
 | `library.resolveCategoryPaths` | 0.9.97 |
@@ -611,6 +616,55 @@ const { data } = await Otzaria.call('library.findBooks', {
 });
 // [{ bookId: "משנה תורה", title: "משנה תורה", topics: [...] }, ...]
 ```
+
+### `library.resolveRef`
+**הרשאה:** `library.books.read`
+
+פותר הפניה חופשית שנכתבה בידי אדם — שם ספר ומיקום יחד — למיקום קונקרטי,
+בלי לפתוח אותו. זו הצורה השאילתתית של `reader.openBookAtRef`, ומאחוריה אותו
+מנוע `find_ref` שמפעיל את מסך "איתור מקורות".
+
+השתמש בה כדי לבנות קישור עומק, להציע השלמה בזמן הקלדה, או לאמת הפניה לפני
+שמציגים אותה. לניווט בפועל השתמש ב-`reader.openBookAtRef`.
+
+```javascript
+const { data } = await Otzaria.call('library.resolveRef', {
+  ref: 'פסחים לד',
+  limit: 5  // אופציונלי, ברירת מחדל: 20
+});
+// [{
+//   id: 42, bookId: "פסחים", bookUid: "id:42", type: "text",
+//   title: "פסחים", reference: "פסחים דף לד", index: 1234,
+//   isPdf: false, isSourceLine: true, isUserBook: false,
+//   bookPath: "ש\"ס, בבלי"
+// }, ...]
+```
+
+התוצאות מדורגות — הראשונה היא ההתאמה הטובה ביותר, לפי אותו דירוג שמסך
+"איתור מקורות" מציג. הפניה קצרה משני תווים מוחזרת כרשימה ריקה.
+
+`isSourceLine` מבחין בין שתי רמות דיוק: `true` = נפתר לשורת מקור מדויקת
+(פסוק, סעיף) דרך אינדקס ההפניות; `false` = נפתר לכותרת בתוכן העניינים,
+כלומר לרמת פרק או דף בלבד.
+
+**בניית קישור עומק — קרא את זה:** `id` הוא המזהה שקישור `otzaria://open/book/<id>`
+מצפה לו, אבל הוא מוחזר `null` כשההתאמה היא ספר אישי (`isUserBook`) או PDF
+ממערכת הקבצים. `user_books.db` מקצה מזהים באותו טווח כמו ספריית הבסיס, ולכן
+מזהה של ספר אישי אינו מזהה ספר יחיד ברמת האפליקציה. במקרה כזה נווט עם
+`reader.openBookAtRef` (שמקבל גם כותרת), או השתמש ב-`otzaria://open/detection?q=<ההפניה>`
+שמעביר את פתירת ההפניה לאוצריא עצמה.
+
+```javascript
+const hit = data[0];
+const href = hit && hit.id != null
+  ? (hit.isPdf
+      ? `otzaria://open/pdf/${hit.id}?index=${hit.index}`
+      : `otzaria://open/book/${hit.id}?index=${hit.index}`)
+  : `otzaria://open/detection?q=${encodeURIComponent(ref)}`;
+```
+
+שים לב ש-`index` הוא אינדקס שורה (0-based) בספר טקסט, אך **מספר עמוד
+(1-based)** ב-PDF — בדיוק כפי ששני נתיבי הקישור מצפים.
 
 ### `library.getBookMetadata`
 **הרשאה:** `library.books.read`

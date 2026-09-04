@@ -398,6 +398,39 @@ PluginBridgeDependencies _buildNetworkDeps() {
   );
 }
 
+/// צורת ההתאמה שמנוע `find_ref` מחזיר לגשר.
+typedef _RefHit = ({
+  String title,
+  int index,
+  bool isPdf,
+  int bookId,
+  String reference,
+  String bookPath,
+  bool isSourceLine,
+  bool isUserBook,
+});
+
+/// ברירות מחדל שפויות, כדי שטסט יציין רק את השדה שהוא בודק.
+_RefHit _refHit({
+  required String title,
+  required int index,
+  bool isPdf = false,
+  int bookId = 1,
+  String reference = '',
+  String bookPath = '',
+  bool isSourceLine = false,
+  bool isUserBook = false,
+}) => (
+  title: title,
+  index: index,
+  isPdf: isPdf,
+  bookId: bookId,
+  reference: reference,
+  bookPath: bookPath,
+  isSourceLine: isSourceLine,
+  isUserBook: isUserBook,
+);
+
 Future<void> main() async {
   // search.query מנקה את השאילתה דרך sanitizeQuery שמאציל למנוע ה-Rust;
   // הבדיקות שלו מדולגות כשאין build נייטיבי זמין.
@@ -1249,8 +1282,7 @@ Future<void> main() async {
     late TextBook yerushalmi;
 
     PluginBridgeAdapter buildAdapter({
-      Future<List<({String title, int index, bool isPdf})>> Function(String)?
-      resolveReference,
+      Future<List<_RefHit>> Function(String)? resolveReference,
     }) {
       return PluginBridgeAdapter(
         _buildInstalledPlugin(permissions: const ['reader.open']),
@@ -1303,7 +1335,7 @@ Future<void> main() async {
         // ירושלמי: "פ\"ו ה\"ז" דו-משמעי; find_ref מודע-הקשר מחזיר את ה-index.
         final adapter = buildAdapter(
           resolveReference: (reference) async => [
-            (title: 'תלמוד ירושלמי עירובין', index: 1234, isPdf: false),
+            _refHit(title: 'תלמוד ירושלמי עירובין', index: 1234),
           ],
         );
 
@@ -1319,6 +1351,172 @@ Future<void> main() async {
         ).called(1);
       },
     );
+  });
+
+  group('PluginBridgeAdapter.library.resolveRef', () {
+    late TextBook pesachim;
+
+    PluginBridgeAdapter buildAdapter({
+      Future<List<_RefHit>> Function(String)? resolveReference,
+    }) {
+      return PluginBridgeAdapter(
+        _buildInstalledPlugin(permissions: const ['library.books.read']),
+        dependencies: PluginBridgeDependencies(
+          historyBloc: _MockHistoryBloc(),
+          tabsBloc: _StubTabsBloc(),
+          navigationBloc: _MockNavigationBloc(),
+          calendarCubit: _StubCalendarCubit(
+            _buildCalendarState(DateTime(2026, 1, 1), inIsrael: true),
+          ),
+          workspaceBloc: _MockWorkspaceBloc(),
+          searchRepository: _MockSearchRepository(),
+          personalNotesRepository: _MockPersonalNotesRepository(),
+          bookOpenCoordinator: _MockBookOpenCoordinator(),
+          themePayloadBuilder: () => <String, dynamic>{},
+          showConfirmDialog: ({required title, required content}) async => true,
+          showWarningDialog:
+              ({required title, required content, required subtitle}) async =>
+                  true,
+          resolveReference: resolveReference,
+        ),
+        pluginRepository: _StubPluginRegistryRepository(),
+      );
+    }
+
+    setUp(() {
+      pesachim = TextBook(id: 42, title: 'פסחים', categoryId: 1);
+      final category = Category(
+        title: 'ש"ס',
+        description: '',
+        shortDescription: '',
+        order: 0,
+        subCategories: [],
+        books: [pesachim],
+        parent: null,
+      );
+      final library = Library(categories: [category]);
+      category.parent = library;
+      DataRepository.instance.library = Future.value(library);
+    });
+
+    test('מחזיר את ה-id המספרי לבניית קישור עומק', () async {
+      final adapter = buildAdapter(
+        resolveReference: (reference) async => [
+          _refHit(
+            title: 'פסחים',
+            index: 1234,
+            bookId: 42,
+            reference: 'פסחים דף לד',
+            bookPath: 'ש"ס, בבלי',
+            isSourceLine: true,
+          ),
+        ],
+      );
+
+      final result =
+          await adapter.execute('library', 'resolveRef', {'ref': 'פסחים לד'})
+              as List<dynamic>;
+
+      expect(result, hasLength(1));
+      final hit = result.single as Map<String, dynamic>;
+      expect(hit['id'], 42);
+      expect(hit['bookId'], 'פסחים');
+      expect(hit['title'], 'פסחים');
+      expect(hit['reference'], 'פסחים דף לד');
+      expect(hit['index'], 1234);
+      expect(hit['isPdf'], isFalse);
+      expect(hit['isSourceLine'], isTrue);
+      expect(hit['bookPath'], 'ש"ס, בבלי');
+      expect(hit['bookUid'], isNotNull);
+    });
+
+    test('ספר אישי מוחזר בלי id — המזהה אינו חד-משמעי', () async {
+      // user_books.db מקצה מזהים באותו טווח כמו seforim.db, ולכן id=42
+      // של ספר אישי אינו מזהה את הספר שקישור עומק היה מגיע אליו.
+      final adapter = buildAdapter(
+        resolveReference: (reference) async => [
+          _refHit(
+            title: 'הערות אישיות',
+            index: 7,
+            bookId: 42,
+            isUserBook: true,
+          ),
+        ],
+      );
+
+      final result =
+          await adapter.execute('library', 'resolveRef', {'ref': 'הערות'})
+              as List<dynamic>;
+
+      final hit = result.single as Map<String, dynamic>;
+      expect(hit['id'], isNull);
+      expect(hit['bookUid'], isNull);
+      expect(hit['isUserBook'], isTrue);
+      // המיקום עצמו עדיין שמיש ל-reader.openBookAtRef
+      expect(hit['index'], 7);
+    });
+
+    test('PDF ממערכת הקבצים מוחזר בלי id', () async {
+      final adapter = buildAdapter(
+        resolveReference: (reference) async => [
+          _refHit(title: 'ספר סרוק', index: 3, bookId: -1, isPdf: true),
+        ],
+      );
+
+      final result =
+          await adapter.execute('library', 'resolveRef', {'ref': 'ספר סרוק ג'})
+              as List<dynamic>;
+
+      final hit = result.single as Map<String, dynamic>;
+      expect(hit['id'], isNull);
+      expect(hit['isPdf'], isTrue);
+    });
+
+    test('הפניה קצרה משני תווים אינה מגיעה למנוע', () async {
+      var calls = 0;
+      final adapter = buildAdapter(
+        resolveReference: (reference) async {
+          calls++;
+          return [_refHit(title: 'פסחים', index: 1)];
+        },
+      );
+
+      expect(
+        await adapter.execute('library', 'resolveRef', {'ref': 'פ'}),
+        isEmpty,
+      );
+      expect(
+        await adapter.execute('library', 'resolveRef', {'ref': '  '}),
+        isEmpty,
+      );
+      expect(calls, 0);
+    });
+
+    test('בלי מנוע איתור מוזרק — רשימה ריקה, לא שגיאה', () async {
+      final adapter = buildAdapter();
+      expect(
+        await adapter.execute('library', 'resolveRef', {'ref': 'פסחים לד'}),
+        isEmpty,
+      );
+    });
+
+    test('limit חותך את התוצאות', () async {
+      final adapter = buildAdapter(
+        resolveReference: (reference) async => [
+          for (var i = 0; i < 5; i++) _refHit(title: 'פסחים', index: i),
+        ],
+      );
+
+      final result =
+          await adapter.execute('library', 'resolveRef', {
+                'ref': 'פסחים לד',
+                'limit': 2,
+              })
+              as List<dynamic>;
+
+      expect(result, hasLength(2));
+    });
+
   });
 
   group('PluginBridgeAdapter.library.getBookContent', () {
