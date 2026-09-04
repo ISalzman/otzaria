@@ -196,8 +196,15 @@ Future<PdfOutlineNode?> getDafYomiOutline(PdfBook book, String daf) async {
 }
 
 Future<List<PdfOutlineNode>> _loadOutlineFromFile(PdfBook book) async {
-  final document = await PdfDocument.openFile(book.path);
-  return document.loadOutline();
+  PdfDocument? document;
+  try {
+    document = await PdfDocument.openFile(book.path);
+    return await document.loadOutline();
+  } finally {
+    // המתנה לשחרור בפועל — ה-worker היחיד של pdfrx חייב להשתחרר מהמסמך
+    // לפני שהטאב שנפתח מיד אחר כך פותח את אותו PDF.
+    await document?.dispose();
+  }
 }
 
 /// פותח ספר PDF לפי שם וסימן
