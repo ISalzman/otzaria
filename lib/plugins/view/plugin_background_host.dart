@@ -527,6 +527,7 @@ class _BackgroundPluginRunner extends StatefulWidget {
 
 class _BackgroundPluginRunnerState extends State<_BackgroundPluginRunner> {
   static PackageInfo? _cachedPackageInfo;
+  static const _fileServerDenialLogInterval = Duration(minutes: 1);
 
   InAppWebViewController? _controller;
   late final PluginBridgeHandler _bridge;
@@ -535,11 +536,43 @@ class _BackgroundPluginRunnerState extends State<_BackgroundPluginRunner> {
   late final PluginSystemBloc _pluginSystemBloc;
   late final FindRefRepository _findRefRepository;
   late String _localHtmlPath;
+  DateTime? _lastFileServerDenialLogAt;
 
   /// נתיב שרת הקבצים הוא `/f/<pluginId>/<token>` — תוסף רקע מורשה רק בשלו.
   bool _isOwnFileServerPath(Uri uri) =>
       uri.pathSegments.length == 3 &&
       uri.pathSegments[1] == widget.plugin.pluginId;
+
+  /// מאפשרת רק קבצים והעלאה פעילה של התוסף עצמו.
+  bool _isOwnFileServerRequest(Uri uri) =>
+      _isOwnFileServerPath(uri) ||
+      PluginFileServer.instance.isUploadUriForPlugin(
+        uri,
+        widget.plugin.pluginId,
+      );
+
+  void _logFileServerDenial(Uri uri) {
+    final now = DateTime.now();
+    final lastLogAt = _lastFileServerDenialLogAt;
+    if (lastLogAt != null &&
+        now.difference(lastLogAt) < _fileServerDenialLogInterval) {
+      return;
+    }
+    _lastFileServerDenialLogAt = now;
+    final kind = uri.pathSegments.isEmpty
+        ? uri.path
+        : '/${uri.pathSegments.first}/…';
+    final message = 'בקשת התוסף לשרת הקבצים נחסמה בשער ה-WebView: $kind';
+    debugPrint('Background plugin [${widget.plugin.pluginId}]: $message');
+    // fire-and-forget, כמו כל כתיבה ללוג הריצה.
+    unawaited(
+      PluginSystemDatabase.instance.writeLog(
+        widget.plugin.pluginId,
+        'warn',
+        message,
+      ),
+    );
+  }
 
   Future<bool> _isNetworkUriAllowed(Uri uri) => isPluginNetworkAccessAllowed(
     uri: uri,
@@ -940,9 +973,11 @@ class _BackgroundPluginRunnerState extends State<_BackgroundPluginRunner> {
           // להצהרה ב-allowlist; מאשרים רק נתיב של התוסף עצמו.
           if (uri.scheme == 'http' &&
               PluginFileServer.instance.isServerUri(uri)) {
-            return _isOwnFileServerPath(uri)
-                ? NavigationActionPolicy.ALLOW
-                : NavigationActionPolicy.CANCEL;
+            if (_isOwnFileServerRequest(uri)) {
+              return NavigationActionPolicy.ALLOW;
+            }
+            _logFileServerDenial(uri);
+            return NavigationActionPolicy.CANCEL;
           }
           if (uri.scheme == 'http' || uri.scheme == 'https') {
             if (await _isNetworkUriAllowed(uri)) {
@@ -981,9 +1016,12 @@ class _BackgroundPluginRunnerState extends State<_BackgroundPluginRunner> {
               _isDevServerUri(uri, widget.plugin.devRootPath)) {
             return null; // allow dev server + HMR requests
           }
+          // שרת הקבצים הפנימי (loopback): נתיב קובץ של התוסף, או נתיב ההעלאה
+          // (/w/) של העלאה פתוחה שלו — ראו [_isOwnFileServerRequest].
           if (uri.scheme == 'http' &&
               PluginFileServer.instance.isServerUri(uri)) {
-            if (_isOwnFileServerPath(uri)) return null;
+            if (_isOwnFileServerRequest(uri)) return null;
+            _logFileServerDenial(uri);
             return WebResourceResponse(
               statusCode: 403,
               reasonPhrase: 'Forbidden',

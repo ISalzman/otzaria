@@ -220,6 +220,7 @@ class _PluginTabPageState extends State<PluginTabPage> {
   late final FindRefRepository _findRefRepository;
   bool _hasError = false;
   String? _devErrorMessage;
+  DateTime? _lastFileServerDenialLogAt;
 
   // כשל יצירה native לא מפעיל אף callback ב-Dart — נשאר רק מסך ריק.
   // השעון נדרך בבניית ה-WebView ומבוטל ב-onWebViewCreated, כדי לרשום ללוג.
@@ -231,6 +232,7 @@ class _PluginTabPageState extends State<PluginTabPage> {
 
   // Cache PackageInfo so the async gap in onLoadStop never crosses a dispose
   static PackageInfo? _cachedPackageInfo;
+  static const _fileServerDenialLogInterval = Duration(minutes: 1);
 
   @override
   void initState() {
@@ -725,6 +727,37 @@ class _PluginTabPageState extends State<PluginTabPage> {
     registry: _pluginRegistryRepository,
   );
 
+  /// מאפשרת רק קבצים והעלאה פעילה של התוסף עצמו.
+  bool _isOwnFileServerRequest(Uri uri) =>
+      PluginFileServer.isUriForPlugin(uri, widget.plugin.pluginId) ||
+      PluginFileServer.instance.isUploadUriForPlugin(
+        uri,
+        widget.plugin.pluginId,
+      );
+
+  void _logFileServerDenial(Uri uri) {
+    final now = DateTime.now();
+    final lastLogAt = _lastFileServerDenialLogAt;
+    if (lastLogAt != null &&
+        now.difference(lastLogAt) < _fileServerDenialLogInterval) {
+      return;
+    }
+    _lastFileServerDenialLogAt = now;
+    final kind = uri.pathSegments.isEmpty
+        ? uri.path
+        : '/${uri.pathSegments.first}/…';
+    final message = 'בקשת התוסף לשרת הקבצים נחסמה בשער ה-WebView: $kind';
+    debugPrint('Plugin [${widget.plugin.pluginId}]: $message');
+    // fire-and-forget, כמו כל כתיבה ללוג הריצה.
+    unawaited(
+      PluginSystemDatabase.instance.writeLog(
+        widget.plugin.pluginId,
+        'warn',
+        message,
+      ),
+    );
+  }
+
   Widget _buildWebView() {
     if (_creationFailure != null) {
       return PluginWebViewFailedView(
@@ -884,16 +917,11 @@ class _PluginTabPageState extends State<PluginTabPage> {
           if (uri.scheme == 'http' &&
               PluginFileServer.instance.isServerUri(uri)) {
             // גם נתיבי קבצים (/f/) וגם נתיב ההעלאה (/w/) של התוסף הזה.
-            return PluginFileServer.isUriForPlugin(
-                      uri,
-                      widget.plugin.pluginId,
-                    ) ||
-                    PluginFileServer.instance.isUploadUriForPlugin(
-                      uri,
-                      widget.plugin.pluginId,
-                    )
-                ? NavigationActionPolicy.ALLOW
-                : NavigationActionPolicy.CANCEL;
+            if (_isOwnFileServerRequest(uri)) {
+              return NavigationActionPolicy.ALLOW;
+            }
+            _logFileServerDenial(uri);
+            return NavigationActionPolicy.CANCEL;
           }
 
           if (uri.scheme == 'http' || uri.scheme == 'https') {
@@ -939,13 +967,8 @@ class _PluginTabPageState extends State<PluginTabPage> {
             // ההחרגה השנייה ה-PUT של fs.beginBinaryWrite נחסם כאן, וכל
             // שמירה בינארית נופלת ב-"Failed to fetch" (נמדד בווינדוס, שבו
             // ה-fork של אוצריא כן מפעיל shouldInterceptRequest).
-            if (PluginFileServer.isUriForPlugin(uri, widget.plugin.pluginId) ||
-                PluginFileServer.instance.isUploadUriForPlugin(
-                  uri,
-                  widget.plugin.pluginId,
-                )) {
-              return null;
-            }
+            if (_isOwnFileServerRequest(uri)) return null;
+            _logFileServerDenial(uri);
             return WebResourceResponse(
               statusCode: 403,
               reasonPhrase: 'Forbidden',
