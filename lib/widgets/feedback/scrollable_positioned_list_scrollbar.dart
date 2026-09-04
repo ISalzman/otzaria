@@ -292,6 +292,11 @@ class _ScrollablePositionedListScrollbarState
         : 0.0;
 
     setState(() {
+      // maxScrollExtent משקף רק את החלון שמרונדר סביב העוגן, ולכן הוא מתאפס
+      // בקצה הרשימה והמסילה הייתה נעלמת. מדידת התוכן עצמו יציבה (issue #1169).
+      if (totalContent > 1.0 + precisionErrorTolerance) {
+        _canScroll = true;
+      }
       // _maxScrollableIndex חייב להתעדכן גם תוך כדי גרירה: כשהמשתמש גורר
       // לתוך אזור עם פריטים גדולים יותר (לדוגמה — אזור שבו מפרש פתוח, או
       // כותרות עם הרבה תוכן) מספר הפריטים הגלויים יורד והאינדקס המקסימלי

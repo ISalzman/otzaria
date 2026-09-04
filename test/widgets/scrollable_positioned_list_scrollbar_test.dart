@@ -1644,4 +1644,43 @@ void main() {
       expect(track.center.dx, lessThan(scrollbar.center.dx));
     });
   });
+
+  testWidgets(
+    'גלילה לסוף ספר ארוך אינה מעלימה את המסילה (issue #1169)',
+    (tester) async {
+      final listener = ItemPositionsListener.create();
+      final controller = ItemScrollController();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: ScrollablePositionedListScrollbar(
+              scrollController: controller,
+              itemPositionsListener: listener,
+              itemCount: 200,
+              // ScrollablePositionedList מרנדר חלון סביב העוגן, ולכן בקצה
+              // הרשימה maxScrollExtent מתאפס אף שיש עוד 198 פריטים.
+              child: const _ScrollableStub(maxScrollExtent: 0),
+            ),
+          ),
+        ),
+      );
+
+      (listener.itemPositions as ValueNotifier<Iterable<ItemPosition>>).value =
+          const [
+            ItemPosition(index: 198, itemLeadingEdge: 0, itemTrailingEdge: 0.4),
+            ItemPosition(
+              index: 199,
+              itemLeadingEdge: 0.4,
+              itemTrailingEdge: 0.8,
+            ),
+          ];
+      await tester.pump();
+
+      expect(
+        find.byKey(ScrollablePositionedListScrollbar.thumbKey),
+        findsOneWidget,
+      );
+    },
+  );
 }
