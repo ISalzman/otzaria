@@ -523,6 +523,27 @@ void Freeze() {
   // לראות תוצאה. עכשיו הכרטיסיה נשארת במקום שגררו אליו, והחלון האמיתי
   // מחליף אותה במקום להופיע אחרי כלום.
   ::KillTimer(g_window, kFollowTimerId);
+
+  // ⚠️ **הקפאה אינה הצגה.**
+  //
+  // סידור כרטיסיות בתוך החלון מסתיים גם הוא כאן — `onDragFinishedAnywhere`
+  // נורה בכל מסלול — והסמן מעולם לא יצא מהחלון, כלומר התצוגה לא הוצגה.
+  // `ShowWindow` בלתי-מותנה הציג אותה בשחרור, ובצירוף `kHoldTimeoutMs`
+  // התוצאה הייתה חלון גדול שקופץ לארבע שניות אחרי כל סידור מקומי. כך
+  // המשתמש דיווח: "בשחרור הכרטיסייה פתאום קופץ החלון עם הלשונית הגדולה
+  // לכמה שניות".
+  //
+  // השאלה נשאלת מהמצב האמיתי ולא מ-`IsWindowVisible`: טיימר המעקב רץ כל
+  // 16ms, ושחרור מיד אחרי יציאה מהחלון עלול להקדים את הפעימה שהייתה
+  // מציגה אותה.
+  POINT cursor{};
+  if (!::GetCursorPos(&cursor) || IsOverSourceWindow(cursor)) {
+    g_active.store(false);
+    g_source.store(nullptr);
+    ::ShowWindow(g_window, SW_HIDE);
+    return;
+  }
+
   ::ShowWindow(g_window, SW_SHOWNOACTIVATE);
   ::SetTimer(g_window, kHoldTimerId, kHoldTimeoutMs, nullptr);
 }

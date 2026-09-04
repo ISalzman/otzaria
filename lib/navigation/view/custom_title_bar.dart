@@ -101,38 +101,28 @@ const double _kTabContentMinWidth = 12.0;
 /// גובה גוף הכרטיסיה, בלי המפריד שלצדה.
 const double _kTabBodyHeight = 32.0;
 
-/// כמה הכרטיסיה הפעילה מציירת **מתחת** לגוף שלה, עד תחתית הסרגל.
+/// גובה הסרגל העליון, וגם הגובה שהכרטיסיה **מציירת** בו.
 ///
-/// ## מה זה מתקן
+/// ⚠️ שני הדברים חייבים להיות אותו מספר, וזה תיקון של באג שחזר שלוש
+/// פעמים. גוף הכרטיסיה הוא [_kTabBodyHeight] = 32 והסרגל 40, כלומר בין
+/// הכרטיסיה לתוכן שמתחתיה נשארים ארבעה פיקסלים של צבע הרצועה — הקו הבהיר
+/// שהמשתמש ראה. הפתרון: ה-widget של הכרטיסיה מקבל את כל 40, הצייר ממרכז
+/// בתוכו כרטיסיה בגובה 32 ומושך אותה עד התחתית, והתוכן ממורכז בנפרד.
 ///
-/// גוף הכרטיסיה הוא [_kTabBodyHeight] והסרגל [_kTopBarHeight], והכרטיסיה
-/// ממורכזת בו — כלומר מתחת לכרטיסיה נשארו ארבעה פיקסלים של **צבע הרצועה**,
-/// בין הכרטיסיה לתוכן שמתחתיה. זה הפס שהמשתמש ראה, והוא הופיע גם כשהכול
-/// היה "נכון": לא גבול, לא צל, לא מפריד — פשוט השטח שנשאר מהמירכוז.
+/// ### ⚠️ ולמה **לא** ציור מחוץ לגבולות
 ///
-/// ## למה **נגזר** ולא 4
+/// הגרסה הקודמת פתרה את זה בכך שהצייר יצא ארבעה פיקסלים מתחת ל-widget
+/// שלו. זה עבד — **לפעמים**. הרצועה היא `SingleChildScrollView`, והוא
+/// חותך את הציור ברגע שהתוכן גולש (`_shouldClipAtPaintOffset`): כלומר
+/// בדיוק כשיש הרבה כרטיסיות, או שהחלון על חצי מסך, החריגה נמחקת והקו
+/// חוזר. זה גם ההסבר המלא ל"מופיע רק בחלק מהחלונות ולא הצלחתי לאבחן
+/// מתי כן ומתי לא".
 ///
-/// זה חצי מרווח המירכוז, לא מספר שנבחר. אילו היה כתוב `4.0`, שינוי של גובה
-/// הסרגל או של גובה הכרטיסיה היה מחזיר את הפס — או מותח את הכרטיסיה לתוך
-/// התוכן — בלי שאיש יקשר בין השניים.
+/// לפני כן נוסה גם להרחיב את הסרגל בחמשה פיקסלים כדי "להזמין מקום";
+/// שם התוצאה הייתה הפוכה — התוכן נדחף למטה והפער גדל.
 ///
-/// ⚠️ הערך הזה **אינו** מרחיב את הסרגל. גרסה קודמת הוסיפה חמשה פיקסלים
-/// לגובהו כדי "להזמין מקום" לגשר, והתוצאה הייתה ההפוכה: רצועה בצבע הרצועה
-/// בכל הרוחב, חוץ ממתחת לכרטיסיה הפעילה — כלומר הפער גדל. כאן הציור נשאר
-/// בתוך גבולות הסרגל, ולכן אין למה להזמין מקום.
-///
-/// ⚠️ חשוף לבדיקה במכוון. בדיקה שמחשבת את ההיסט בעצמה מאמתת את החשבון
-/// שלה מול עצמו, ועוברת גם כשהקוד מצייר במקום הלא נכון — בדיוק מה שקרה
-/// בגרסה הראשונה של הבדיקה כאן.
-@visibleForTesting
-const double kTabBackgroundBottomOffset =
-    (_kTopBarHeight - _kTabBodyHeight) / 2;
-
-/// גובה הסרגל העליון.
-///
-/// ⚠️ חשוף כקבוע ולא כמספר בשורת ה-`SizedBox`, כי
-/// [kTabBackgroundBottomOffset] נגזר ממנו. שינוי כאן בלי שינוי שם
-/// היה מחזיר את הפס שבין הכרטיסיה לתוכן.
+/// **המסקנה: ציור שיוצא מגבולות ה-widget שלו תלוי בחסדי כל אב בעץ.**
+/// כאן אין חריגה אנכית בכלל.
 const double _kTopBarHeight = 40.0;
 
 /// רוחבי הטאבים בשורה: הנבחר עשוי להיות רחב מהשאר (ראה [_kTabSelectedMinWidth]).
@@ -941,28 +931,30 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
                       : null,
                 ),
                 Expanded(
-                  child: Container(
-                    constraints: const BoxConstraints(
-                      maxHeight: _kTabBodyHeight,
-                    ),
-                    padding: EdgeInsets.only(
-                      left: 3,
-                      right: index == 0 ? 0 : 3,
-                    ),
-                    // הגובה מפורש: ל-CustomPaint ללא ילד אין גודל טבעי, והוא
-                    // היה מתכווץ לאפס — גם הציור וגם שטח הלחיצה.
-                    child: CustomPaint(
-                      size: const Size.fromHeight(_kTabBodyHeight),
-                      painter: _tabBackgroundPainter(
-                        context,
-                        tab,
-                        state,
-                        isSelected: isSelected,
+                  // ⚠️ גובה **הסרגל** ולא גובה הכרטיסיה — ראו
+                  // [_kTopBarHeight]. הצייר ממרכז את הכרטיסיה בתוכו.
+                  child: SizedBox(
+                    height: _kTopBarHeight,
+                    child: Padding(
+                      padding: EdgeInsets.only(
+                        left: 3,
+                        right: index == 0 ? 0 : 3,
                       ),
-                      foregroundPainter: _tabHoverPainter(
-                        context,
-                        isHovered: isTabHovered,
-                        isSelected: isSelected,
+                      // הגובה מפורש: ל-CustomPaint ללא ילד אין גודל טבעי,
+                      // והוא היה מתכווץ לאפס — גם הציור וגם שטח הלחיצה.
+                      child: CustomPaint(
+                        size: const Size.fromHeight(_kTopBarHeight),
+                        painter: _tabBackgroundPainter(
+                          context,
+                          tab,
+                          state,
+                          isSelected: isSelected,
+                        ),
+                        foregroundPainter: _tabHoverPainter(
+                          context,
+                          isHovered: isTabHovered,
+                          isSelected: isSelected,
+                        ),
                       ),
                     ),
                   ),
@@ -1124,86 +1116,103 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
           // הטאב ממלא את הרוחב הקבוע שמכתיב ה-SizedBox; הכותרת ב-Expanded כדי
           // שתתכווץ ותטושטש לקראת הסוף. ה-X/נעץ מוצגים רק אם נשאר להם מקום.
           Expanded(
-            child: Container(
-              constraints: const BoxConstraints(maxHeight: _kTabBodyHeight),
-              padding: EdgeInsets.only(
-                left: outerPad,
-                right: index == 0 ? 0 : outerPad,
-              ),
-              child: CustomPaint(
-                // טאב בבחירה מרובה נצבע ב-secondaryContainer כדי לסמן שהוא
-                // חלק מהקבוצה שתיסגר יחד.
-                painter: _tabBackgroundPainter(
-                  context,
-                  tab,
-                  state,
-                  isSelected: isSelected,
+            // ⚠️ גובה **הסרגל** ולא גובה הכרטיסיה, והצייר ממרכז בתוכו.
+            // ראו [_kTopBarHeight]: ציור שיוצא מגבולות ה-widget נחתך
+            // ברצועה ברגע שהיא גולשת, וזה היה הקו הבהיר ה"לפעמים".
+            child: SizedBox(
+              height: _kTopBarHeight,
+              child: Padding(
+                padding: EdgeInsets.only(
+                  left: outerPad,
+                  right: index == 0 ? 0 : outerPad,
                 ),
-                foregroundPainter: _tabHoverPainter(
-                  context,
-                  isHovered: isTabHovered,
-                  isSelected: isSelected,
-                ),
-                child: Tab(
-                  child: Padding(
-                    padding: EdgeInsets.symmetric(horizontal: innerPad),
-                    child: DefaultTextStyle(
-                      style: titleStyle,
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          if (isSelected) const SizedBox(width: 4),
-                          if (showPin) _buildPinIconInline(context, tab),
-                          if (showPdfIcon)
-                            Padding(
-                              padding: const EdgeInsetsDirectional.only(end: 4),
-                              child: Icon(
-                                OtzariaIcons.book_pdf_24_regular,
-                                size: 14,
-                                color: colorScheme.onSurface,
-                              ),
-                            ),
-                          if (toolIcon != null)
-                            Padding(
-                              padding: const EdgeInsetsDirectional.only(end: 4),
-                              child: toolIcon,
-                            ),
-                          Expanded(
-                            child: buildTabContent(
-                              displayTitle,
-                              paneCloseExtent: paneCloseExtent,
-                              showPaneClose: showPaneClose,
-                            ),
-                          ),
-                          if (showClose)
-                            Tooltip(
-                              preferBelow: false,
-                              message: ShortcutHelper.formatShortcutForDisplay(
-                                closeTabShortcut,
-                              ),
-                              child: MetaData(
-                                metaData: _kTabCloseButtonHitMarker,
-                                child: IconButton(
-                                  // shrinkWrap + padding אפס: בלעדיהם שטח-המגע
-                                  // ברירת-המחדל (48px) גולש בטאב צר.
-                                  style: IconButton.styleFrom(
-                                    tapTargetSize:
-                                        MaterialTapTargetSize.shrinkWrap,
-                                    padding: EdgeInsets.zero,
+                child: CustomPaint(
+                  // טאב בבחירה מרובה נצבע ב-secondaryContainer כדי לסמן שהוא
+                  // חלק מהקבוצה שתיסגר יחד.
+                  painter: _tabBackgroundPainter(
+                    context,
+                    tab,
+                    state,
+                    isSelected: isSelected,
+                  ),
+                  foregroundPainter: _tabHoverPainter(
+                    context,
+                    isHovered: isTabHovered,
+                    isSelected: isSelected,
+                  ),
+                  // התוכן נשאר בגובה הכרטיסיה וממורכז, כדי שהגבהת ה-widget
+                  // לא תזיז את הכותרת והאייקונים.
+                  child: Center(
+                    child: SizedBox(
+                      height: _kTabBodyHeight,
+                      child: Tab(
+                        child: Padding(
+                          padding: EdgeInsets.symmetric(horizontal: innerPad),
+                          child: DefaultTextStyle(
+                            style: titleStyle,
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: [
+                                if (isSelected) const SizedBox(width: 4),
+                                if (showPin) _buildPinIconInline(context, tab),
+                                if (showPdfIcon)
+                                  Padding(
+                                    padding: const EdgeInsetsDirectional.only(
+                                      end: 4,
+                                    ),
+                                    child: Icon(
+                                      OtzariaIcons.book_pdf_24_regular,
+                                      size: 14,
+                                      color: colorScheme.onSurface,
+                                    ),
                                   ),
-                                  constraints: BoxConstraints.tightFor(
-                                    width: closeExtent,
-                                    height: _kTabCloseExtent,
+                                if (toolIcon != null)
+                                  Padding(
+                                    padding: const EdgeInsetsDirectional.only(
+                                      end: 4,
+                                    ),
+                                    child: toolIcon,
                                   ),
-                                  onPressed: () => closeTab(tab, context),
-                                  icon: const Icon(
-                                    FluentIcons.dismiss_24_regular,
-                                    size: 10,
+                                Expanded(
+                                  child: buildTabContent(
+                                    displayTitle,
+                                    paneCloseExtent: paneCloseExtent,
+                                    showPaneClose: showPaneClose,
                                   ),
                                 ),
-                              ),
+                                if (showClose)
+                                  Tooltip(
+                                    preferBelow: false,
+                                    message:
+                                        ShortcutHelper.formatShortcutForDisplay(
+                                          closeTabShortcut,
+                                        ),
+                                    child: MetaData(
+                                      metaData: _kTabCloseButtonHitMarker,
+                                      child: IconButton(
+                                        // shrinkWrap + padding אפס: בלעדיהם שטח-המגע
+                                        // ברירת-המחדל (48px) גולש בטאב צר.
+                                        style: IconButton.styleFrom(
+                                          tapTargetSize:
+                                              MaterialTapTargetSize.shrinkWrap,
+                                          padding: EdgeInsets.zero,
+                                        ),
+                                        constraints: BoxConstraints.tightFor(
+                                          width: closeExtent,
+                                          height: _kTabCloseExtent,
+                                        ),
+                                        onPressed: () => closeTab(tab, context),
+                                        icon: const Icon(
+                                          FluentIcons.dismiss_24_regular,
+                                          size: 10,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                              ],
                             ),
-                        ],
+                          ),
+                        ),
                       ),
                     ),
                   ),
@@ -1369,46 +1378,44 @@ class _TabBackgroundPainter extends CustomPainter {
     const topRadius = 8.0;
     const bottomRadius = 15.0;
 
-    // הצורה נמשכת [kTabBackgroundBottomOffset] מתחת לגוף הכרטיסיה, עד
-    // ראו ההסבר שם. הציור נשאר בתוך גבולות הסרגל, ולכן דבר אינו נצבע
-    // מעליו.
-    path.moveTo(-bottomRadius, size.height + kTabBackgroundBottomOffset);
+    // ⚠️ הצורה יושבת **בתוך** הגבולות: מ-[topInset] ועד `size.height`
+    // בדיוק. אין חריגה אנכית — ראו ההסבר ב-[_kTopBarHeight].
+    //
+    // המירכוז נעשה כאן ולא בפריסה, כי ה-widget מקבל את כל גובה הסרגל
+    // (כדי שלא ייחתך) בעוד שהכרטיסיה עצמה נמוכה ממנו.
+    final topInset = math.max(0.0, (size.height - _kTabBodyHeight) / 2);
+
+    path.moveTo(-bottomRadius, size.height);
 
     path.arcToPoint(
-      Offset(0, size.height + kTabBackgroundBottomOffset - bottomRadius),
+      Offset(0, size.height - bottomRadius),
       radius: const Radius.circular(bottomRadius),
       clockwise: false,
     );
 
-    path.lineTo(0, topRadius);
+    path.lineTo(0, topInset + topRadius);
 
     path.arcToPoint(
-      const Offset(topRadius, 0),
+      Offset(topRadius, topInset),
       radius: const Radius.circular(topRadius),
     );
 
-    path.lineTo(size.width - topRadius, 0);
+    path.lineTo(size.width - topRadius, topInset);
 
     path.arcToPoint(
-      Offset(size.width, topRadius),
+      Offset(size.width, topInset + topRadius),
       radius: const Radius.circular(topRadius),
     );
 
-    path.lineTo(
-      size.width,
-      size.height + kTabBackgroundBottomOffset - bottomRadius,
-    );
+    path.lineTo(size.width, size.height - bottomRadius);
 
     path.arcToPoint(
-      Offset(
-        size.width + bottomRadius,
-        size.height + kTabBackgroundBottomOffset,
-      ),
+      Offset(size.width + bottomRadius, size.height),
       radius: const Radius.circular(bottomRadius),
       clockwise: false,
     );
 
-    path.lineTo(-bottomRadius, size.height + kTabBackgroundBottomOffset);
+    path.lineTo(-bottomRadius, size.height);
 
     path.close();
     canvas.drawPath(path, paint);

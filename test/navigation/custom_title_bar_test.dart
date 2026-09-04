@@ -1592,20 +1592,69 @@ void main() {
           .toList();
       expect(painted, hasLength(1), reason: 'רק הכרטיסיה הפעילה נצבעת');
 
-      final tabRect = tester.getRect(
-        find.byWidget(painted.first),
-      );
+      final tabRect = tester.getRect(find.byWidget(painted.first));
       final barRect = tester.getRect(find.byType(CustomTitleBar));
 
-      // ⚠️ ההצהרה עצמה: הציור נמשך מתחת לגוף הכרטיסיה **בדיוק** עד
-      // תחתית הסרגל. פחות מזה — נשאר פס; יותר — הכרטיסיה נכנסת לתוכן.
-      final painterBottom = tabRect.bottom + kTabBackgroundBottomOffset;
+      // ⚠️ ההצהרה: שטח הציור **הוא** גובה הסרגל, מלמעלה עד למטה.
+      //
+      // זו הצהרה חזקה יותר מ"הציור מגיע עד התחתית", והיא זו שנדרשת: כל
+      // עוד הצייר חרג מגבולות ה-widget שלו, הרצועה
+      // (`SingleChildScrollView`) חתכה את החריגה ברגע שהתוכן גלש —
+      // כלומר עם הרבה כרטיסיות או בחלון צר הקו הבהיר חזר. ציור שכולו
+      // בתוך הגבולות אינו יכול להיחתך.
       expect(
-        painterBottom,
+        tabRect.top,
+        moreOrLessEquals(barRect.top, epsilon: 0.01),
+        reason: 'שטח הציור מתחיל ב-${tabRect.top} והסרגל ב-${barRect.top}',
+      );
+      expect(
+        tabRect.bottom,
         moreOrLessEquals(barRect.bottom, epsilon: 0.01),
         reason:
-            'הציור נעצר ב-$painterBottom והסרגל מסתיים ב-${barRect.bottom} — '
-            'ההפרש הוא הפס שנראה בין הכרטיסיה לתוכן',
+            'שטח הציור מסתיים ב-${tabRect.bottom} והסרגל ב-'
+            '${barRect.bottom} — ההפרש הוא הפס שנראה בין הכרטיסיה לתוכן',
+      );
+    });
+
+    testWidgets('הגבהת שטח הציור אינה מזיזה את כותרת הכרטיסיה', (
+      tester,
+    ) async {
+      // ⚠️ ה-widget קיבל את כל גובה הסרגל כדי שהציור לא ייחתך, והתוכן
+      // ממורכז בנפרד. בלי המירכוז הכותרת הייתה יורדת ארבעה פיקסלים.
+      final tabs = [_makeTextTab('ספר א'), _makeTextTab('ספר ב')];
+      final tabsBloc = _TestTabsBloc(
+        TabsState(tabs: tabs, currentTabIndex: 0),
+      );
+      final navigationBloc = _TestNavigationBloc(
+        const NavigationState(currentScreen: Screen.reading),
+      );
+      final settingsBloc = _TestSettingsBloc(SettingsState.initial());
+
+      addTearDown(() async {
+        for (final tab in tabs) {
+          tab.dispose();
+        }
+        await tabsBloc.close();
+        await navigationBloc.close();
+        await settingsBloc.close();
+      });
+
+      await _setSurfaceSize(tester, const Size(1200, 800));
+      await _pumpTitleBar(
+        tester,
+        tabsBloc: tabsBloc,
+        navigationBloc: navigationBloc,
+        settingsBloc: settingsBloc,
+      );
+
+      final titleRect = tester.getRect(find.text('ספר א').first);
+      final barRect = tester.getRect(find.byType(CustomTitleBar));
+      expect(
+        titleRect.center.dy,
+        moreOrLessEquals(barRect.center.dy, epsilon: 1.0),
+        reason:
+            'הכותרת ממורכזת ב-${titleRect.center.dy} והסרגל ב-'
+            '${barRect.center.dy}',
       );
     });
 
