@@ -1,7 +1,7 @@
 // Tests for [ReferenceBooksCache.prewarmAllPdfOutlines].
 //
 // המנגנון: לאחר ש-warmUp מסיים, ה-cache מפעיל ברקע parse של ה-outline לכל
-// ה-FS PDFs ב-batches מוגבלות (ברירת מחדל 4). הטסטים בודקים את ההתנהגויות
+// ה-FS PDFs ב-batches מוגבלות (ברירת מחדל 1 — ה-worker של pdfrx יחיד). הטסטים בודקים את ההתנהגויות
 // הקריטיות: throttle בפועל, דילוג על ערכים שכבר בקאש, וביטול לאחר clear().
 
 import 'dart:async';
