@@ -13,12 +13,15 @@ import 'package:otzaria/theme/app_surfaces.dart';
 ///
 /// ⚠️ הצבעים נלקחים מ-`AppSurfaces` ומ-`colorScheme`, ולא מ-literal-ים —
 /// כלל 2.9 בפרויקט. כאן זו נקודת התרגום היחידה בין השכבות.
+///
+/// ⚠️ שלושה צבעים ולא חמישה. גרסה קודמת ציירה "חלון מוקטן" ולכן שלחה גם
+/// רקע רצועה וגם רקע גוף; מאז מה שנגרר הוא צילום, והשרטוט שקודם לו הוא
+/// כרטיסיה בלבד. הרקע של המוק מגיע מ-`ReadingTabStrip.stripColor`, שם הוא
+/// באמת נצבע.
 @immutable
 class DragPreviewColors {
   const DragPreviewColors({
-    required this.strip,
     required this.tab,
-    required this.body,
     required this.border,
     required this.text,
   });
@@ -28,28 +31,21 @@ class DragPreviewColors {
   factory DragPreviewColors.of(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return DragPreviewColors(
-      // רצועת הכרטיסיות במסך הקריאה.
-      strip: AppSurfaces.readerBackground(context),
       // הכרטיסיה הפעילה — אותו משטח בדיוק כמו ב-`_tabBackgroundPainter`.
       tab: AppSurfaces.topBarBackground(context),
-      body: AppSurfaces.readerBackground(context),
       border: scheme.outlineVariant,
       text: scheme.onSurface,
     );
   }
 
-  final Color strip;
   final Color tab;
-  final Color body;
   final Color border;
   final Color text;
 
   /// ⚠️ `toARGB32` ולא `.value`: השני יצא deprecated, והצד הנייטיבי מצפה
   /// ל-int יחיד שממנו הוא חולץ R/G/B.
   Map<String, int> toArgb() => {
-    'strip': strip.toARGB32(),
     'tab': tab.toARGB32(),
-    'body': body.toARGB32(),
     'border': border.toARGB32(),
     'text': text.toARGB32(),
   };

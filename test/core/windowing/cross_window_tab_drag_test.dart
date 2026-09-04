@@ -213,9 +213,7 @@ void main() {
     const settle = Duration(milliseconds: 260);
 
     const colors = DragPreviewColors(
-      strip: Color(0xFF101010),
       tab: Color(0xFF202020),
-      body: Color(0xFF303030),
       border: Color(0xFF404040),
       text: Color(0xFFF0F0F0),
     );
@@ -345,6 +343,53 @@ void main() {
       expect(peer.receivedTabs, 1);
       expect(runner.openWindowCalls, 0);
       expect(tabsBloc.events.whereType<RemoveTab>(), hasLength(1));
+    });
+
+    test('⚠️ הצמדה פותחת חלון גם כשחלון המקור תחת הסמן', () async {
+      // זה היה באג נראה לעין: המשתמש ראה את מסדר החלונות נפתח, בחר אזור,
+      // **ושום חלון לא נפתח**. האזור המוצמד מכסה בדרך כלל את חלון המקור
+      // עצמו, ולכן `isSelf` יצא true והקוד ביטל בשקט.
+      //
+      // הצמדה היא החלטה מפורשת של המשתמש "החלון יהיה כאן", ולכן מה
+      // שנמצא תחת הסמן באותו רגע חסר משמעות.
+      runner.cursorTarget = (slot: null, isSelf: false, isShellTray: false);
+      runner.systemDragTarget = (slot: 1, isSelf: true, isShellTray: false);
+      runner.systemDragResult = (
+        ran: true,
+        snapped: true,
+        left: 0,
+        top: 0,
+        width: 960,
+        height: 1040,
+      );
+
+      startDrag(firstTab());
+      await Future<void>.delayed(settle);
+
+      expect(runner.openWindowCalls, 1);
+      expect(tabsBloc.events.whereType<RemoveTab>(), hasLength(1));
+    });
+
+    test('הצמדה גוברת גם על חלון אוצריא אחר שתחת הסמן', () async {
+      // אותו היגיון: הצמדה אינה "העבר לחלון הזה" אלא "פתח חלון כאן".
+      final peer = _FakePeer(2, accept: true)..register();
+      addTearDown(peer.dispose);
+      runner.cursorTarget = (slot: null, isSelf: false, isShellTray: false);
+      runner.systemDragTarget = (slot: 2, isSelf: false, isShellTray: false);
+      runner.systemDragResult = (
+        ran: true,
+        snapped: true,
+        left: 960,
+        top: 0,
+        width: 960,
+        height: 1040,
+      );
+
+      startDrag(firstTab());
+      await Future<void>.delayed(settle);
+
+      expect(peer.receivedTabs, 0);
+      expect(runner.openWindowCalls, 1);
     });
 
     test('שחרור חזרה מעל חלון המקור מבוטל', () async {

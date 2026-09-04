@@ -728,9 +728,7 @@ bool FlutterWindow::OnCreate() {
               *out = RGB((argb >> 16) & 0xFF, (argb >> 8) & 0xFF, argb & 0xFF);
               return true;
             };
-            colors.valid = read("strip", &colors.strip) &&
-                           read("tab", &colors.tab) &&
-                           read("body", &colors.body) &&
+            colors.valid = read("tab", &colors.tab) &&
                            read("border", &colors.border) &&
                            read("text", &colors.text);
           } else if (const auto* legacy =

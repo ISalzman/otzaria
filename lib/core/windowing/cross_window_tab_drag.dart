@@ -249,22 +249,43 @@ class CrossWindowTabDrag {
     _timer = null;
 
     if (outcome == null) return _hidePreview();
+    // ⚠️ נשאר בקוד. את מסלול הגרירה אי אפשר לבדוק אוטומטית — הוא תלוי
+    // בהחלטות ה-shell — ושורה אחת בלוג היא ההבדל בין אבחון לניחוש.
+    debugPrint(
+      'גרירה הסתיימה: snapped=${outcome.snapped} '
+      'rect=${outcome.left},${outcome.top} '
+      '${outcome.width}×${outcome.height} '
+      'slot=${outcome.slot} isSelf=${outcome.isSelf} '
+      'tray=${outcome.isShellTray}',
+    );
 
-    // שחרור חזרה מעל חלון המקור — ביטול. אחרת כל גרירה שיצאה וחזרה
-    // הייתה פותחת חלון.
-    if (outcome.isSelf) return _hidePreview();
+    // ⚠️ **הצמדה עוקפת את שאלת "מה תחת הסמן", וזה תיקון של באג.**
+    //
+    // המשתמש בחר אזור במסדר החלונות, והמערכת הצמידה את התצוגה אליו —
+    // כלומר "החלון יהיה כאן" הוא כבר החלטה מפורשת. אבל האזור המוצמד מכסה
+    // בדרך כלל את חלון המקור עצמו, ולכן `isSelf` יצא true והקוד ביטל
+    // בשקט: המשתמש ראה את מסדר החלונות נפתח, בחר אזור, **ושום חלון לא
+    // נפתח**.
+    //
+    // בגרירה בלי הצמדה השאלה כן רלוונטית: שם המשתמש רק הזיז את הרוח
+    // ושחרר, ומה שתחת הסמן הוא כל מה שמעיד על כוונתו.
+    if (!outcome.snapped) {
+      // שחרור חזרה מעל חלון המקור — ביטול. אחרת כל גרירה שיצאה וחזרה
+      // הייתה פותחת חלון.
+      if (outcome.isSelf) return _hidePreview();
 
-    // ⚠️ שורת המשימות אינה מחווה של "פתח חלון כאן". היא נגישה גם בחלון
-    // ממוקסם, ולכן שחרור עליה הוא כמעט תמיד החטאה.
-    if (outcome.isShellTray) {
-      debugPrint('גרירה שוחררה מעל שורת המשימות — מבוטלת');
-      return _hidePreview();
+      // ⚠️ שורת המשימות אינה מחווה של "פתח חלון כאן". היא נגישה גם בחלון
+      // ממוקסם, ולכן שחרור עליה הוא כמעט תמיד החטאה.
+      if (outcome.isShellTray) {
+        debugPrint('גרירה שוחררה מעל שורת המשימות — מבוטלת');
+        return _hidePreview();
+      }
     }
 
     final dropIndex = _remoteDropIndex;
     _remoteDropIndex = null;
 
-    if (outcome.slot != null) {
+    if (!outcome.snapped && outcome.slot != null) {
       // הכרטיסיה נכנסת לחלון קיים — אין מה להחליף את הרוח, והיא מוסתרת
       // מיד כדי שלא תרחף מעל היעד.
       _hidePreview();

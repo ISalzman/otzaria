@@ -113,6 +113,25 @@ class AppTopBar extends StatefulWidget {
   State<AppTopBar> createState() => _AppTopBarState();
 }
 
+/// מרחב לצל התחתון, גדול מטווח הצל של `elevation: 2`.
+const double _kShadowReach = 12.0;
+
+/// חותך את הצל שמעל הסרגל ומשאיר את הצל שמתחתיו ולצדדיו.
+class _ShadowBelowOnlyClipper extends CustomClipper<Rect> {
+  const _ShadowBelowOnlyClipper();
+
+  @override
+  Rect getClip(Size size) => Rect.fromLTRB(
+    -_kShadowReach,
+    0,
+    size.width + _kShadowReach,
+    size.height + _kShadowReach,
+  );
+
+  @override
+  bool shouldReclip(covariant CustomClipper<Rect> oldClipper) => false;
+}
+
 const double _kTouchHeight = 56.0;
 const double _kCompactHeight = 44.0;
 const Duration _kAnimDuration = Duration(milliseconds: 220);
@@ -340,16 +359,19 @@ class _AppTopBarState extends State<AppTopBar>
                     : BarButton.toolbarWidth(isCompact),
               );
 
-        final mainBar = Material(
-          color: barColor,
-          elevation: 2.0,
-          shadowColor: shadowColor,
-          surfaceTintColor: Colors.transparent,
-          child: SizedBox(
-            height: barH,
-            child: Padding(
-              padding: EdgeInsets.symmetric(horizontal: hPad, vertical: vPad),
-              child: toolbar,
+        final mainBar = ClipRect(
+          clipper: const _ShadowBelowOnlyClipper(),
+          child: Material(
+            color: barColor,
+            elevation: 2.0,
+            shadowColor: shadowColor,
+            surfaceTintColor: Colors.transparent,
+            child: SizedBox(
+              height: barH,
+              child: Padding(
+                padding: EdgeInsets.symmetric(horizontal: hPad, vertical: vPad),
+                child: toolbar,
+              ),
             ),
           ),
         );

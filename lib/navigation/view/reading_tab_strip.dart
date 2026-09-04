@@ -803,12 +803,18 @@ class _TabDragFeedback extends StatelessWidget {
       textDirection: Directionality.of(context),
       child: Theme(
         data: theme,
-        // העוגן הוא נקודת המצביע, ולכן הכרטיסיה מוזזת כדי לרחף סביבה.
-        child: FractionalTranslation(
-          translation: const Offset(-0.5, -0.5),
-          child: ValueListenableBuilder<ui.Image?>(
-            valueListenable: contentImage,
-            builder: (context, content, _) => Material(
+        // העוגן הוא נקודת המצביע, ולכן התצוגה מוזזת כדי לרחף סביבו.
+        child: ValueListenableBuilder<ui.Image?>(
+          valueListenable: contentImage,
+          builder: (context, content, _) => FractionalTranslation(
+            // ⚠️ המוק יורד **מתחת** לסמן, ורק הוא. ראש הכרטיסיה לבדו
+            // ממורכז על הסמן כמו קודם, אבל מוק בגובה 170 שממורכז עליו
+            // מכסה את הכרטיסיות שמימין ומשמאל — בדיוק אותן כרטיסיות
+            // שהמשתמש צריך לראות זזות כדי לדעת לאן הנגררת נכנסת.
+            translation: content == null
+                ? const Offset(-0.5, -0.5)
+                : const Offset(-0.5, 0),
+            child: Material(
               color: content == null
                   ? theme.colorScheme.surfaceContainerHigh
                   : stripColor,

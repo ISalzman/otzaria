@@ -20,10 +20,10 @@ final GlobalKey windowContentBoundaryKey = GlobalKey();
 /// מחווה בתוך הרצועה, ותצוגה בגודל חלון הייתה מכסה את התוכנה כולה בזמן
 /// שהמשתמש מנסה לראות לאן הכרטיסיה נכנסת. בגרירה **החוצה** התצוגה כן
 /// בגודל אמיתי — שם היא מוק של החלון שעומד להיפתח.
-const double kMiniPreviewWidth = 280;
+const double kMiniPreviewWidth = 240;
 
 /// גובה מרבי לתצוגה המוקטנת. חלון רחב-ונמוך אינו נמתח מעל זה.
-const double kMiniPreviewMaxHeight = 200;
+const double kMiniPreviewMaxHeight = 170;
 
 /// תקרת פיקסלים לצילום שנשלח לצד הנייטיבי.
 ///

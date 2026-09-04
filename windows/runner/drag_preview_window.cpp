@@ -50,9 +50,7 @@ std::atomic<HWND> g_source{nullptr};
 std::atomic<bool> g_system_dragging{false};
 
 struct Palette {
-  COLORREF strip = RGB(0xF2, 0xEB, 0xE0);
   COLORREF tab = RGB(0xF7, 0xF2, 0xEA);
-  COLORREF body = RGB(0xFD, 0xFB, 0xF7);
   COLORREF border = RGB(0xC9, 0xBA, 0xA4);
   COLORREF text = RGB(0x3A, 0x2E, 0x1E);
 };
@@ -388,9 +386,7 @@ void Begin(const std::wstring& title, HWND source, const Colors& colors) {
     std::lock_guard<std::mutex> lock(g_mutex);
     g_title = title;
     if (colors.valid) {
-      g_palette.strip = colors.strip;
       g_palette.tab = colors.tab;
-      g_palette.body = colors.body;
       g_palette.border = colors.border;
       g_palette.text = colors.text;
     }
@@ -544,6 +540,5 @@ void End() {
                  SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
 }
 
-bool IsActive() { return g_active.load(); }
 
 }  // namespace drag_preview
