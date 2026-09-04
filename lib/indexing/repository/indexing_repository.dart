@@ -16,6 +16,7 @@ import 'package:otzaria/indexing/utils/pdf_extraction_prefetcher.dart';
 import 'package:otzaria/indexing/models/catalogue_order_resolver.dart';
 import 'package:otzaria/indexing/models/indexing_run_result.dart';
 import 'package:otzaria/migration/database/repository/seforim_repository.dart';
+import 'package:otzaria/pdf_book/utils/pdf_viewer_activity.dart';
 import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/search/book_facet.dart';
@@ -976,6 +977,8 @@ class IndexingRepository {
     final file = File(book.path);
     if (!await file.exists()) return empty;
 
+    // הקורא קודם — טאב שממתין לעמוד היעד לא יחכה בתור מאחורי האינדוקס.
+    await PdfViewerActivity.instance.waitUntilIdle();
     final document = await PdfDocument.openFile(
       book.path,
     ).timeout(const Duration(seconds: 60));
@@ -994,6 +997,7 @@ class IndexingRepository {
       final pageCount = document.pages.length;
       for (int i = 0; i < pageCount; i++) {
         if (!_tantivyDataProvider.isIndexing.value) return empty;
+        await PdfViewerActivity.instance.waitUntilIdle();
 
         final pageText = await document.pages[i].loadText().timeout(
           const Duration(seconds: 5),

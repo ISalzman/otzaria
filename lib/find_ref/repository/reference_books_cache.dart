@@ -12,6 +12,7 @@ import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/migration/database/repository/seforim_repository.dart';
 import 'package:otzaria/migration/models/category.dart' as db_models;
 import 'package:otzaria/migration/models/pdf_outline_cache_entry.dart';
+import 'package:otzaria/pdf_book/utils/pdf_viewer_activity.dart';
 import 'package:otzaria/services/commentary_service.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart';
 import 'package:pdfrx/pdfrx.dart';
@@ -489,6 +490,8 @@ class ReferenceBooksCache {
     if (paths.isEmpty) return;
 
     for (var i = 0; i < paths.length; i += maxConcurrent) {
+      // הקורא קודם — טאב שממתין לעמוד היעד לא יחכה בתור מאחורי ה-outline.
+      await PdfViewerActivity.instance.waitUntilIdle();
       if (gen != _generation) return;
       final end = (i + maxConcurrent < paths.length)
           ? i + maxConcurrent

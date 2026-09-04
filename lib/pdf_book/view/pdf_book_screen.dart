@@ -36,6 +36,7 @@ import 'package:otzaria/pdf_book/bloc/pdf_book_bloc.dart';
 import 'package:otzaria/pdf_book/bloc/pdf_book_event.dart' as pdf_events;
 import 'package:otzaria/pdf_book/bloc/pdf_book_state.dart';
 import 'package:otzaria/pdf_book/utils/pdf_spread_layout.dart';
+import 'package:otzaria/pdf_book/utils/pdf_viewer_activity.dart';
 import 'package:otzaria/pdf_book/utils/trackpad_axis_lock.dart';
 import 'package:otzaria/pdf_book/utils/trackpad_pan_recognizer.dart';
 import 'package:otzaria/widgets/misc/app_cursors.dart';
@@ -3708,6 +3709,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     // יכול לירות לפני onViewerReady, ואיפוס היה מאבד את הסימון. הוא
     // מנוהל ריכוזית ב-_createDocumentRef.
     if (!_waitingForStableLayout) {
+      PdfViewerActivity.instance.begin();
       setState(() {
         _waitingForStableLayout = true;
       });
@@ -3776,6 +3778,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     _stableLayoutTargetPage = null;
     _stableLayoutStartedAt = null;
     if (!_waitingForStableLayout) return;
+    PdfViewerActivity.instance.end();
     if (mounted) {
       setState(() {
         _waitingForStableLayout = false;
@@ -3793,6 +3796,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     _stableLayoutStartedAt = null;
     _stableLayoutRetryCount = 0;
     _stableLayoutPrefixChecked = false;
+    if (_waitingForStableLayout) PdfViewerActivity.instance.end();
     _waitingForStableLayout = false;
     // לא מאפסים _documentFullyLoaded כאן — ראה הסבר ב-_beginStableLayoutTracking.
   }
@@ -3920,6 +3924,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     textSearcher = null;
     _stableLayoutTimer?.cancel();
     _stableLayoutTimer = null;
+    if (_waitingForStableLayout) PdfViewerActivity.instance.end();
     pdfController.removeListener(_onPdfViewerControllerUpdate);
     _leftPaneTabController?.removeListener(_leftPaneTabControllerListener);
     widget.tab.showLeftPane.removeListener(_showLeftPaneListener);
