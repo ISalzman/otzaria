@@ -559,6 +559,21 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
         return ValueListenableBuilder<SearchPreviewTarget?>(
           valueListenable: widget.tab.previewTarget,
           builder: (context, target, _) {
+            // אותם פרמטרים שפתיחה בחלון מלא מעבירה, כדי שההדגשה בשתי
+            // התצוגות תזהה את אותן התאמות (issue #1147).
+            final configuration = widget.tab.searchBloc.state.configuration;
+            final previewQuery = widget.tab.searchBloc.state.searchQuery;
+            final previewOptions = widget.tab.effectiveSearchOptions(
+              query: previewQuery,
+            );
+            final previewParameters = InBookSearchRouting.resolveForReadingTab(
+              searchMode: configuration.searchMode,
+              distance: configuration.distance,
+              searchOptions: previewOptions,
+              alternativeWords: widget.tab.alternativeWords,
+              spacingValues: widget.tab.spacingValues,
+              matchPolicy: configuration.matchPolicy,
+            );
             final available = constraints.maxWidth;
             final minWidth = available < 280 ? available : 280.0;
             final maxWidth = (available - 320).clamp(minWidth, available);
@@ -577,6 +592,12 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
                     ? target.segment + 1
                     : null,
                 searchText: widget.tab.searchBloc.state.searchQuery,
+                searchOptions: previewOptions,
+                alternativeWords: widget.tab.alternativeWords,
+                spacingValues: widget.tab.spacingValues,
+                searchMode: previewParameters.searchMode,
+                searchDistance: previewParameters.distance,
+                matchPolicy: previewParameters.matchPolicy,
                 onOpenInReader: (_, {bool? forcePdf}) {
                   final openTarget = widget.tab.previewTarget.value;
                   if (openTarget == null) return;

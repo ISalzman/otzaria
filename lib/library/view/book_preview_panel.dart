@@ -10,6 +10,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/core/messages/messages_exports.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/models/books.dart';
+import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/text_book/view/combined_view/combined_book_screen.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
@@ -47,6 +48,16 @@ class BookPreviewPanel extends StatefulWidget {
   /// טקסט להדגשה בסעיף היעד (שאילתת החיפוש שבוצעה).
   final String? searchText;
 
+  /// פרמטרי החיפוש שהניבו את התוצאה. בלעדיהם ההדגשה בתצוגה המקדימה מכירה
+  /// רק את השאילתה המילולית, וכל תוצאה שנמצאה דרך קידומת, מילה חלופית או
+  /// מרחק בין מילים מוצגת בלי הדגשה (issue #1147).
+  final Map<String, Map<String, bool>> searchOptions;
+  final Map<int, List<String>> alternativeWords;
+  final Map<String, String> spacingValues;
+  final SearchMode searchMode;
+  final int searchDistance;
+  final SearchMatchPolicy matchPolicy;
+
   const BookPreviewPanel({
     super.key,
     this.book,
@@ -54,10 +65,47 @@ class BookPreviewPanel extends StatefulWidget {
     this.initialTextIndex,
     this.initialPdfPage,
     this.searchText,
+    this.searchOptions = const {},
+    this.alternativeWords = const {},
+    this.spacingValues = const {},
+    this.searchMode = SearchMode.exact,
+    this.searchDistance = 0,
+    this.matchPolicy = SearchMatchPolicy.standard,
   });
 
   @override
   State<BookPreviewPanel> createState() => _BookPreviewPanelState();
+}
+
+/// טאב הטקסט שהתצוגה המקדימה מרנדרת. חשוף לבדיקה כדי לנעול את העברת
+/// פרמטרי החיפוש — הם קובעים אילו תוצאות מודגשות, ולא רק מה נמצא.
+@visibleForTesting
+TextBookTab buildPreviewTextTab({
+  required TextBook book,
+  required int? targetIndex,
+  String? searchText,
+  Map<String, Map<String, bool>> searchOptions = const {},
+  Map<int, List<String>> alternativeWords = const {},
+  Map<String, String> spacingValues = const {},
+  SearchMode searchMode = SearchMode.exact,
+  int searchDistance = 0,
+  SearchMatchPolicy matchPolicy = SearchMatchPolicy.standard,
+}) {
+  final hasTarget = targetIndex != null;
+  return TextBookTab(
+    book: book,
+    index: targetIndex ?? 0,
+    searchText: hasTarget ? (searchText ?? '') : '',
+    searchOptions: hasTarget ? searchOptions : const {},
+    alternativeWords: hasTarget ? alternativeWords : const {},
+    spacingValues: hasTarget ? spacingValues : const {},
+    searchMode: hasTarget ? searchMode : SearchMode.exact,
+    searchDistance: hasTarget ? searchDistance : 0,
+    matchPolicy: hasTarget ? matchPolicy : SearchMatchPolicy.standard,
+    initialSearchResultLines: hasTarget ? {targetIndex} : null,
+    openLeftPane: false,
+    splitedView: Settings.getValue<bool>('key-splited-view') ?? true,
+  );
 }
 
 class _BookPreviewPanelState extends State<BookPreviewPanel> {
@@ -198,16 +246,18 @@ class _BookPreviewPanelState extends State<BookPreviewPanel> {
   }
 
   void _createTextTab(TextBook textBook) {
-    final targetIndex = widget.initialTextIndex;
     setState(() {
       _isPdfViewerReady = false;
-      _currentTextTab = TextBookTab(
+      _currentTextTab = buildPreviewTextTab(
         book: textBook,
-        index: targetIndex ?? 0,
-        searchText: targetIndex != null ? (widget.searchText ?? '') : '',
-        initialSearchResultLines: targetIndex != null ? {targetIndex} : null,
-        openLeftPane: false,
-        splitedView: Settings.getValue<bool>('key-splited-view') ?? true,
+        targetIndex: widget.initialTextIndex,
+        searchText: widget.searchText,
+        searchOptions: widget.searchOptions,
+        alternativeWords: widget.alternativeWords,
+        spacingValues: widget.spacingValues,
+        searchMode: widget.searchMode,
+        searchDistance: widget.searchDistance,
+        matchPolicy: widget.matchPolicy,
       );
     });
   }
