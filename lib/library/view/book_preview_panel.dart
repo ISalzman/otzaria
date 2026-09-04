@@ -7,6 +7,7 @@ import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:otzaria_icons/otzaria_icons.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:collection/collection.dart';
 import 'package:otzaria/core/messages/messages_exports.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/models/books.dart';
@@ -48,9 +49,8 @@ class BookPreviewPanel extends StatefulWidget {
   /// טקסט להדגשה בסעיף היעד (שאילתת החיפוש שבוצעה).
   final String? searchText;
 
-  /// פרמטרי החיפוש שהניבו את התוצאה. בלעדיהם ההדגשה בתצוגה המקדימה מכירה
-  /// רק את השאילתה המילולית, וכל תוצאה שנמצאה דרך קידומת, מילה חלופית או
-  /// מרחק בין מילים מוצגת בלי הדגשה (issue #1147).
+  /// פרמטרי החיפוש שהניבו את התוצאה. בלעדיהם ההדגשה מכירה רק את השאילתה
+  /// המילולית, ותוצאה שהותאמה דרך קידומת או מרחק מוצגת בלי הדגשה (issue #1147).
   final Map<String, Map<String, bool>> searchOptions;
   final Map<int, List<String>> alternativeWords;
   final Map<String, String> spacingValues;
@@ -75,6 +75,26 @@ class BookPreviewPanel extends StatefulWidget {
 
   @override
   State<BookPreviewPanel> createState() => _BookPreviewPanelState();
+}
+
+/// האם פרמטרי החיפוש של התצוגה המקדימה השתנו. ההשוואה עמוקה: המפות נבנות
+/// מחדש בכל רינדור, והשוואת זהות הייתה בונה את הטאב מחדש בלי סוף.
+@visibleForTesting
+bool previewSearchParametersChanged(
+  BookPreviewPanel oldWidget,
+  BookPreviewPanel newWidget,
+) {
+  const equality = DeepCollectionEquality();
+  return oldWidget.searchText != newWidget.searchText ||
+      oldWidget.searchMode != newWidget.searchMode ||
+      oldWidget.searchDistance != newWidget.searchDistance ||
+      oldWidget.matchPolicy != newWidget.matchPolicy ||
+      !equality.equals(oldWidget.searchOptions, newWidget.searchOptions) ||
+      !equality.equals(
+        oldWidget.alternativeWords,
+        newWidget.alternativeWords,
+      ) ||
+      !equality.equals(oldWidget.spacingValues, newWidget.spacingValues);
 }
 
 /// טאב הטקסט שהתצוגה המקדימה מרנדרת. חשוף לבדיקה כדי לנעול את העברת
@@ -135,6 +155,14 @@ class _BookPreviewPanelState extends State<BookPreviewPanel> {
       if (widget.book != null) {
         _createNewTab();
       }
+      return;
+    }
+
+    // אותה תוצאה, פרמטרי חיפוש אחרים: שינוי מצב/מרחק/אפשרויות והרצה חוזרת
+    // של אותה שאילתה אינם סוגרים את החלונית, והטאב היה מדגיש לפי הישנים.
+    if (previewSearchParametersChanged(oldWidget, widget)) {
+      _disposeCurrentTab();
+      _createNewTab();
       return;
     }
 

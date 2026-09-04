@@ -90,4 +90,69 @@ void main() {
       expect(tab.initialSearchResultLines, isNull);
     });
   });
+
+  group('זיהוי שינוי בפרמטרי החיפוש', () {
+    BookPreviewPanel panel({
+      String searchText = 'אבל',
+      Map<String, Map<String, bool>> searchOptions = const {},
+      int searchDistance = 0,
+      SearchMode searchMode = SearchMode.exact,
+    }) => BookPreviewPanel(
+      book: _book(),
+      initialTextIndex: 7,
+      searchText: searchText,
+      searchOptions: searchOptions,
+      searchDistance: searchDistance,
+      searchMode: searchMode,
+    );
+
+    test('מפות שוות בתוכן אך אינסטנסים שונים — אין שינוי', () {
+      // effectiveSearchOptions בונה מפה חדשה בכל קריאה; השוואת זהות הייתה
+      // מזהה כאן "שינוי" ובונה את הטאב מחדש בכל רינדור.
+      final before = panel(
+        searchOptions: {
+          'אבל': {'prefixes': true},
+        },
+      );
+      final after = panel(
+        searchOptions: {
+          'אבל': {'prefixes': true},
+        },
+      );
+
+      expect(previewSearchParametersChanged(before, after), isFalse);
+    });
+
+    test('שינוי באפשרויות מזוהה', () {
+      expect(
+        previewSearchParametersChanged(
+          panel(),
+          panel(
+            searchOptions: {
+              'אבל': {'prefixes': true},
+            },
+          ),
+        ),
+        isTrue,
+      );
+    });
+
+    test('שינוי במרחק או במצב החיפוש מזוהה', () {
+      expect(
+        previewSearchParametersChanged(panel(), panel(searchDistance: 3)),
+        isTrue,
+      );
+      expect(
+        previewSearchParametersChanged(
+          panel(),
+          panel(searchMode: SearchMode.fuzzy),
+        ),
+        isTrue,
+      );
+    });
+
+    test('אותם פרמטרים בדיוק — אין שינוי', () {
+      expect(previewSearchParametersChanged(panel(), panel()), isFalse);
+    });
+  });
 }
