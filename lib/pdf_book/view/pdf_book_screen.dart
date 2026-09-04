@@ -3924,6 +3924,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     textSearcher = null;
     _stableLayoutTimer?.cancel();
     _stableLayoutTimer = null;
+    _pageMetadataTimer?.cancel();
     if (_waitingForStableLayout) PdfViewerActivity.instance.end();
     pdfController.removeListener(_onPdfViewerControllerUpdate);
     _leftPaneTabController?.removeListener(_leftPaneTabControllerListener);
@@ -3962,6 +3963,10 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   // מצב התצוגה האחרון שנצפה ב-BlocListener, לזיהוי מעבר בין מצבים.
   PdfLayoutMode? _lastObservedLayoutMode;
   int _lastComputedForPage = -1;
+
+  /// פתרון הכותרת, מספר השורה והקישורים ניגש ל-DB — נדחה עד שהגלילה נרגעת.
+  static const Duration _kPageMetadataDebounce = Duration(milliseconds: 150);
+  Timer? _pageMetadataTimer;
   int? _initialPageNumber; // שמירת מספר העמוד ההתחלתי
   bool _isJumping = false; // flag לציון שאנחנו בתהליך קפיצה
   bool _linksLoading = true; // true עד שטעינת הקישורים מסתיימת
@@ -4030,7 +4035,6 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     // loading. Cheap & idempotent — guarded by `_lastPrerenderTriggeredSpread`.
     _schedulePrerenderForAdjacentSpreads();
 
-    final tourCubit = context.read<TourCubit>();
     final newZoom = widget.tab.pdfViewerController.value.zoom;
     widget.tab.savedZoom = newZoom;
 
@@ -4077,7 +4081,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
 
     if (newPage == widget.tab.pageNumber) return;
     widget.tab.pageNumber = newPage;
-    final token = _lastComputedForPage = newPage;
+    _lastComputedForPage = newPage;
 
     final immediateRange = _spreadPageRangeFor(newPage);
     widget.tab.currentTitle.value =
@@ -4085,30 +4089,36 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         ? 'עמודים ${immediateRange.startPage}-${immediateRange.endPageExclusive - 1}'
         : 'עמוד $newPage';
 
-    final titles = await _resolveTitlesForPage(newPage);
-    if (!mounted) return;
-    if (token == _lastComputedForPage) {
-      widget.tab.currentTitle.value = titles.display;
+    _pageMetadataTimer?.cancel();
+    _pageMetadataTimer = Timer(
+      _kPageMetadataDebounce,
+      () => _resolvePageMetadata(newPage),
+    );
+  }
 
-      final resolved = await _resolveTextLineNumberForPage(
-        newPage,
-        resolvedTitle: titles.single,
-      );
-      if (!mounted) return;
-      widget.tab.currentTextLineNumber = resolved.start;
-      widget.tab.currentTextLineNumberEnd = resolved.end;
-      unawaited(_refreshLinksWindow());
-      _maybeRegisterPdfCommentaryOpportunity();
-      tourCubit.recordInteraction(
-        TourInteraction(
-          type: TourInteractionType.readerPositionChanged,
-          primaryValue: widget.tab.title,
-        ),
-      );
-      if (mounted) {
-        setState(() {});
-      }
-    }
+  Future<void> _resolvePageMetadata(int page) async {
+    if (!mounted) return;
+    final tourCubit = context.read<TourCubit>();
+    final titles = await _resolveTitlesForPage(page);
+    if (!mounted || page != _lastComputedForPage) return;
+    widget.tab.currentTitle.value = titles.display;
+
+    final resolved = await _resolveTextLineNumberForPage(
+      page,
+      resolvedTitle: titles.single,
+    );
+    if (!mounted || page != _lastComputedForPage) return;
+    widget.tab.currentTextLineNumber = resolved.start;
+    widget.tab.currentTextLineNumberEnd = resolved.end;
+    unawaited(_refreshLinksWindow());
+    _maybeRegisterPdfCommentaryOpportunity();
+    tourCubit.recordInteraction(
+      TourInteraction(
+        type: TourInteractionType.readerPositionChanged,
+        primaryValue: widget.tab.title,
+      ),
+    );
+    setState(() {});
   }
 
   @override
