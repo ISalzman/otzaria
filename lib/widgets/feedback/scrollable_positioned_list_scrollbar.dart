@@ -293,8 +293,9 @@ class _ScrollablePositionedListScrollbarState
 
     setState(() {
       // maxScrollExtent משקף רק את החלון שמרונדר סביב העוגן, ולכן הוא מתאפס
-      // בקצה הרשימה והמסילה הייתה נעלמת. מדידת התוכן עצמו יציבה (issue #1169).
-      if (totalContent > 1.0 + precisionErrorTolerance) {
+      // בקצה הרשימה והמסילה הייתה נעלמת. מדידת התוכן עצמה יציבה (issue #1169).
+      final hasOffscreenItem = minIndex > 0 || maxIndex < widget.itemCount - 1;
+      if (hasOffscreenItem || totalContent > 1.0 + precisionErrorTolerance) {
         _canScroll = true;
       }
       // _maxScrollableIndex חייב להתעדכן גם תוך כדי גרירה: כשהמשתמש גורר
