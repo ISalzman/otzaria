@@ -3,6 +3,11 @@
 #include <atomic>
 #include <mutex>
 #include <string>
+#include <vector>
+
+// `AlphaBlend` — נדרש כדי לצייר את תמונת הכרטיסיה עם ערוץ האלפא שלה, כך
+// שהפינות המעוגלות יישבו על הרקע שלנו ולא ייצבעו שחור.
+#pragma comment(lib, "msimg32.lib")
 
 namespace drag_preview {
 namespace {
@@ -57,6 +62,28 @@ struct Palette {
   COLORREF text = RGB(0x3A, 0x2E, 0x1E);
 };
 Palette g_palette;
+
+// תמונת הכרטיסיה כפי שהיא בחלון המקור, אם הגיעה.
+//
+// ⚠️ DIB ולא `HBITMAP` תואם-מכשיר: צריך גישה ישירה לפיקסלים כדי להמיר
+// RGBA (מה ש-Flutter מחזיר) ל-BGRA (מה ש-GDI מצפה לו).
+HBITMAP g_tab_bitmap = nullptr;
+int g_tab_bitmap_w = 0;
+int g_tab_bitmap_h = 0;
+// הגודל **הלוגי** שבו התמונה תצויר — פיקסלים חלקי ה-DPR שבו צולמה.
+int g_tab_logical_w = 0;
+int g_tab_logical_h = 0;
+
+void ReleaseTabBitmap() {
+  if (g_tab_bitmap) {
+    ::DeleteObject(g_tab_bitmap);
+    g_tab_bitmap = nullptr;
+  }
+  g_tab_bitmap_w = 0;
+  g_tab_bitmap_h = 0;
+  g_tab_logical_w = 0;
+  g_tab_logical_h = 0;
+}
 
 // האם הנקודה נמצאת מעל חלון המקור.
 //
@@ -113,9 +140,45 @@ void Paint(HWND hwnd) {
   ::DeleteObject(strip_brush);
 
   // הכרטיסיה עצמה, בצד ימין — RTL.
-  RECT tab{kWidth - kTabInset - kTabWidth, 4, kWidth - kTabInset,
-           kStripHeight};
-  FillRoundedTop(hdc, tab, palette.tab, kTabRadius);
+  //
+  // ⚠️ אם התמונה האמיתית הגיעה — מציירים אותה, ולא שרטוט מחדש. שרטוט GDI
+  // אינו יכול להיות זהה (גופן, אייקון סוג, כפתור X, סימון בחירה), והמשתמש
+  // ביקש שזה ייראה כמו בכרום.
+  HBITMAP bitmap = nullptr;
+  int bmp_w = 0, bmp_h = 0, logical_w = 0, logical_h = 0;
+  {
+    std::lock_guard<std::mutex> lock(g_mutex);
+    bitmap = g_tab_bitmap;
+    bmp_w = g_tab_bitmap_w;
+    bmp_h = g_tab_bitmap_h;
+    logical_w = g_tab_logical_w;
+    logical_h = g_tab_logical_h;
+  }
+
+  if (bitmap && bmp_w > 0 && bmp_h > 0) {
+    const int draw_w = logical_w > 0 ? logical_w : bmp_w;
+    const int draw_h = logical_h > 0 ? logical_h : bmp_h;
+    const int left = kWidth - kTabInset - draw_w;
+    const int top = kStripHeight - draw_h;
+
+    const HDC mem = ::CreateCompatibleDC(hdc);
+    const HGDIOBJ old = ::SelectObject(mem, bitmap);
+    // ⚠️ `AlphaBlend` ולא `BitBlt`: לכרטיסיה יש פינות מעוגלות, ובלי ערוץ
+    // האלפא הן היו נצבעות שחור על הרקע שלנו.
+    BLENDFUNCTION blend{};
+    blend.BlendOp = AC_SRC_OVER;
+    blend.SourceConstantAlpha = 255;
+    blend.AlphaFormat = AC_SRC_ALPHA;
+    ::SetStretchBltMode(hdc, HALFTONE);
+    ::AlphaBlend(hdc, left, top, draw_w, draw_h, mem, 0, 0, bmp_w, bmp_h,
+                 blend);
+    ::SelectObject(mem, old);
+    ::DeleteDC(mem);
+  } else {
+    RECT tab{kWidth - kTabInset - kTabWidth, 4, kWidth - kTabInset,
+             kStripHeight};
+    FillRoundedTop(hdc, tab, palette.tab, kTabRadius);
+  }
 
   // מסגרת חיצונית.
   const HPEN border = ::CreatePen(PS_SOLID, 1, palette.border);
@@ -126,23 +189,28 @@ void Paint(HWND hwnd) {
   ::SelectObject(hdc, old_pen);
   ::DeleteObject(border);
 
-  // ⚠️ `DT_RTLREADING` — הכותרות בעברית, ובלעדיו סימני פיסוק ומספרים
-  // מופיעים בצד הלא נכון.
-  const HFONT font = ::CreateFontW(
-      15, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
-      OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
-      DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
-  const HGDIOBJ old_font = ::SelectObject(hdc, font);
-  ::SetBkMode(hdc, TRANSPARENT);
-  ::SetTextColor(hdc, palette.text);
+  // הכותרת מצוירת רק כשאין תמונה — בתמונה היא כבר בפנים, ובכתיבה מעליה
+  // היינו מקבלים טקסט כפול.
+  if (!bitmap) {
+    // ⚠️ `DT_RTLREADING` — הכותרות בעברית, ובלעדיו סימני פיסוק ומספרים
+    // מופיעים בצד הלא נכון.
+    const HFONT font = ::CreateFontW(
+        15, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
+        OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
+        DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
+    const HGDIOBJ old_font = ::SelectObject(hdc, font);
+    ::SetBkMode(hdc, TRANSPARENT);
+    ::SetTextColor(hdc, palette.text);
 
-  RECT text_rect{tab.left + 9, tab.top, tab.right - 9, tab.bottom};
-  ::DrawTextW(hdc, title.c_str(), -1, &text_rect,
-              DT_SINGLELINE | DT_VCENTER | DT_RIGHT | DT_END_ELLIPSIS |
-                  DT_RTLREADING | DT_NOPREFIX);
+    RECT text_rect{kWidth - kTabInset - kTabWidth + 9, 4,
+                   kWidth - kTabInset - 9, kStripHeight};
+    ::DrawTextW(hdc, title.c_str(), -1, &text_rect,
+                DT_SINGLELINE | DT_VCENTER | DT_RIGHT | DT_END_ELLIPSIS |
+                    DT_RTLREADING | DT_NOPREFIX);
 
-  ::SelectObject(hdc, old_font);
-  ::DeleteObject(font);
+    ::SelectObject(hdc, old_font);
+    ::DeleteObject(font);
+  }
   ::EndPaint(hwnd, &ps);
 }
 
@@ -227,6 +295,11 @@ void Begin(const std::wstring& title, HWND source, const Colors& colors) {
     }
   }
   g_source.store(source);
+  // התמונה של הגרירה הקודמת אינה שייכת לזו — עד שתגיע חדשה, שרטוט GDI.
+  {
+    std::lock_guard<std::mutex> lock(g_mutex);
+    ReleaseTabBitmap();
+  }
   EnsureClass();
 
   if (!g_window) {
@@ -249,6 +322,52 @@ void Begin(const std::wstring& title, HWND source, const Colors& colors) {
 
   // מיקום ראשוני מיידי, כדי שהתצוגה לא תקפוץ מהפינה בפעימה הראשונה.
   MoveToCursor(g_window);
+}
+
+void SetImage(const unsigned char* rgba, int width, int height, double dpr) {
+  if (!rgba || width <= 0 || height <= 0) return;
+
+  BITMAPINFO info{};
+  info.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+  info.bmiHeader.biWidth = width;
+  // ⚠️ שלילי = top-down. `toByteData` מחזיר שורות מלמעלה למטה, ו-DIB
+  // ברירת מחדל הוא bottom-up — בלי המינוס התמונה מגיעה הפוכה.
+  info.bmiHeader.biHeight = -height;
+  info.bmiHeader.biPlanes = 1;
+  info.bmiHeader.biBitCount = 32;
+  info.bmiHeader.biCompression = BI_RGB;
+
+  void* bits = nullptr;
+  const HDC screen = ::GetDC(nullptr);
+  const HBITMAP bitmap = ::CreateDIBSection(screen, &info, DIB_RGB_COLORS,
+                                            &bits, nullptr, 0);
+  ::ReleaseDC(nullptr, screen);
+  if (!bitmap || !bits) {
+    if (bitmap) ::DeleteObject(bitmap);
+    return;
+  }
+
+  // RGBA → BGRA. שני הפורמטים מוכפלים-מראש, ולכן די בהחלפת האדום והכחול.
+  auto* dst = static_cast<unsigned char*>(bits);
+  const size_t pixels = static_cast<size_t>(width) * height;
+  for (size_t i = 0; i < pixels; ++i) {
+    dst[i * 4 + 0] = rgba[i * 4 + 2];
+    dst[i * 4 + 1] = rgba[i * 4 + 1];
+    dst[i * 4 + 2] = rgba[i * 4 + 0];
+    dst[i * 4 + 3] = rgba[i * 4 + 3];
+  }
+
+  const double scale = dpr > 0.1 ? dpr : 1.0;
+  {
+    std::lock_guard<std::mutex> lock(g_mutex);
+    ReleaseTabBitmap();
+    g_tab_bitmap = bitmap;
+    g_tab_bitmap_w = width;
+    g_tab_bitmap_h = height;
+    g_tab_logical_w = static_cast<int>(width / scale + 0.5);
+    g_tab_logical_h = static_cast<int>(height / scale + 0.5);
+  }
+  if (g_window) ::InvalidateRect(g_window, nullptr, TRUE);
 }
 
 void Freeze() {

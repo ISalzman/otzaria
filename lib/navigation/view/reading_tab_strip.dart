@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:otzaria/core/windowing/external_tab_drag.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/tabs/view/pane_drop_target.dart';
@@ -70,6 +72,12 @@ class ReadingTabStrip extends StatefulWidget {
   /// נקרא כשמתחילה גרירת כרטיסיה, עם הכרטיסיה הנגררת.
   final void Function(OpenedTab tab)? onDragStarted;
 
+  /// נקרא כשצילום הכרטיסיה מוכן — **אחרי** [onDragStarted].
+  ///
+  /// ⚠️ שני קולבקים ולא אחד: הצילום אסינכרוני, ותצוגת הגרירה חייבת
+  /// להתחיל מיד. הבעלות על התמונה עוברת למי שמקבל אותה.
+  final void Function(OpenedTab tab, ui.Image snapshot)? onTabSnapshot;
+
   /// נקרא בסיום הגרירה בכל מסלול — הצלחה, ביטול, או שחרור בחוץ.
   ///
   /// ⚠️ נפרד מ-[onDroppedOutside]: תצוגת הגרירה הנייטיבית חייבת להיסגר
@@ -98,6 +106,7 @@ class ReadingTabStrip extends StatefulWidget {
     this.acceptsExternal,
     this.onExternalDrop,
     this.onDragStarted,
+    this.onTabSnapshot,
     this.onDragFinishedAnywhere,
     this.onSpringOpen,
     this.onDroppedOutside,
@@ -159,8 +168,7 @@ class _ReadingTabStripState extends State<ReadingTabStrip> {
 
     // מחוץ לגובה הרצועה — הכרטיסיה תתקבל, אבל לא למקום מדויק.
     final cross = widget.isVertical ? local.dx : local.dy;
-    final crossExtent =
-        widget.isVertical ? box.size.width : box.size.height;
+    final crossExtent = widget.isVertical ? box.size.width : box.size.height;
     if (cross < -12 || cross > crossExtent + 12) {
       externalTabDropIndex.value = null;
       if (_insertIndex != null) setState(() => _insertIndex = null);
@@ -419,6 +427,13 @@ class _ReadingTabStripState extends State<ReadingTabStrip> {
                         onDragStarted: widget.onDragStarted == null
                             ? null
                             : () => widget.onDragStarted!(widget.tabs[i]),
+
+                        onTabSnapshot: widget.onTabSnapshot == null
+                            ? null
+                            : (snapshot) => widget.onTabSnapshot!(
+                                widget.tabs[i],
+                                snapshot,
+                              ),
                         onDroppedOutside: widget.onDroppedOutside == null
                             ? null
                             : () => widget.onDroppedOutside!(widget.tabs[i]),
@@ -511,13 +526,20 @@ class _TabStripGeometry {
 }
 
 /// כרטיסיה בודדת ברצועה, ניתנת לגרירה.
-class _DraggableTab extends StatelessWidget {
+class _DraggableTab extends StatefulWidget {
   final OpenedTab tab;
   final Axis axis;
   final double extent;
   final double? crossExtent;
   final bool requireLongPress;
+
   final VoidCallback? onDragStarted;
+
+  /// נקרא כשצילום הכרטיסיה מוכן — **אחרי** [onDragStarted].
+  ///
+  /// ⚠️ שני קולבקים ולא אחד: הצילום אסינכרוני, ותצוגת הגרירה חייבת להתחיל
+  /// מיד. הבעלות על התמונה עוברת למי שמקבל אותה.
+  final void Function(ui.Image snapshot)? onTabSnapshot;
   final VoidCallback onDragFinished;
 
   /// נקרא כשהכרטיסיה שוחררה מחוץ לכל יעד הפלה — ייתכן מחוץ לחלון כולו.
@@ -532,51 +554,109 @@ class _DraggableTab extends StatelessWidget {
     required this.crossExtent,
     required this.requireLongPress,
     required this.onDragStarted,
+    required this.onTabSnapshot,
     required this.onDragFinished,
     required this.onDroppedOutside,
     required this.child,
   });
 
   @override
+  State<_DraggableTab> createState() => _DraggableTabState();
+}
+
+class _DraggableTabState extends State<_DraggableTab> {
+  /// ⚠️ `RepaintBoundary` פר-כרטיסיה, וזה המחיר של נאמנות.
+  ///
+  /// שרטוט מחדש של הכרטיסיה בנייטיב אינו יכול להיות זהה — גופן, אייקון
+  /// סוג, כפתור X, סימון בחירה — ולכן התצוגה שמחוץ לחלון מקבלת **צילום**
+  /// של הכרטיסיה האמיתית. צילום מחייב גבול ציור.
+  ///
+  /// המחיר מוגבל: הכרטיסיה הנגררת מקבלת שכבה נפרדת ממילא בזמן הגרירה
+  /// (`Draggable.feedback`), והרצועה מחזיקה עשרות כרטיסיות לכל היותר.
+  final GlobalKey _boundaryKey = GlobalKey();
+
+  /// ⚠️ `toImage` (אסינכרוני) ולא `toImageSync`.
+  ///
+  /// `toImageSync` היה הבחירה הראשונה, כי `onDragStarted` סינכרוני — והוא
+  /// החזיר תמונה **ריקה**: המשתמש ראה כרטיסיה שקופה במקום כרטיסיה. עם
+  /// Impeller, ברירת המחדל ב-Flutter 3.47, המסלול הסינכרוני אינו אמין
+  /// לקריאה מיידית של הפיקסלים.
+  ///
+  /// ההמתנה אינה עולה כלום כאן: התצוגה הנייטיבית מופיעה מיד עם שרטוט GDI,
+  /// והתמונה מחליפה אותו כשהיא מוכנה.
+  Future<ui.Image?> _captureTab() async {
+    try {
+      final object = _boundaryKey.currentContext?.findRenderObject();
+      if (object is! RenderRepaintBoundary) return null;
+      return await object.toImage(
+        pixelRatio: View.of(context).devicePixelRatio,
+      );
+    } catch (e) {
+      debugPrint('צילום הכרטיסיה לגרירה נכשל: $e');
+      return null;
+    }
+  }
+
+  void _handleDragStarted() {
+    // ⚠️ מודיעים **מיד**, ובלי להמתין לצילום: התצוגה הנייטיבית מתחילה עם
+    // שרטוט GDI כדי שלא יהיה רגע ריק, והתמונה מגיעה בקריאה שנייה.
+    widget.onDragStarted?.call();
+    final onSnapshot = widget.onTabSnapshot;
+    if (onSnapshot == null) return;
+    _captureTab().then((image) {
+      if (image == null) return;
+      if (!mounted) {
+        image.dispose();
+        return;
+      }
+      onSnapshot(image);
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
+    // ⚠️ הגבול עוטף את הכרטיסיה שברצועה, ולא את ה-feedback: ה-feedback
+    // קיים רק בזמן הגרירה, והצילום נדרש **ברגע** שהיא מתחילה.
+    final child = RepaintBoundary(key: _boundaryKey, child: widget.child);
+
     // הכרטיסיה נשארת במקומה מעומעמת ולא נעלמת: היעלמותה הייתה משנה את חלוקת
     // המידות באמצע הגרירה ומזיזה את שאר הכרטיסיות תחת הסמן.
     final placeholder = Opacity(opacity: _kDraggingTabOpacity, child: child);
-    final isVertical = axis == Axis.vertical;
+    final isVertical = widget.axis == Axis.vertical;
     final feedback = _TabDragFeedback(
-      width: isVertical ? crossExtent : extent,
-      height: isVertical ? extent : null,
-      child: child,
+      width: isVertical ? widget.crossExtent : widget.extent,
+      height: isVertical ? widget.extent : null,
+      child: widget.child,
     );
 
-    if (requireLongPress) {
+    if (widget.requireLongPress) {
       return LongPressDraggable<OpenedTab>(
-        data: tab,
+        data: widget.tab,
         dragAnchorStrategy: pointerDragAnchorStrategy,
         feedback: feedback,
         childWhenDragging: placeholder,
-        onDragStarted: onDragStarted,
-        onDragEnd: (_) => onDragFinished(),
+        onDragStarted: _handleDragStarted,
+        onDragEnd: (_) => widget.onDragFinished(),
         onDraggableCanceled: (_, _) {
-          onDragFinished();
-          onDroppedOutside?.call();
+          widget.onDragFinished();
+          widget.onDroppedOutside?.call();
         },
         child: child,
       );
     }
 
     return Draggable<OpenedTab>(
-      data: tab,
+      data: widget.tab,
       // חובה: ה-offset שמקבלים יעדי ההפלה הוא פינת ה-feedback, ולכן עוגן
       // ברירת המחדל מסיט את אזור ההפלה בכחצי רוחב כרטיסיה.
       dragAnchorStrategy: pointerDragAnchorStrategy,
       feedback: feedback,
       childWhenDragging: placeholder,
-      onDragStarted: onDragStarted,
-      onDragEnd: (_) => onDragFinished(),
+      onDragStarted: _handleDragStarted,
+      onDragEnd: (_) => widget.onDragFinished(),
       onDraggableCanceled: (_, _) {
-        onDragFinished();
-        onDroppedOutside?.call();
+        widget.onDragFinished();
+        widget.onDroppedOutside?.call();
       },
       child: child,
     );

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
 import 'package:otzaria/core/ui_snack.dart';
@@ -48,6 +49,71 @@ class CrossWindowTabDrag {
     _timer?.cancel();
     _timer = Timer.periodic(_pollInterval, (_) => unawaited(_poll()));
   }
+
+  /// מחליף את השרטוט בצילום הכרטיסיה. נקרא **אחרי** [begin], כשהצילום מוכן.
+  ///
+  /// ⚠️ הבעלות על [snapshot] עוברת לכאן — היא משוחררת גם בכשל.
+  void applySnapshot(ui.Image snapshot, double devicePixelRatio) {
+    if (!MultiWindowService.isSupported) {
+      snapshot.dispose();
+      return;
+    }
+    _snapshotDpr = devicePixelRatio;
+    unawaited(_sendSnapshot(snapshot));
+  }
+
+  /// שולח את צילום הכרטיסיה, אם הוא באמת מכיל משהו.
+  ///
+  /// ⚠️ **צילום שקוף אינו נשלח.** זו לא הגנה תיאורטית: הגרסה הראשונה
+  /// השתמשה ב-`toImageSync`, קיבלה תמונה ריקה, והתצוגה הראתה כרטיסיה
+  /// שקופה — גרוע מהשרטוט שהיא באה להחליף. כאן ההחלטה היא לפי הפיקסלים
+  /// עצמם ולא לפי הנחה על ה-API: אם אין מה להציג, השרטוט נשאר.
+  Future<void> _sendSnapshot(ui.Image image) async {
+    try {
+      final data = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
+      if (data == null) return;
+      final rgba = data.buffer.asUint8List();
+      if (!_hasVisiblePixels(rgba)) {
+        debugPrint(
+          'צילום הכרטיסיה יצא שקוף (${image.width}×${image.height}) — '
+          'נשאר השרטוט',
+        );
+        return;
+      }
+      await _service.setTabDragImage(
+        rgba,
+        image.width,
+        image.height,
+        _snapshotDpr,
+      );
+    } catch (e) {
+      debugPrint('צילום הכרטיסיה לגרירה נכשל: $e');
+    } finally {
+      image.dispose();
+    }
+  }
+
+  /// האם יש פיקסל שאינו שקוף לגמרי.
+  ///
+  /// ⚠️ דגימה ולא סריקה מלאה: כרטיסיה ב-DPR 1.5 היא ~10,000 פיקסלים, וזה
+  /// רץ בתחילת כל גרירה. צעד של 97 (ראשוני) מבטיח שהדגימה אינה מתיישרת
+  /// עם דפוס חוזר בתמונה.
+  static bool _hasVisiblePixels(Uint8List rgba) {
+    for (var i = 3; i < rgba.length; i += 4 * 97) {
+      if (rgba[i] != 0) return true;
+    }
+    // הדגימה החמיצה — בדיקה מלאה לפני שמכריזים על תמונה ריקה.
+    for (var i = 3; i < rgba.length; i += 4) {
+      if (rgba[i] != 0) return true;
+    }
+    return false;
+  }
+
+  /// ה-DPR שבו הצילום נלקח.
+  ///
+  /// ⚠️ נדרש כדי שהתמונה תצויר בגודל הלוגי הנכון. במסך 150% הצילום גדול
+  /// פי 1.5, וציור שלו 1:1 היה נותן כרטיסיה כפולה בגודלה.
+  double _snapshotDpr = 1.0;
 
   /// מסיים את **המעקב**, ומשאיר את התצוגה קפואה במקום השחרור.
   ///

@@ -118,6 +118,10 @@ class _VerticalReadingTabStripState extends State<VerticalReadingTabStrip> {
             draggedTab.title,
             DragPreviewColors.of(context),
           ),
+          onTabSnapshot: (_, snapshot) => _crossWindowDrag.applySnapshot(
+            snapshot,
+            View.of(context).devicePixelRatio,
+          ),
           onDragFinishedAnywhere: _crossWindowDrag.end,
           onDroppedOutside: MultiWindowService.isSupported
               ? (tab) => _crossWindowDrag.handleDroppedOutside(

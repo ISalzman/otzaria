@@ -72,6 +72,7 @@ import 'package:otzaria/utils/navigation/book_open_coordinator.dart';
 import 'package:otzaria_search_engine/otzaria_search_engine.dart';
 import 'package:otzaria/core/app_paths.dart';
 import 'package:otzaria/core/cli_command.dart';
+import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/core/error_log_file.dart';
 import 'package:otzaria/core/info/app_info_cli.dart';
 import 'package:otzaria/core/info/app_install_timeline.dart';
@@ -1237,6 +1238,30 @@ class _AppBootstrapState extends State<AppBootstrap> {
               final transferred = MultiWindowService.decodePayload(payload);
               if (transferred != null) {
                 bloc.add(AddTab(transferred));
+              } else if (MultiWindowService.payloadHasTab(payload)) {
+                // ⚠️ המטען **הכיל** כרטיסיה והפענוח נכשל. עד כה זה היה
+                // כשל שקט: חלון חדש נפתח ריק, המקור כבר מחק את הכרטיסיה,
+                // והשורה היחידה שהסבירה למה נכתבה ל-stdout שאיש אינו רואה
+                // בהפעלה מהסייר.
+                //
+                // ההודעה נדחית לאחרי הבנייה — `UiSnack` זקוק ל-navigator,
+                // ובנקודה הזו העץ עוד לא הורכב.
+                debugPrint('⚠️ פענוח הכרטיסיה שהועברה נכשל — החלון ייפתח ריק');
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  UiSnack.showError(
+                    'הכרטיסיה לא נפתחה בחלון החדש. היא נשמרה בהיסטוריה.',
+                  );
+                });
+                try {
+                  ErrorLogFile.append(
+                    title: 'פענוח כרטיסיה שהועברה לחלון חדש נכשל',
+                    error:
+                        'decodePayload returned null for a payload with a tab',
+                    stackTrace: StackTrace.current,
+                  );
+                } catch (_) {
+                  // רישום הוא best-effort ולעולם אינו חוסם את עליית החלון.
+                }
               }
               return bloc;
             },

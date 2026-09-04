@@ -625,6 +625,10 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
           DragPreviewColors.of(context),
         );
       },
+      onTabSnapshot: (_, snapshot) => _crossWindowDrag.applySnapshot(
+        snapshot,
+        View.of(context).devicePixelRatio,
+      ),
       onDragFinishedAnywhere: _crossWindowDrag.end,
       onDroppedOutside: MultiWindowService.isSupported
           ? (tab) => _crossWindowDrag.handleDroppedOutside(

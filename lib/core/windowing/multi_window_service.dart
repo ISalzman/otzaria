@@ -193,6 +193,33 @@ class MultiWindowService {
     }
   }
 
+  /// מחליף את הכרטיסיה המשורטטת בתמונה **אמיתית** שלה.
+  ///
+  /// ⚠️ שרטוט מחדש ב-GDI אינו יכול להיות זהה: הוא אינו יודע את הגופן, את
+  /// אייקון סוג הכרטיסיה, את כפתור ה-X או את סימון הבחירה. הבקשה הייתה
+  /// שהגרירה תיראה כמו בכרום — כלומר הכרטיסיה עצמה.
+  ///
+  /// [rgba] הוא `ImageByteFormat.rawRgba`, שהוא **מוכפל-מראש** — בדיוק מה
+  /// ש-`AlphaBlend` מצפה לו אחרי החלפת אדום וכחול.
+  Future<void> setTabDragImage(
+    Uint8List rgba,
+    int width,
+    int height,
+    double devicePixelRatio,
+  ) async {
+    if (!isSupported) return;
+    try {
+      await _channel.invokeMethod<void>('setTabDragImage', {
+        'bytes': rgba,
+        'width': width,
+        'height': height,
+        'dpr': devicePixelRatio,
+      });
+    } catch (e) {
+      debugPrint('setTabDragImage failed: $e');
+    }
+  }
+
   /// עוצר את המעקב ומשאיר את התצוגה **גלויה במקום השחרור**.
   ///
   /// ⚠️ נקרא בסיום הגרירה ולא [endTabDrag], כי בשלב הזה עוד לא ידוע אם
@@ -324,6 +351,13 @@ class MultiWindowService {
 
   /// המטען הוא מחרוזת ולא Map, כי הוא עובר כארגומנט לנקודת הכניסה של
   /// המנוע החדש (`set_dart_entrypoint_arguments`), וזו מקבלת מחרוזות בלבד.
+  /// ⚠️ חשוף לבדיקות כדי שהמסלול ייבדק **דרך JSON** ולא רק
+  /// `toJson`→`fromJson`. `jsonEncode` דורש פרימיטיבים, ומפה עם מפתחות
+  /// שאינם מחרוזת חוזרת ממנו אחרת — טיפוס שעובר בדיקה ישירה יכול להיכשל
+  /// כאן, והמשתמש רואה חלון חדש שנפתח בלי הכרטיסיה.
+  @visibleForTesting
+  static String encodePayloadForTest(OpenedTab? tab) => _encodePayload(tab);
+
   static String _encodePayload(OpenedTab? tab) {
     return jsonEncode({
       'version': 1,
@@ -492,11 +526,23 @@ class MultiWindowService {
   /// נכשלה: `decodeCombinedTab` בולע אותה ומחזיר את השורדת — התנהגות
   /// נכונה בשחזור מדיסק (עדיף חצי ספר מכלום), ואובדן מידע בהעברה (הכרטיסיה
   /// כבר נמחקת מהמקור). לכן נבדק גם **מבנה** התוצאה ולא רק היעדר חריגה.
+  /// ⚠️ נבדק דרך **המסלול האמיתי** — `jsonEncode` ואחריו `jsonDecode` —
+  /// ולא `toJson`→`fromJson` ישירות.
+  ///
+  /// זו הייתה חור: `jsonEncode` דורש פרימיטיבים, ומפה עם מפתחות שאינם
+  /// מחרוזת חוזרת ממנו עם מפתחות מחרוזת. כלומר כרטיסיה יכלה לעבור את
+  /// הבדיקה, להימחק מהמקור, ולהיכשל בפענוח ביעד — והמשתמש רואה חלון חדש
+  /// שנפתח **בלי הכרטיסיה**. אם `canTransfer` אמור להיות ההגנה, הוא חייב
+  /// לבדוק בדיוק את מה שיקרה.
   static bool canTransfer(OpenedTab tab) {
     try {
-      final restored = OpenedTab.fromJson(
-        Map<String, dynamic>.from(tab.toJson()),
-      );
+      final restored = decodePayload(_encodePayload(tab));
+      if (restored == null) {
+        debugPrint(
+          'canTransfer: ${tab.runtimeType} אינה שורדת את מסלול המטען',
+        );
+        return false;
+      }
       if (tab is CombinedTab && restored is! CombinedTab) {
         debugPrint(
           'canTransfer: טאב מפוצל איבד חלונית בסריאליזציה — לא מועבר',

@@ -701,6 +701,35 @@ bool FlutterWindow::OnCreate() {
         }
         // עוצר את המעקב ומשאיר את התצוגה במקום השחרור, עד שהחלון האמיתי
         // נחשף. ראו `drag_preview::Freeze`.
+        // התמונה האמיתית של הכרטיסיה, מ-`RepaintBoundary` בצד Dart.
+        if (call.method_name() == "setTabDragImage") {
+          if (const auto* args =
+                  std::get_if<flutter::EncodableMap>(call.arguments())) {
+            const auto get_int = [&](const char* key, int fallback) {
+              const auto it = args->find(flutter::EncodableValue(key));
+              if (it == args->end()) return fallback;
+              const auto* v = std::get_if<int>(&it->second);
+              return v ? *v : fallback;
+            };
+            const auto bytes_it = args->find(flutter::EncodableValue("bytes"));
+            const auto dpr_it = args->find(flutter::EncodableValue("dpr"));
+            double dpr = 1.0;
+            if (dpr_it != args->end()) {
+              if (const auto* v = std::get_if<double>(&dpr_it->second)) {
+                dpr = *v;
+              }
+            }
+            if (bytes_it != args->end()) {
+              if (const auto* bytes =
+                      std::get_if<std::vector<uint8_t>>(&bytes_it->second)) {
+                drag_preview::SetImage(bytes->data(), get_int("width", 0),
+                                       get_int("height", 0), dpr);
+              }
+            }
+          }
+          result->Success();
+          return;
+        }
         if (call.method_name() == "freezeTabDrag") {
           drag_preview::Freeze();
           result->Success();
