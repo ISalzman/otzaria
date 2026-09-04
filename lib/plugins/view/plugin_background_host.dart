@@ -527,6 +527,7 @@ class _BackgroundPluginRunner extends StatefulWidget {
 
 class _BackgroundPluginRunnerState extends State<_BackgroundPluginRunner> {
   static PackageInfo? _cachedPackageInfo;
+  static const _fileServerDenialLogInterval = Duration(minutes: 1);
 
   InAppWebViewController? _controller;
   late final PluginBridgeHandler _bridge;
@@ -535,21 +536,14 @@ class _BackgroundPluginRunnerState extends State<_BackgroundPluginRunner> {
   late final PluginSystemBloc _pluginSystemBloc;
   late final FindRefRepository _findRefRepository;
   late String _localHtmlPath;
+  DateTime? _lastFileServerDenialLogAt;
 
   /// נתיב שרת הקבצים הוא `/f/<pluginId>/<token>` — תוסף רקע מורשה רק בשלו.
   bool _isOwnFileServerPath(Uri uri) =>
       uri.pathSegments.length == 3 &&
       uri.pathSegments[1] == widget.plugin.pluginId;
 
-  /// בקשה לשרת הקבצים שמותרת למופע הרקע: נתיב קובץ שלו, או נתיב ההעלאה
-  /// (`/w/<token>`) של העלאה פתוחה שלו.
-  ///
-  /// בלי הענף השני ה-PUT של `fs.beginBinaryWrite` נחסם כאן, וכל שמירה בינארית
-  /// נופלת ב-"Failed to fetch" — אותו כשל שתוקן בשער של `plugin_tab_page.dart`
-  /// ונשאר כאן. הפער אינו תיאורטי: מניפסט שאינו מצהיר `backgroundEntrypoint`
-  /// מקבל את ה-entrypoint של הדף המלא גם ברקע (ראו
-  /// `InstalledPlugin.backgroundEntrypointPath`), כלומר אותו קוד שמירה בדיוק
-  /// רץ בשני המופעים.
+  /// מאפשרת רק קבצים והעלאה פעילה של התוסף עצמו.
   bool _isOwnFileServerRequest(Uri uri) =>
       _isOwnFileServerPath(uri) ||
       PluginFileServer.instance.isUploadUriForPlugin(
@@ -557,13 +551,14 @@ class _BackgroundPluginRunnerState extends State<_BackgroundPluginRunner> {
         widget.plugin.pluginId,
       );
 
-  /// רושם חסימה של בקשה לשרת הקבצים.
-  ///
-  /// תשובת ה-403 שאנחנו מייצרים אינה נושאת כותרות CORS, ולכן היא מגיעה ל-JS
-  /// כ-TypeError אטום ("Failed to fetch") ולא כסטטוס. בלי הרישום כאן אין שום
-  /// עקבה של *מה* נחסם — התוסף נאלץ לנחש (הבאג הזה אובחן בתוסף „וורד לאוצריא”
-  /// דרך בקשת בדיקה שהוא שולח לשרת בעצמו). ה-token אינו נרשם: הוא סוד.
   void _logFileServerDenial(Uri uri) {
+    final now = DateTime.now();
+    final lastLogAt = _lastFileServerDenialLogAt;
+    if (lastLogAt != null &&
+        now.difference(lastLogAt) < _fileServerDenialLogInterval) {
+      return;
+    }
+    _lastFileServerDenialLogAt = now;
     final kind = uri.pathSegments.isEmpty
         ? uri.path
         : '/${uri.pathSegments.first}/…';

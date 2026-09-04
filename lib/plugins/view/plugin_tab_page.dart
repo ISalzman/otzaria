@@ -220,6 +220,7 @@ class _PluginTabPageState extends State<PluginTabPage> {
   late final FindRefRepository _findRefRepository;
   bool _hasError = false;
   String? _devErrorMessage;
+  DateTime? _lastFileServerDenialLogAt;
 
   // כשל יצירה native לא מפעיל אף callback ב-Dart — נשאר רק מסך ריק.
   // השעון נדרך בבניית ה-WebView ומבוטל ב-onWebViewCreated, כדי לרשום ללוג.
@@ -231,6 +232,7 @@ class _PluginTabPageState extends State<PluginTabPage> {
 
   // Cache PackageInfo so the async gap in onLoadStop never crosses a dispose
   static PackageInfo? _cachedPackageInfo;
+  static const _fileServerDenialLogInterval = Duration(minutes: 1);
 
   @override
   void initState() {
@@ -725,8 +727,7 @@ class _PluginTabPageState extends State<PluginTabPage> {
     registry: _pluginRegistryRepository,
   );
 
-  /// בקשה לשרת הקבצים שמותרת לתוסף הזה: נתיב קובץ שלו (`/f/`), או נתיב
-  /// ההעלאה (`/w/<token>`) של העלאה פתוחה שלו.
+  /// מאפשרת רק קבצים והעלאה פעילה של התוסף עצמו.
   bool _isOwnFileServerRequest(Uri uri) =>
       PluginFileServer.isUriForPlugin(uri, widget.plugin.pluginId) ||
       PluginFileServer.instance.isUploadUriForPlugin(
@@ -734,13 +735,14 @@ class _PluginTabPageState extends State<PluginTabPage> {
         widget.plugin.pluginId,
       );
 
-  /// רושם חסימה של בקשה לשרת הקבצים.
-  ///
-  /// תשובת ה-403 שאנחנו מייצרים אינה נושאת כותרות CORS, ולכן היא מגיעה ל-JS
-  /// כ-TypeError אטום ("Failed to fetch") ולא כסטטוס. בלי הרישום כאן אין שום
-  /// עקבה של *מה* נחסם — אבחון החסימה של נתיב ההעלאה דרש בקשת בדיקה שהתוסף
-  /// שולח לשרת בעצמו. ה-token אינו נרשם: הוא סוד.
   void _logFileServerDenial(Uri uri) {
+    final now = DateTime.now();
+    final lastLogAt = _lastFileServerDenialLogAt;
+    if (lastLogAt != null &&
+        now.difference(lastLogAt) < _fileServerDenialLogInterval) {
+      return;
+    }
+    _lastFileServerDenialLogAt = now;
     final kind = uri.pathSegments.isEmpty
         ? uri.path
         : '/${uri.pathSegments.first}/…';
