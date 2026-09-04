@@ -41,6 +41,13 @@ windows/runner/*
 !windows/runner/splash_window.h
 !windows/runner/jump_list_manager.cpp
 !windows/runner/jump_list_manager.h
+!windows/runner/drag_preview_window.cpp
+!windows/runner/drag_preview_window.h
+# ⚠️ `windows/runner/*` מעל מסנן **הכול**, וכל קובץ מקור חדש חייב חריגה
+# מפורשת כאן. קבצים שכבר tracked ממשיכים להיות tracked ולכן הבעיה אינה
+# נראית — אבל קובץ **חדש** נבלע בשקט: `git add -A` מדלג עליו בלי מילה,
+# ה-CMakeLists כן מזכיר אותו, וכל מי שיעשה clone יקבל כשל בנייה
+# ("Cannot find source file"). זה קרה ל-`drag_preview_window` בענף הזה.
 macos/*
 !macos/Runner/
 macos/Runner/*

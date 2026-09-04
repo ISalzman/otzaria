@@ -623,7 +623,10 @@ bool FlutterWindow::OnCreate() {
         // תצוגת הגרירה הנייטיבית — הכרטיסיה שנראית מחוץ לחלון.
         if (call.method_name() == "beginTabDrag") {
           if (const auto* title = std::get_if<std::string>(call.arguments())) {
-            drag_preview::Begin(drag_preview::Utf16FromUtf8(*title));
+            // חלון המקור מועבר במפורש: התצוגה מוסתרת רק מעליו, ולא מעל
+            // חלונות אוצריא אחרים. ראו ההערה ב-`drag_preview::Begin`.
+            drag_preview::Begin(drag_preview::Utf16FromUtf8(*title),
+                                GetHandle());
           }
           result->Success();
           return;
@@ -958,7 +961,14 @@ void FlutterWindow::OnDestroy() {
       pending.result->Success(flutter::EncodableValue(false));
     }
   }
-  if (const HWND self = GetHandle()) WindowSlots().erase(self);
+  // ⚠️ **לא** לפי `GetHandle()`. במסלול `WM_DESTROY` השדה `window_handle_`
+  // מתאפס **לפני** הקריאה ל-`Destroy()` שמגיעה לכאן, ולכן מחיקה לפיו
+  // הייתה no-op שקט שנראה כמו ניקוי. סריקה של עד ארבע רשומות היא זולה,
+  // והיא נכונה בשני המסלולים — גם ב-`Destroy()` שנקרא מתוך `Create()`.
+  auto& slots = WindowSlots();
+  for (auto it = slots.begin(); it != slots.end();) {
+    it = ::IsWindow(it->first) ? std::next(it) : slots.erase(it);
+  }
 
   splash_channel_.reset();
   multiwindow_channel_.reset();

@@ -1,3 +1,16 @@
+// ⚠️ Windows בלבד, ובמכוון.
+//
+// כל מסלול הגרירה מגודר ב-`MultiWindowService.isSupported`, שהוא
+// `Platform.isWindows` — הצד הנייטיב מומש ב-`windows/runner`. על Linux
+// (שם רצות שש ה-shards של ה-CI) `windowAtCursor` ו-`openWindow` חוזרים
+// מיד בלי לגעת בערוץ, ולכן ה-runner המדומה כאן לא היה נקרא כלל וההצהרות
+// היו נכשלות מסיבה שאין לה קשר למה שנבדק.
+//
+// גידור הקובץ ולא הצהרות בודדות: בדיקה שמדלגת על החלק המעניין שלה
+// ונשארת ירוקה גרועה מבדיקה שאינה רצה.
+@TestOn('windows')
+library;
+
 import 'dart:isolate';
 import 'dart:ui' as ui show IsolateNameServer;
 
