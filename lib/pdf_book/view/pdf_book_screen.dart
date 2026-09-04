@@ -3724,15 +3724,21 @@ class _PdfBookScreenState extends State<PdfBookScreen>
 
   void _onLayoutMaybeStable() {
     if (!mounted || !_waitingForStableLayout) return;
-    final controller = widget.tab.pdfViewerController;
-    if (!controller.isReady) {
-      _restartStableLayoutDebounce();
-      return;
-    }
     final startedAt = _stableLayoutStartedAt;
     final maxWaitReached =
         startedAt != null &&
         DateTime.now().difference(startedAt) >= _kStableLayoutMaxWait;
+    final controller = widget.tab.pdfViewerController;
+    if (!controller.isReady) {
+      // גם controller שלא נעשה ready מוגבל בזמן — אחרת ה-overlay ומונה
+      // PdfViewerActivity היו נשארים תקועים.
+      if (maxWaitReached) {
+        _completeStableLayoutTracking();
+      } else {
+        _restartStableLayoutDebounce();
+      }
+      return;
+    }
     if (!_isTargetPagePrefixLoaded() && !maxWaitReached) {
       _restartStableLayoutDebounce();
       return;
@@ -3922,10 +3928,8 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     textSearcher?.removeListener(_onTextSearcherUpdated);
     textSearcher?.dispose();
     textSearcher = null;
-    _stableLayoutTimer?.cancel();
-    _stableLayoutTimer = null;
+    _cancelStableLayoutTracking();
     _pageMetadataTimer?.cancel();
-    if (_waitingForStableLayout) PdfViewerActivity.instance.end();
     pdfController.removeListener(_onPdfViewerControllerUpdate);
     _leftPaneTabController?.removeListener(_leftPaneTabControllerListener);
     widget.tab.showLeftPane.removeListener(_showLeftPaneListener);
