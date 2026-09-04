@@ -618,9 +618,21 @@ class _DraggableTabState extends State<_DraggableTab> {
   /// כי ה-feedback חי ב-`Overlay` ואינו תת-עץ של הכרטיסיה.
   final ValueNotifier<ui.Image?> _contentImage = ValueNotifier(null);
 
+  /// מחליף את הצילום ומשחרר את קודמו.
+  ///
+  /// ⚠️ `ui.Image` מחזיקה זיכרון GPU שאינו נאסף לבד. השמה ישירה
+  /// ל-`_contentImage.value` הייתה מדליפה צילום של חלון מלא (~5MB) בכל
+  /// גרירה שנייה של אותה כרטיסיה, ועוד אחד בכל גרירה שהסתיימה.
+  void _setContentImage(ui.Image? image) {
+    final previous = _contentImage.value;
+    if (identical(previous, image)) return;
+    _contentImage.value = image;
+    previous?.dispose();
+  }
+
   @override
   void dispose() {
-    _contentImage.value?.dispose();
+    _setContentImage(null);
     _contentImage.dispose();
     super.dispose();
   }
@@ -642,11 +654,40 @@ class _DraggableTabState extends State<_DraggableTab> {
     GestureBinding.instance.cancelPointer(pointer);
   }
 
+  /// האם גרירה פעילה, והאם [_buildPreview] עוד רץ.
+  ///
+  /// ⚠️ שני דגלים, ולא אחד. הצילום נדרש רק כל עוד ה-`feedback` מוצג, אבל
+  /// **שחרורו בסיום הגרירה בזמן שההרכבה עוד קוראת אותו הוא
+  /// use-after-dispose**. וזה לא תרחיש תיאורטי: הגרירה מבוטלת מיד כשהיא
+  /// נמסרת ל-Windows, וההרכבה אסינכרונית — כלומר הסיום מגיע דווקא באמצע.
+  ///
+  /// מי שמסיים אחרון משחרר: אם ההרכבה עוד רצה, הסיום מדלג והיא תשחרר.
+  bool _dragging = false;
+  bool _previewPending = false;
+
+  void _handleDragFinished() {
+    _dragging = false;
+    if (!_previewPending) _setContentImage(null);
+    widget.onDragFinished();
+  }
+
   void _handleDragStarted() {
+    _dragging = true;
+    _previewPending = true;
     // ⚠️ מודיעים **מיד**, ובלי להמתין לצילום: התצוגה הנייטיבית מתחילה עם
     // שרטוט GDI כדי שלא יהיה רגע ריק, והתמונה מגיעה בקריאה שנייה.
     widget.onDragStarted?.call(_cancelDrag);
-    unawaited(_buildPreview());
+    unawaited(_finishPreview());
+  }
+
+  /// עוטף את [_buildPreview] ומשחרר את הצילום אם הגרירה הסתיימה בינתיים.
+  Future<void> _finishPreview() async {
+    try {
+      await _buildPreview();
+    } finally {
+      _previewPending = false;
+      if (!_dragging) _setContentImage(null);
+    }
   }
 
   /// מצלם את הכרטיסיה ואת התוכן שלה, ומרכיב מהם מוק של החלון.
@@ -671,7 +712,7 @@ class _DraggableTabState extends State<_DraggableTab> {
       content?.dispose();
       return;
     }
-    if (content != null) _contentImage.value = content;
+    if (content != null) _setContentImage(content);
 
     final onSnapshot = widget.onTabSnapshot;
     if (onSnapshot == null) return;
@@ -728,9 +769,9 @@ class _DraggableTabState extends State<_DraggableTab> {
             feedback: feedback,
             childWhenDragging: placeholder,
             onDragStarted: _handleDragStarted,
-            onDragEnd: (_) => widget.onDragFinished(),
+            onDragEnd: (_) => _handleDragFinished(),
             onDraggableCanceled: (_, _) {
-              widget.onDragFinished();
+              _handleDragFinished();
               widget.onDroppedOutside?.call();
             },
             child: child,
@@ -743,9 +784,9 @@ class _DraggableTabState extends State<_DraggableTab> {
             feedback: feedback,
             childWhenDragging: placeholder,
             onDragStarted: _handleDragStarted,
-            onDragEnd: (_) => widget.onDragFinished(),
+            onDragEnd: (_) => _handleDragFinished(),
             onDraggableCanceled: (_, _) {
-              widget.onDragFinished();
+              _handleDragFinished();
               widget.onDroppedOutside?.call();
             },
             child: child,
