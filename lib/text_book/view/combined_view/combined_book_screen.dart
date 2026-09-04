@@ -2011,6 +2011,8 @@ class _CombinedViewState extends State<CombinedView> {
                                   scrollController: widget.tab.scrollController,
                                   itemPositionsListener:
                                       widget.tab.positionsListener,
+                                  offsetController:
+                                      widget.tab.mainOffsetController,
                                   itemCount: state.readingSegments.isNotEmpty
                                       ? state.readingSegments.length
                                       : widget.data.length,
