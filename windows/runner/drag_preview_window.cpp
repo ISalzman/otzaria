@@ -5,34 +5,30 @@
 #include <string>
 #include <vector>
 
-// `AlphaBlend` — נדרש כדי לצייר את תמונת הכרטיסיה עם ערוץ האלפא שלה, כך
-// שהפינות המעוגלות יישבו על הרקע שלנו ולא ייצבעו שחור.
-#pragma comment(lib, "msimg32.lib")
-
 namespace drag_preview {
 namespace {
 
 constexpr const wchar_t kClassName[] = L"OtzariaDragPreview";
 
-// מידות התצוגה — **חלון מוקטן, לא תווית**.
+// מידות השרטוט שלפני שהצילום מגיע, ביחידות לוגיות (96 DPI).
 //
-// ⚠️ הגרסה הראשונה הייתה מלבן 190×34 עם כותרת, והמשתמש תיאר אותה כ"ריבוע
-// מוזר" ולא ככרטיסיה. מה שהמשתמש עומד לקבל הוא **חלון**, ולכן זה מה
-// שהתצוגה מראה: רצועת כרטיסיות עם הכרטיסיה שנגררת, וגוף מתחתיה.
-constexpr int kWidth = 300;
-constexpr int kHeight = 196;
-constexpr int kStripHeight = 34;
-constexpr int kTabWidth = 176;
+// ⚠️ קיים רק לפריים אחד. הצילום אסינכרוני, ובלעדיו היה רגע שבו הסמן יוצא
+// מהחלון ולא נראה כלום.
+constexpr int kFallbackWidth = 176;
+constexpr int kFallbackHeight = 40;
 constexpr int kTabRadius = 8;
-constexpr int kTabInset = 8;
 
-// מרחק הסמן מפינת התצוגה.
+// צבע זקיף לזיהוי מה GDI צייר.
 //
-// ⚠️ הסמן מחזיק את **הכרטיסיה**, לא את פינת החלון — ולכן ההיסט מכוון כך
-// שהכרטיסיה תשב תחת הסמן, בדיוק כמו בדפדפן. ב-RTL הכרטיסיה בצד ימין,
-// ולכן ההיסט האופקי שלילי.
-constexpr int kCursorOffsetX = -(kWidth - kTabInset - kTabWidth / 2);
-constexpr int kCursorOffsetY = -kStripHeight / 2;
+// ⚠️ GDI אינו כותב לערוץ האלפא, ו-`UpdateLayeredWindow` דורש אלפא לכל
+// פיקסל — כלומר שרטוט GDI גולמי היה יוצא שקוף לחלוטין. לכן ה-DIB נצבע
+// מראש במג'נטה, ואחרי הציור כל פיקסל שאינו מג'נטה מקבל אלפא 255. מג'נטה
+// ולא שחור: צבע ערכה כהה יכול להיות שחור-כמעט, ואז חלקים מהכרטיסיה היו
+// יוצאים שקופים.
+constexpr unsigned char kSentinelB = 0xFF;
+constexpr unsigned char kSentinelG = 0x00;
+constexpr unsigned char kSentinelR = 0xFF;
+constexpr COLORREF kSentinel = RGB(kSentinelR, kSentinelG, kSentinelB);
 
 constexpr UINT_PTR kFollowTimerId = 1;
 constexpr UINT kFollowIntervalMs = 16;
@@ -50,10 +46,9 @@ std::atomic<bool> g_active{false};
 // החלון שממנו הגרירה התחילה. התצוגה מוסתרת רק מעליו.
 std::atomic<HWND> g_source{nullptr};
 
-// צבעי הערכה הנוכחית, שמגיעים מ-Dart.
-//
-// ⚠️ קודם הם היו מקודדים קשיח בגוונים בהירים. בערכה כהה זה נראה כמו
-// מלבן לבן זוהר על מסך כהה — הפוך בדיוק ממה שהמשתמש מצפה שייגרר.
+// האם Windows מנהל כרגע את הגרירה. חוסם את המעקב שלנו, שהיה נאבק בו.
+std::atomic<bool> g_system_dragging{false};
+
 struct Palette {
   COLORREF strip = RGB(0xF2, 0xEB, 0xE0);
   COLORREF tab = RGB(0xF7, 0xF2, 0xEA);
@@ -63,62 +58,36 @@ struct Palette {
 };
 Palette g_palette;
 
-// תמונת הכרטיסיה כפי שהיא בחלון המקור, אם הגיעה.
+// צילום הכרטיסיה, BGRA מוכפל-מראש, שורות מלמעלה למטה.
 //
-// ⚠️ DIB ולא `HBITMAP` תואם-מכשיר: צריך גישה ישירה לפיקסלים כדי להמיר
-// RGBA (מה ש-Flutter מחזיר) ל-BGRA (מה ש-GDI מצפה לו).
-HBITMAP g_tab_bitmap = nullptr;
-int g_tab_bitmap_w = 0;
-int g_tab_bitmap_h = 0;
-// הגודל **הלוגי** שבו התמונה תצויר — פיקסלים חלקי ה-DPR שבו צולמה.
-int g_tab_logical_w = 0;
-int g_tab_logical_h = 0;
+// ⚠️ מאגר ולא `HBITMAP`: `UpdateLayeredWindow` מקבל DC של DIB שאנחנו
+// בונים בכל הרכבה, וכך אין מצב ביניים שבו הביטמאפ נבחר לשני DC-ים.
+std::vector<unsigned char> g_shot;
+int g_shot_w = 0;
+int g_shot_h = 0;
 
-void ReleaseTabBitmap() {
-  if (g_tab_bitmap) {
-    ::DeleteObject(g_tab_bitmap);
-    g_tab_bitmap = nullptr;
+int DpiOf(HWND hwnd) {
+  const UINT dpi = hwnd ? ::GetDpiForWindow(hwnd) : 96;
+  return dpi > 0 ? static_cast<int>(dpi) : 96;
+}
+
+// מידות התצוגה בפיקסלים פיזיים.
+void PreviewSize(int* out_w, int* out_h) {
+  {
+    std::lock_guard<std::mutex> lock(g_mutex);
+    if (g_shot_w > 0 && g_shot_h > 0) {
+      *out_w = g_shot_w;
+      *out_h = g_shot_h;
+      return;
+    }
   }
-  g_tab_bitmap_w = 0;
-  g_tab_bitmap_h = 0;
-  g_tab_logical_w = 0;
-  g_tab_logical_h = 0;
+  const int dpi = DpiOf(g_source.load());
+  *out_w = ::MulDiv(kFallbackWidth, dpi, 96);
+  *out_h = ::MulDiv(kFallbackHeight, dpi, 96);
 }
 
-// האם הנקודה נמצאת מעל חלון המקור.
-//
-// ⚠️ המקור בלבד, ולא "כל חלון של התהליך" — ראו ההערה ב-[Begin] שבכותרת.
-// העלייה ל-root חיונית: `WindowFromPoint` מחזיר את החלון הפנימי ביותר,
-// בדרך כלל ה-view של Flutter או חלון של WebView2.
-bool IsOverSourceWindow(POINT pt) {
-  const HWND source = g_source.load();
-  if (!source) return false;
-  const HWND under = ::WindowFromPoint(pt);
-  if (!under) return false;
-  return ::GetAncestor(under, GA_ROOT) == source;
-}
-
-void FillRoundedTop(HDC hdc, RECT rect, COLORREF color, int radius) {
-  const HBRUSH brush = ::CreateSolidBrush(color);
-  const HGDIOBJ old_brush = ::SelectObject(hdc, brush);
-  const HPEN pen = ::CreatePen(PS_SOLID, 1, color);
-  const HGDIOBJ old_pen = ::SelectObject(hdc, pen);
-  // פינות עליונות מעוגלות ותחתונות מרובעות: ה-`RoundRect` מעגל את
-  // ארבעתן, והמלבן שאחריו מרבע את התחתונות — כך הכרטיסיה מתמזגת בגוף
-  // בלי תפר, וזה בדיוק מה שהופך אותה לכרטיסיה ולא לכפתור.
-  ::RoundRect(hdc, rect.left, rect.top, rect.right, rect.bottom + radius,
-              radius * 2, radius * 2);
-  ::Rectangle(hdc, rect.left, rect.bottom - radius, rect.right, rect.bottom);
-  ::SelectObject(hdc, old_pen);
-  ::DeleteObject(pen);
-  ::SelectObject(hdc, old_brush);
-  ::DeleteObject(brush);
-}
-
-void Paint(HWND hwnd) {
-  PAINTSTRUCT ps;
-  const HDC hdc = ::BeginPaint(hwnd, &ps);
-
+// מצייר את השרטוט שלפני הצילום לתוך [hdc], ומחזיר את האזור שנגע בו.
+void DrawFallback(HDC hdc, int width, int height) {
   Palette palette;
   std::wstring title;
   {
@@ -127,106 +96,169 @@ void Paint(HWND hwnd) {
     title = g_title;
   }
 
-  // גוף החלון.
-  RECT body{0, kStripHeight, kWidth, kHeight};
-  const HBRUSH body_brush = ::CreateSolidBrush(palette.body);
-  ::FillRect(hdc, &body, body_brush);
-  ::DeleteObject(body_brush);
-
-  // רצועת הכרטיסיות.
-  RECT strip{0, 0, kWidth, kStripHeight};
-  const HBRUSH strip_brush = ::CreateSolidBrush(palette.strip);
-  ::FillRect(hdc, &strip, strip_brush);
-  ::DeleteObject(strip_brush);
-
-  // הכרטיסיה עצמה, בצד ימין — RTL.
-  //
-  // ⚠️ אם התמונה האמיתית הגיעה — מציירים אותה, ולא שרטוט מחדש. שרטוט GDI
-  // אינו יכול להיות זהה (גופן, אייקון סוג, כפתור X, סימון בחירה), והמשתמש
-  // ביקש שזה ייראה כמו בכרום.
-  HBITMAP bitmap = nullptr;
-  int bmp_w = 0, bmp_h = 0, logical_w = 0, logical_h = 0;
-  {
-    std::lock_guard<std::mutex> lock(g_mutex);
-    bitmap = g_tab_bitmap;
-    bmp_w = g_tab_bitmap_w;
-    bmp_h = g_tab_bitmap_h;
-    logical_w = g_tab_logical_w;
-    logical_h = g_tab_logical_h;
-  }
-
-  if (bitmap && bmp_w > 0 && bmp_h > 0) {
-    const int draw_w = logical_w > 0 ? logical_w : bmp_w;
-    const int draw_h = logical_h > 0 ? logical_h : bmp_h;
-    const int left = kWidth - kTabInset - draw_w;
-    const int top = kStripHeight - draw_h;
-
-    const HDC mem = ::CreateCompatibleDC(hdc);
-    const HGDIOBJ old = ::SelectObject(mem, bitmap);
-    // ⚠️ `AlphaBlend` ולא `BitBlt`: לכרטיסיה יש פינות מעוגלות, ובלי ערוץ
-    // האלפא הן היו נצבעות שחור על הרקע שלנו.
-    BLENDFUNCTION blend{};
-    blend.BlendOp = AC_SRC_OVER;
-    blend.SourceConstantAlpha = 255;
-    blend.AlphaFormat = AC_SRC_ALPHA;
-    ::SetStretchBltMode(hdc, HALFTONE);
-    ::AlphaBlend(hdc, left, top, draw_w, draw_h, mem, 0, 0, bmp_w, bmp_h,
-                 blend);
-    ::SelectObject(mem, old);
-    ::DeleteDC(mem);
-  } else {
-    RECT tab{kWidth - kTabInset - kTabWidth, 4, kWidth - kTabInset,
-             kStripHeight};
-    FillRoundedTop(hdc, tab, palette.tab, kTabRadius);
-  }
-
-  // מסגרת חיצונית.
-  const HPEN border = ::CreatePen(PS_SOLID, 1, palette.border);
-  const HGDIOBJ old_pen = ::SelectObject(hdc, border);
-  const HGDIOBJ old_brush = ::SelectObject(hdc, ::GetStockObject(NULL_BRUSH));
-  ::Rectangle(hdc, 0, 0, kWidth, kHeight);
-  ::SelectObject(hdc, old_brush);
+  const HBRUSH fill = ::CreateSolidBrush(palette.tab);
+  const HGDIOBJ old_brush = ::SelectObject(hdc, fill);
+  const HPEN pen = ::CreatePen(PS_SOLID, 1, palette.border);
+  const HGDIOBJ old_pen = ::SelectObject(hdc, pen);
+  // פינות עליונות מעוגלות ותחתונות מרובעות — כך זו כרטיסיה ולא כפתור.
+  ::RoundRect(hdc, 0, 0, width, height + kTabRadius, kTabRadius * 2,
+              kTabRadius * 2);
   ::SelectObject(hdc, old_pen);
-  ::DeleteObject(border);
+  ::DeleteObject(pen);
+  ::SelectObject(hdc, old_brush);
+  ::DeleteObject(fill);
 
-  // הכותרת מצוירת רק כשאין תמונה — בתמונה היא כבר בפנים, ובכתיבה מעליה
-  // היינו מקבלים טקסט כפול.
-  if (!bitmap) {
-    // ⚠️ `DT_RTLREADING` — הכותרות בעברית, ובלעדיו סימני פיסוק ומספרים
-    // מופיעים בצד הלא נכון.
-    const HFONT font = ::CreateFontW(
-        15, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
-        OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
-        DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
-    const HGDIOBJ old_font = ::SelectObject(hdc, font);
-    ::SetBkMode(hdc, TRANSPARENT);
-    ::SetTextColor(hdc, palette.text);
-
-    RECT text_rect{kWidth - kTabInset - kTabWidth + 9, 4,
-                   kWidth - kTabInset - 9, kStripHeight};
-    ::DrawTextW(hdc, title.c_str(), -1, &text_rect,
-                DT_SINGLELINE | DT_VCENTER | DT_RIGHT | DT_END_ELLIPSIS |
-                    DT_RTLREADING | DT_NOPREFIX);
-
-    ::SelectObject(hdc, old_font);
-    ::DeleteObject(font);
-  }
-  ::EndPaint(hwnd, &ps);
+  // ⚠️ `DT_RTLREADING` — הכותרות בעברית, ובלעדיו סימני פיסוק ומספרים
+  // מופיעים בצד הלא נכון.
+  const int dpi = DpiOf(g_source.load());
+  const HFONT font = ::CreateFontW(
+      ::MulDiv(15, dpi, 96), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+      DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+      CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
+  const HGDIOBJ old_font = ::SelectObject(hdc, font);
+  ::SetBkMode(hdc, TRANSPARENT);
+  ::SetTextColor(hdc, palette.text);
+  const int inset = ::MulDiv(9, dpi, 96);
+  RECT text_rect{inset, 0, width - inset, height};
+  ::DrawTextW(hdc, title.c_str(), -1, &text_rect,
+              DT_SINGLELINE | DT_VCENTER | DT_RIGHT | DT_END_ELLIPSIS |
+                  DT_RTLREADING | DT_NOPREFIX);
+  ::SelectObject(hdc, old_font);
+  ::DeleteObject(font);
 }
 
-void MoveToCursor(HWND hwnd) {
+// מרכיב את התצוגה ומעביר אותה ל-Windows עם אלפא לכל פיקסל.
+//
+// ⚠️ `UpdateLayeredWindow` ולא `WM_PAINT` + `SetLayeredWindowAttributes`.
+// השני נותן שקיפות **אחידה** לכל החלון, ולכן הפינות המעוגלות של
+// הכרטיסיה היו נצבעות ברקע שלנו במקום להיות שקופות — מלבן עם פינות
+// צבועות, לא כרטיסיה. השניים גם אינם יכולים לחיות יחד: קריאה לאחד
+// מבטלת את מצב השני.
+//
+// [move_to] הוא מיקום חדש בקואורדינטות מסך, או nullptr כדי להשאיר במקום.
+void Compose(const POINT* move_to) {
+  if (!g_window) return;
+
+  int width = 0;
+  int height = 0;
+  PreviewSize(&width, &height);
+  if (width <= 0 || height <= 0) return;
+
+  BITMAPINFO info{};
+  info.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+  info.bmiHeader.biWidth = width;
+  // ⚠️ שלילי = top-down. `toByteData` מחזיר שורות מלמעלה למטה, ו-DIB
+  // ברירת מחדל הוא bottom-up — בלי המינוס התמונה מגיעה הפוכה.
+  info.bmiHeader.biHeight = -height;
+  info.bmiHeader.biPlanes = 1;
+  info.bmiHeader.biBitCount = 32;
+  info.bmiHeader.biCompression = BI_RGB;
+
+  const HDC screen = ::GetDC(nullptr);
+  const HDC mem = ::CreateCompatibleDC(screen);
+  void* bits = nullptr;
+  const HBITMAP dib =
+      ::CreateDIBSection(screen, &info, DIB_RGB_COLORS, &bits, nullptr, 0);
+  if (!dib || !bits) {
+    if (dib) ::DeleteObject(dib);
+    ::DeleteDC(mem);
+    ::ReleaseDC(nullptr, screen);
+    return;
+  }
+  const HGDIOBJ old_bitmap = ::SelectObject(mem, dib);
+  auto* dst = static_cast<unsigned char*>(bits);
+  const size_t pixels = static_cast<size_t>(width) * height;
+
+  bool have_shot = false;
+  {
+    std::lock_guard<std::mutex> lock(g_mutex);
+    if (g_shot_w == width && g_shot_h == height && !g_shot.empty()) {
+      ::memcpy(dst, g_shot.data(), pixels * 4);
+      have_shot = true;
+    }
+  }
+
+  if (!have_shot) {
+    // צביעה מראש בזקיף, ציור, ואז חילוץ האלפא — ראו [kSentinel].
+    for (size_t i = 0; i < pixels; ++i) {
+      dst[i * 4 + 0] = kSentinelB;
+      dst[i * 4 + 1] = kSentinelG;
+      dst[i * 4 + 2] = kSentinelR;
+      dst[i * 4 + 3] = 0;
+    }
+    DrawFallback(mem, width, height);
+    ::GdiFlush();
+    for (size_t i = 0; i < pixels; ++i) {
+      const bool untouched = dst[i * 4 + 0] == kSentinelB &&
+                             dst[i * 4 + 1] == kSentinelG &&
+                             dst[i * 4 + 2] == kSentinelR;
+      if (untouched) {
+        dst[i * 4 + 0] = 0;
+        dst[i * 4 + 1] = 0;
+        dst[i * 4 + 2] = 0;
+        dst[i * 4 + 3] = 0;
+      } else {
+        dst[i * 4 + 3] = 255;
+      }
+    }
+  }
+
+  SIZE size{width, height};
+  POINT src{0, 0};
+  BLENDFUNCTION blend{};
+  blend.BlendOp = AC_SRC_OVER;
+  blend.SourceConstantAlpha = 255;
+  blend.AlphaFormat = AC_SRC_ALPHA;
+  POINT position{};
+  if (move_to) {
+    position = *move_to;
+  } else {
+    RECT current{};
+    ::GetWindowRect(g_window, &current);
+    position.x = current.left;
+    position.y = current.top;
+  }
+  ::UpdateLayeredWindow(g_window, screen, &position, &size, mem, &src, 0,
+                        &blend, ULW_ALPHA);
+
+  ::SelectObject(mem, old_bitmap);
+  ::DeleteObject(dib);
+  ::DeleteDC(mem);
+  ::ReleaseDC(nullptr, screen);
+}
+
+// האם הנקודה נמצאת מעל חלון המקור.
+//
+// ⚠️ המקור בלבד, ולא "כל חלון של התהליך" — ראו ההערה ב-[Begin] שבכותרת.
+bool IsOverSourceWindow(POINT pt) {
+  const HWND source = g_source.load();
+  if (!source) return false;
+  const HWND under = WindowUnderCursor(pt);
+  return under == source;
+}
+
+// ממקם את התצוגה כך שפינתה תשב על הסמן.
+//
+// ⚠️ פינה ולא מרכז, ובמכוון: `Draggable` מוגדר עם
+// `pointerDragAnchorStrategy`, כלומר ה-`feedback` שבתוך החלון מצויר עם
+// פינתו על הסמן. אותו היסט כאן הוא מה שהופך את המעבר מתוך החלון אל
+// מחוצה לו לרציף — אחרת הכרטיסיה קופצת ברגע שהסמן חוצה את הגבול.
+void MoveToCursor() {
   POINT pt{};
-  ::GetCursorPos(&pt);
-  ::SetWindowPos(hwnd, HWND_TOPMOST, pt.x + kCursorOffsetX,
-                 pt.y + kCursorOffsetY, 0, 0, SWP_NOSIZE | SWP_NOACTIVATE);
+  if (!::GetCursorPos(&pt)) return;
+  Compose(&pt);
 }
 
 LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wparam,
                          LPARAM lparam) {
   switch (message) {
-    case WM_PAINT:
-      Paint(hwnd);
-      return 0;
+    // ⚠️ ביטול המסגרת. הסגנונות של חלון אמיתי נדרשים כדי שה-shell יציע
+    // Snap Layouts, אבל מסגרת וכותרת של Windows על צילום של כרטיסיה היו
+    // נראות כמו שגיאה. החזרת אזור הלקוח כמלוא החלון משאירה את הסגנונות
+    // ומוחקת את הציור שלהם.
+    case WM_NCCALCSIZE:
+      if (wparam == TRUE) return 0;
+      break;
     case WM_TIMER: {
       if (wparam == kHoldTimerId) {
         // החלון האמיתי לא נחשף בזמן. עדיף להסתיר מלהשאיר תלוי.
@@ -235,11 +267,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wparam,
         return 0;
       }
       if (wparam != kFollowTimerId) break;
+      if (g_system_dragging.load()) return 0;
       POINT pt{};
-      ::GetCursorPos(&pt);
-      ::SetWindowPos(hwnd, HWND_TOPMOST, pt.x + kCursorOffsetX,
-                     pt.y + kCursorOffsetY, 0, 0,
-                     SWP_NOSIZE | SWP_NOACTIVATE);
+      if (!::GetCursorPos(&pt)) return 0;
       // מעל חלון המקור ה-`feedback` של Flutter כבר מוצג, ולכן התצוגה
       // הנייטיבית מוסתרת כדי שלא ייראו שתי כרטיסיות. מעל כל מקום אחר —
       // כולל חלון אוצריא אחר — היא **חייבת** להיראות, כי ה-feedback
@@ -249,6 +279,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wparam,
       if (should_show != visible) {
         ::ShowWindow(hwnd, should_show ? SW_SHOWNOACTIVATE : SW_HIDE);
       }
+      if (should_show) Compose(&pt);
       return 0;
     }
     case WM_DESTROY:
@@ -282,6 +313,24 @@ std::wstring Utf16FromUtf8(const std::string& utf8) {
   return result;
 }
 
+HWND WindowUnderCursor(POINT pt) {
+  // בלי התצוגה השאלה פשוטה. העלייה ל-root חיונית: `WindowFromPoint`
+  // מחזיר את החלון הפנימי ביותר, בדרך כלל ה-view של Flutter או WebView2.
+  if (!g_window || !::IsWindowVisible(g_window)) {
+    const HWND under = ::WindowFromPoint(pt);
+    return under ? ::GetAncestor(under, GA_ROOT) : nullptr;
+  }
+  // ⚠️ הדלקה רגעית של `WS_EX_TRANSPARENT`. הדגל אינו מודלק בקביעות כי
+  // חלון שאינו נמצא תחת הסמן אינו נראה ל-shell כחלון שנגרר, ובלי זה אין
+  // Snap Layouts. כאן הוא נדרש לרגע החישוב בלבד: בלעדיו התצוגה עצמה
+  // הייתה התשובה, וכל שחרור מעל חלון אחר לא היה מזוהה.
+  const LONG_PTR ex = ::GetWindowLongPtrW(g_window, GWL_EXSTYLE);
+  ::SetWindowLongPtrW(g_window, GWL_EXSTYLE, ex | WS_EX_TRANSPARENT);
+  const HWND under = ::WindowFromPoint(pt);
+  ::SetWindowLongPtrW(g_window, GWL_EXSTYLE, ex);
+  return under ? ::GetAncestor(under, GA_ROOT) : nullptr;
+}
+
 void Begin(const std::wstring& title, HWND source, const Colors& colors) {
   {
     std::lock_guard<std::mutex> lock(g_mutex);
@@ -293,81 +342,119 @@ void Begin(const std::wstring& title, HWND source, const Colors& colors) {
       g_palette.border = colors.border;
       g_palette.text = colors.text;
     }
+    // הצילום של הגרירה הקודמת אינו שייך לזו — עד שיגיע חדש, שרטוט.
+    g_shot.clear();
+    g_shot_w = 0;
+    g_shot_h = 0;
   }
   g_source.store(source);
-  // התמונה של הגרירה הקודמת אינה שייכת לזו — עד שתגיע חדשה, שרטוט GDI.
-  {
-    std::lock_guard<std::mutex> lock(g_mutex);
-    ReleaseTabBitmap();
-  }
+  g_system_dragging.store(false);
   EnsureClass();
 
   if (!g_window) {
-    // WS_EX_TRANSPARENT — חובה. בלעדיו החלון הזה היה מחזיר את עצמו
-    // מ-`WindowFromPoint`, ושחרור הכרטיסיה מעל חלון אחר לא היה מזוהה.
-    // WS_EX_NOACTIVATE — כדי שהמעקב לא יגנוב פוקוס מהחלון הנגרר ממנו.
+    // ⚠️ `WS_OVERLAPPEDWINDOW` ולא `WS_POPUP`, וללא `WS_EX_TOOLWINDOW`.
+    //
+    // אלה התנאים שה-shell בודק לפני שהוא מציע Snap Layouts: חלון עליון
+    // שניתן לשנות את גודלו (`WS_THICKFRAME`), עם כפתור הגדלה
+    // (`WS_MAXIMIZEBOX`), שאינו חלון כלים. עם `WS_POPUP` או
+    // `WS_EX_TOOLWINDOW` הגרירה פשוט לא מזוהה כגרירת חלון — וזה מה
+    // שהמשתמש דיווח.
+    //
+    // המסגרת עצמה מבוטלת ב-`WM_NCCALCSIZE`, כלומר הסגנונות קיימים
+    // לצורך הסיווג בלבד ואינם נראים.
+    //
+    // ⚠️ אין כאן `WS_EX_NOACTIVATE`: לולאת ההזזה של Windows עובדת על
+    // החלון הפעיל, וחלון שאינו מקבל הפעלה אינו "החלון הנגרר".
     g_window = ::CreateWindowExW(
-        WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_TOOLWINDOW |
-            WS_EX_TOPMOST | WS_EX_NOACTIVATE,
-        kClassName, L"", WS_POPUP, 0, 0, kWidth, kHeight, nullptr, nullptr,
-        ::GetModuleHandle(nullptr), nullptr);
+        WS_EX_LAYERED | WS_EX_TOPMOST, kClassName, L"אוצריא",
+        WS_OVERLAPPEDWINDOW, 0, 0, kFallbackWidth, kFallbackHeight, nullptr,
+        nullptr, ::GetModuleHandle(nullptr), nullptr);
     if (!g_window) return;
-    ::SetLayeredWindowAttributes(g_window, 0, 225, LWA_ALPHA);
   }
 
   ::KillTimer(g_window, kHoldTimerId);
-  ::InvalidateRect(g_window, nullptr, TRUE);
   ::SetTimer(g_window, kFollowTimerId, kFollowIntervalMs, nullptr);
   g_active.store(true);
 
-  // מיקום ראשוני מיידי, כדי שהתצוגה לא תקפוץ מהפינה בפעימה הראשונה.
-  MoveToCursor(g_window);
+  // מיקום ותוכן ראשוניים מיידיים, כדי שהתצוגה לא תקפוץ מהפינה בפעימה
+  // הראשונה.
+  MoveToCursor();
 }
 
-void SetImage(const unsigned char* rgba, int width, int height, double dpr) {
+void SetImage(const unsigned char* rgba, int width, int height) {
   if (!rgba || width <= 0 || height <= 0) return;
 
-  BITMAPINFO info{};
-  info.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
-  info.bmiHeader.biWidth = width;
-  // ⚠️ שלילי = top-down. `toByteData` מחזיר שורות מלמעלה למטה, ו-DIB
-  // ברירת מחדל הוא bottom-up — בלי המינוס התמונה מגיעה הפוכה.
-  info.bmiHeader.biHeight = -height;
-  info.bmiHeader.biPlanes = 1;
-  info.bmiHeader.biBitCount = 32;
-  info.bmiHeader.biCompression = BI_RGB;
-
-  void* bits = nullptr;
-  const HDC screen = ::GetDC(nullptr);
-  const HBITMAP bitmap = ::CreateDIBSection(screen, &info, DIB_RGB_COLORS,
-                                            &bits, nullptr, 0);
-  ::ReleaseDC(nullptr, screen);
-  if (!bitmap || !bits) {
-    if (bitmap) ::DeleteObject(bitmap);
-    return;
-  }
-
-  // RGBA → BGRA. שני הפורמטים מוכפלים-מראש, ולכן די בהחלפת האדום והכחול.
-  auto* dst = static_cast<unsigned char*>(bits);
+  std::vector<unsigned char> bgra(static_cast<size_t>(width) * height * 4);
+  // RGBA → BGRA. שני הפורמטים מוכפלים-מראש, ולכן די בהחלפת אדום וכחול.
   const size_t pixels = static_cast<size_t>(width) * height;
   for (size_t i = 0; i < pixels; ++i) {
-    dst[i * 4 + 0] = rgba[i * 4 + 2];
-    dst[i * 4 + 1] = rgba[i * 4 + 1];
-    dst[i * 4 + 2] = rgba[i * 4 + 0];
-    dst[i * 4 + 3] = rgba[i * 4 + 3];
+    bgra[i * 4 + 0] = rgba[i * 4 + 2];
+    bgra[i * 4 + 1] = rgba[i * 4 + 1];
+    bgra[i * 4 + 2] = rgba[i * 4 + 0];
+    bgra[i * 4 + 3] = rgba[i * 4 + 3];
   }
 
-  const double scale = dpr > 0.1 ? dpr : 1.0;
   {
     std::lock_guard<std::mutex> lock(g_mutex);
-    ReleaseTabBitmap();
-    g_tab_bitmap = bitmap;
-    g_tab_bitmap_w = width;
-    g_tab_bitmap_h = height;
-    g_tab_logical_w = static_cast<int>(width / scale + 0.5);
-    g_tab_logical_h = static_cast<int>(height / scale + 0.5);
+    g_shot = std::move(bgra);
+    g_shot_w = width;
+    g_shot_h = height;
   }
-  if (g_window) ::InvalidateRect(g_window, nullptr, TRUE);
+  // ⚠️ בלי מיקום מחדש: הסמן לא זז, והתצוגה גדלה לגודל הצילום סביב אותה
+  // פינה. `Compose` מקבל nullptr ולכן שומר את המקום.
+  if (g_window && !g_system_dragging.load()) Compose(nullptr);
+}
+
+SystemDragResult DragWithSystem() {
+  SystemDragResult out;
+  if (!g_window || !g_active.load()) return out;
+
+  POINT cursor{};
+  if (!::GetCursorPos(&cursor)) return out;
+  out.cursor = cursor;
+
+  // ⚠️ רק אם הכפתור עוד לחוץ. `WM_NCLBUTTONDOWN` בלי כפתור לחוץ נכנס
+  // ללולאה שנתקעת עד הלחיצה הבאה — חלון שנתפס לסמן בלי סיבה.
+  if ((::GetAsyncKeyState(VK_LBUTTON) & 0x8000) == 0) {
+    ::GetWindowRect(g_window, &out.rect);
+    out.under = WindowUnderCursor(cursor);
+    return out;
+  }
+
+  g_system_dragging.store(true);
+  ::KillTimer(g_window, kFollowTimerId);
+
+  // ⚠️ יציאה מ-topmost. חלון topmost נגרר בסדר, אבל ה-shell מתייחס אליו
+  // כאל שכבה מעל שאר החלונות ולא כאל חלון רגיל — וזה בדיוק הסיווג
+  // שקובע אם יוצע Snap.
+  ::SetWindowPos(g_window, HWND_NOTOPMOST, 0, 0, 0, 0,
+                 SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+  ::ShowWindow(g_window, SW_SHOWNOACTIVATE);
+  ::SetForegroundWindow(g_window);
+
+  // ⚠️ `ReleaseCapture` אינו נימוס. ה-embedder של Flutter לוכד את העכבר
+  // בלחיצה, וכל המנועים חולקים את ה-thread הזה — כלומר הלכידה של חלון
+  // המקור בתוקף. בלעדיו לולאת ההזזה אינה רואה את העכבר, והחלון פשוט
+  // אינו נגרר.
+  ::ReleaseCapture();
+  ::SendMessageW(g_window, WM_NCLBUTTONDOWN, HTCAPTION,
+                 MAKELPARAM(cursor.x, cursor.y));
+
+  g_system_dragging.store(false);
+  out.ran = true;
+  ::GetWindowRect(g_window, &out.rect);
+  // הצמדה = המערכת שינתה את הגודל. סבילות של 2 פיקסלים כי חלון מוצמד
+  // מקבל מסגרת שאינה בהכרח זהה לפיקסל למה שביקשנו.
+  int expected_w = 0;
+  int expected_h = 0;
+  PreviewSize(&expected_w, &expected_h);
+  const int actual_w = out.rect.right - out.rect.left;
+  const int actual_h = out.rect.bottom - out.rect.top;
+  out.snapped =
+      ::abs(actual_w - expected_w) > 2 || ::abs(actual_h - expected_h) > 2;
+  ::GetCursorPos(&out.cursor);
+  out.under = WindowUnderCursor(out.cursor);
+  return out;
 }
 
 void Freeze() {
@@ -376,8 +463,8 @@ void Freeze() {
   //
   // ⚠️ זה מה שמכסה את הפער שהמשתמש תיאר: פתיחת חלון לוקחת מאות
   // מילישניות, ובלי ההקפאה המסך ריק בדיוק בפרק הזמן שבו המשתמש מחכה
-  // לראות תוצאה. עכשיו הרוח נשארת במקום שגררו אליו, והחלון האמיתי מחליף
-  // אותה במקום להופיע אחרי כלום.
+  // לראות תוצאה. עכשיו הכרטיסיה נשארת במקום שגררו אליו, והחלון האמיתי
+  // מחליף אותה במקום להופיע אחרי כלום.
   ::KillTimer(g_window, kFollowTimerId);
   ::ShowWindow(g_window, SW_SHOWNOACTIVATE);
   ::SetTimer(g_window, kHoldTimerId, kHoldTimeoutMs, nullptr);
@@ -386,10 +473,14 @@ void Freeze() {
 void End() {
   g_active.store(false);
   g_source.store(nullptr);
+  g_system_dragging.store(false);
   if (!g_window) return;
   ::KillTimer(g_window, kFollowTimerId);
   ::KillTimer(g_window, kHoldTimerId);
   ::ShowWindow(g_window, SW_HIDE);
+  // חזרה ל-topmost לגרירה הבאה, שמתחילה לפני שהמערכת מקבלת אותה.
+  ::SetWindowPos(g_window, HWND_TOPMOST, 0, 0, 0, 0,
+                 SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
 }
 
 bool IsActive() { return g_active.load(); }

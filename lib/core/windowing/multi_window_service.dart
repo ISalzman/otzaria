@@ -11,6 +11,24 @@ import 'package:otzaria/core/windowing/window_bus.dart';
 import 'package:otzaria/tabs/models/combined_tab.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 
+/// תוצאת גרירה שהמערכת ניהלה — ראו [MultiWindowService.dragOutToSystem].
+///
+/// [snapped] הוא מה שמבדיל בין "פתח כאן" לבין "פתח **במסגרת הזו**": התצוגה
+/// היא בגודל כרטיסיה, ושימוש עיוור במסגרת היה יוצר חלון אוצריא של 176×40.
+typedef SystemDragOutcome = ({
+  bool ran,
+  bool snapped,
+  int left,
+  int top,
+  int width,
+  int height,
+  int x,
+  int y,
+  int? slot,
+  bool isSelf,
+  bool isShellTray,
+});
+
 /// פותח חלונות אוצריא נוספים.
 ///
 /// כל חלון הוא `FlutterEngine` נפרד, ב-isolate נפרד, **באותו תהליך**
@@ -65,7 +83,15 @@ class MultiWindowService {
   /// ⚠️ בלעדיו החלון נפתח בהיסט מדורג מהפינה, בלי קשר למקום שאליו המשתמש
   /// גרר — גררת לפינה התחתונה-ימנית והחלון קפץ למעלה-שמאלה. רשימת ה-QA של
   /// הענף כן דרשה "חלון חדש במיקום הסמן", וזה פשוט לא מומש.
-  Future<bool> openWindow({OpenedTab? tab, ({int x, int y})? dropPoint}) async {
+  ///
+  /// [bounds] היא מסגרת מדויקת שדוחה את [dropPoint] — כך חלון שהמשתמש
+  /// **הצמיד** בגרירה נוצר בדיוק במסגרת שההצמדה נתנה. בלעדיה ההצמדה
+  /// שהמשתמש ראה נעלמת ברגע שהחלון האמיתי מופיע.
+  Future<bool> openWindow({
+    OpenedTab? tab,
+    ({int x, int y})? dropPoint,
+    ({int left, int top, int width, int height})? bounds,
+  }) async {
     if (!isSupported) return false;
     try {
       // המידות נשלחות ל-runner כדי שייצור את החלון בגודל הנכון מלכתחילה.
@@ -84,6 +110,13 @@ class MultiWindowService {
             if (inherited != null) 'height': inherited.height.round(),
             if (dropPoint != null) 'dropX': dropPoint.x,
             if (dropPoint != null) 'dropY': dropPoint.y,
+            if (bounds != null)
+              'bounds': {
+                'left': bounds.left,
+                'top': bounds.top,
+                'width': bounds.width,
+                'height': bounds.height,
+              },
           })
           // ⚠️ רשת ביטחון. התשובה מגיעה מלולאת ההודעות של ה-runner,
           // ואם החלון הפותח נהרס לפני שההודעה טופלה — אין מי שיענה.
@@ -201,22 +234,61 @@ class MultiWindowService {
   ///
   /// [rgba] הוא `ImageByteFormat.rawRgba`, שהוא **מוכפל-מראש** — בדיוק מה
   /// ש-`AlphaBlend` מצפה לו אחרי החלפת אדום וכחול.
-  Future<void> setTabDragImage(
-    Uint8List rgba,
-    int width,
-    int height,
-    double devicePixelRatio,
-  ) async {
+  /// ⚠️ אין כאן DPR. התצוגה נקבעת לגודל **הפיזי** של הצילום, ולכן היא
+  /// נכונה בכל מסך בלי לחשב סקאלה. גרסה קודמת חילקה ב-DPR וצמצמה את
+  /// התמונה לגודל לוגי — כלומר הקטינה אותה ואיבדה את החדות שהצילום נועד
+  /// לתת.
+  Future<void> setTabDragImage(Uint8List rgba, int width, int height) async {
     if (!isSupported) return;
     try {
       await _channel.invokeMethod<void>('setTabDragImage', {
         'bytes': rgba,
         'width': width,
         'height': height,
-        'dpr': devicePixelRatio,
       });
     } catch (e) {
       debugPrint('setTabDragImage failed: $e');
+    }
+  }
+
+  /// מוסר ל-Windows את המשך הגרירה, וממתין עד שהמשתמש שחרר.
+  ///
+  /// ## למה זו הדרך היחידה ל-Snap Layouts
+  ///
+  /// אין API שפותח את מסדר החלונות. ה-shell פותח אותו בעצמו, ורק כשהוא
+  /// משוכנע שהמשתמש גורר **חלון** לעבר קצה המסך. כל עוד הכרטיסיה נגררת
+  /// בתוך התהליך שלנו — Flutter לוכד את הסמן, וה-runner מזיז חלון layered
+  /// בטיימר — מבחינת Windows שום חלון אינו נגרר.
+  ///
+  /// לכן התצוגה עצמה היא חלון עם סגנונות של חלון אמיתי, והיא זו שנמסרת
+  /// למערכת. **שום מנוע Flutter אינו נוצר כאן** — זו הנקודה: החלון
+  /// האמיתי נפתח רק בשחרור, על פי התוצאה שחוזרת מכאן.
+  ///
+  /// ⚠️ הקריאה חוסמת לכל משך הגרירה, וזה במתכוון: התשובה היא המסגרת
+  /// הסופית — כולל הצמדה, אם המשתמש הצמיד.
+  Future<SystemDragOutcome?> dragOutToSystem() async {
+    if (!isSupported) return null;
+    try {
+      final info = await _channel.invokeMapMethod<String, dynamic>(
+        'dragOutToSystem',
+      );
+      if (info == null) return null;
+      return (
+        ran: info['ran'] == true,
+        snapped: info['snapped'] == true,
+        left: (info['left'] as int?) ?? 0,
+        top: (info['top'] as int?) ?? 0,
+        width: (info['width'] as int?) ?? 0,
+        height: (info['height'] as int?) ?? 0,
+        x: (info['x'] as int?) ?? 0,
+        y: (info['y'] as int?) ?? 0,
+        slot: info['slot'] as int?,
+        isSelf: info['isSelf'] == true,
+        isShellTray: info['isShellTray'] == true,
+      );
+    } catch (e) {
+      debugPrint('dragOutToSystem failed: $e');
+      return null;
     }
   }
 

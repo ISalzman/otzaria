@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:otzaria/core/windowing/external_tab_drag.dart';
@@ -70,7 +71,11 @@ class ReadingTabStrip extends StatefulWidget {
   final void Function(OpenedTab tab, int insertIndex)? onExternalDrop;
 
   /// נקרא כשמתחילה גרירת כרטיסיה, עם הכרטיסיה הנגררת.
-  final void Function(OpenedTab tab)? onDragStarted;
+  ///
+  /// `cancelDrag` מבטל את הגרירה של Flutter בלי שהמשתמש שחרר את
+  /// הכפתור — נדרש כשהגרירה נמסרת ל-Windows. ראו
+  /// `_DraggableTabState._cancelDrag`.
+  final void Function(OpenedTab tab, VoidCallback cancelDrag)? onDragStarted;
 
   /// נקרא כשצילום הכרטיסיה מוכן — **אחרי** [onDragStarted].
   ///
@@ -426,8 +431,10 @@ class _ReadingTabStripState extends State<ReadingTabStrip> {
                         requireLongPress: widget.requireLongPressToDrag,
                         onDragStarted: widget.onDragStarted == null
                             ? null
-                            : () => widget.onDragStarted!(widget.tabs[i]),
-
+                            : (cancelDrag) => widget.onDragStarted!(
+                                widget.tabs[i],
+                                cancelDrag,
+                              ),
                         onTabSnapshot: widget.onTabSnapshot == null
                             ? null
                             : (snapshot) => widget.onTabSnapshot!(
@@ -533,7 +540,8 @@ class _DraggableTab extends StatefulWidget {
   final double? crossExtent;
   final bool requireLongPress;
 
-  final VoidCallback? onDragStarted;
+  /// נקרא כשמתחילה גרירה מהכרטיסיה הזו, עם דרך לבטל אותה.
+  final void Function(VoidCallback cancelDrag)? onDragStarted;
 
   /// נקרא כשצילום הכרטיסיה מוכן — **אחרי** [onDragStarted].
   ///
@@ -597,10 +605,27 @@ class _DraggableTabState extends State<_DraggableTab> {
     }
   }
 
+  /// המצביע שבו מתבצעת הגרירה, לביטולה מבחוץ. ראו [_cancelDrag].
+  int? _pointer;
+
+  /// מבטל את הגרירה של Flutter מבלי שהמשתמש שחרר את הכפתור.
+  ///
+  /// ⚠️ נדרש כשהגרירה נמסרת ל-Windows (Snap Layouts): מאותו רגע לולאת
+  /// ההזזה של המערכת לוכדת את העכבר, ו-Flutter **לא יראה את השחרור** —
+  /// כלומר ה-[Draggable] היה נשאר תקוע לנצח, עם הכרטיסיה מעומעמת במקומה.
+  ///
+  /// ה-cancel מגיע לזירת המחוות ולכן מסתיים דרך `onDraggableCanceled`,
+  /// כמו כל גרירה שהתפספסה — אותו מסלול סיום בדיוק.
+  void _cancelDrag() {
+    final pointer = _pointer;
+    if (pointer == null) return;
+    GestureBinding.instance.cancelPointer(pointer);
+  }
+
   void _handleDragStarted() {
     // ⚠️ מודיעים **מיד**, ובלי להמתין לצילום: התצוגה הנייטיבית מתחילה עם
     // שרטוט GDI כדי שלא יהיה רגע ריק, והתמונה מגיעה בקריאה שנייה.
-    widget.onDragStarted?.call();
+    widget.onDragStarted?.call(_cancelDrag);
     final onSnapshot = widget.onTabSnapshot;
     if (onSnapshot == null) return;
     _captureTab().then((image) {
@@ -629,36 +654,42 @@ class _DraggableTabState extends State<_DraggableTab> {
       child: widget.child,
     );
 
-    if (widget.requireLongPress) {
-      return LongPressDraggable<OpenedTab>(
-        data: widget.tab,
-        dragAnchorStrategy: pointerDragAnchorStrategy,
-        feedback: feedback,
-        childWhenDragging: placeholder,
-        onDragStarted: _handleDragStarted,
-        onDragEnd: (_) => widget.onDragFinished(),
-        onDraggableCanceled: (_, _) {
-          widget.onDragFinished();
-          widget.onDroppedOutside?.call();
-        },
-        child: child,
-      );
-    }
+    // ⚠️ ה-Listener רק **מתעד** את המצביע, ואינו צורך את האירוע:
+    // `deferToChild` מעביר אותו ל-Draggable כרגיל. המצביע נדרש כדי
+    // שנוכל לבטל את הגרירה מבחוץ — ראו [_cancelDrag].
+    final draggable = widget.requireLongPress
+        ? LongPressDraggable<OpenedTab>(
+            data: widget.tab,
+            dragAnchorStrategy: pointerDragAnchorStrategy,
+            feedback: feedback,
+            childWhenDragging: placeholder,
+            onDragStarted: _handleDragStarted,
+            onDragEnd: (_) => widget.onDragFinished(),
+            onDraggableCanceled: (_, _) {
+              widget.onDragFinished();
+              widget.onDroppedOutside?.call();
+            },
+            child: child,
+          )
+        : Draggable<OpenedTab>(
+            data: widget.tab,
+            // חובה: ה-offset שמקבלים יעדי ההפלה הוא פינת ה-feedback, ולכן עוגן
+            // ברירת המחדל מסיט את אזור ההפלה בכחצי רוחב כרטיסיה.
+            dragAnchorStrategy: pointerDragAnchorStrategy,
+            feedback: feedback,
+            childWhenDragging: placeholder,
+            onDragStarted: _handleDragStarted,
+            onDragEnd: (_) => widget.onDragFinished(),
+            onDraggableCanceled: (_, _) {
+              widget.onDragFinished();
+              widget.onDroppedOutside?.call();
+            },
+            child: child,
+          );
 
-    return Draggable<OpenedTab>(
-      data: widget.tab,
-      // חובה: ה-offset שמקבלים יעדי ההפלה הוא פינת ה-feedback, ולכן עוגן
-      // ברירת המחדל מסיט את אזור ההפלה בכחצי רוחב כרטיסיה.
-      dragAnchorStrategy: pointerDragAnchorStrategy,
-      feedback: feedback,
-      childWhenDragging: placeholder,
-      onDragStarted: _handleDragStarted,
-      onDragEnd: (_) => widget.onDragFinished(),
-      onDraggableCanceled: (_, _) {
-        widget.onDragFinished();
-        widget.onDroppedOutside?.call();
-      },
-      child: child,
+    return Listener(
+      onPointerDown: (event) => _pointer = event.pointer,
+      child: draggable,
     );
   }
 }

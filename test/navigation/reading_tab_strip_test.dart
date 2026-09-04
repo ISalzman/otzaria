@@ -66,7 +66,7 @@ void main() {
                   widths: widths,
                   requireLongPressToDrag: requireLongPress,
                   onReorder: log.reorder,
-                  onDragStarted: (_) => log.dragStarts++,
+                  onDragStarted: (_, _) => log.dragStarts++,
                   onSpringOpen: log.springOpened.add,
                   tabBuilder: (tab, index, width) => SizedBox(
                     width: width,
@@ -482,7 +482,7 @@ void main() {
                     tabs: tabs,
                     widths: [for (final _ in tabs) itemHeight],
                     onReorder: log.reorder,
-                    onDragStarted: (_) => log.dragStarts++,
+                    onDragStarted: (_, _) => log.dragStarts++,
                     onSpringOpen: log.springOpened.add,
                     tabBuilder: (tab, index, extent) => SizedBox(
                       height: extent,

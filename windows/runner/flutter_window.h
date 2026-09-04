@@ -39,8 +39,11 @@ class FlutterWindow : public Win32Window {
   // משלמת שוב את מלוא האתחול, וכל מחזור פתיחה-סגירה מוסיף מנוע לזיכרון.
   // [drop_x]/[drop_y] הם נקודת השחרור בקואורדינטות מסך, או 0 כשאין —
   // ואז המיקום נשאר כשהיה.
+  // [bounds] היא מסגרת מדויקת שדוחה את [drop_x]/[drop_y] — כך חלון
+  // שהמשתמש הצמיד בגרירה נוצר בדיוק במסגרת שההצמדה נתנה.
   void ReviveWith(const std::string& payload, int width, int height,
-                  int drop_x = 0, int drop_y = 0);
+                  int drop_x = 0, int drop_y = 0,
+                  const RECT* bounds = nullptr);
 
  protected:
   // Win32Window:
@@ -90,11 +93,25 @@ class FlutterWindow : public Win32Window {
     // נקודת השחרור בקואורדינטות מסך, או 0 כשהפתיחה לא באה מגרירה.
     int drop_x = 0;
     int drop_y = 0;
+    // מסגרת מדויקת, כשהגרירה הסתיימה בהצמדה של Windows.
+    //
+    // ⚠️ דוחה את `drop_x`/`drop_y`. חלון שהמשתמש הצמיד לחצי מסך חייב
+    // להיווצר באותה מסגרת, אחרת ההצמדה שהוא ראה נעלמת ברגע שהחלון
+    // האמיתי מופיע.
+    bool has_bounds = false;
+    RECT bounds{};
     std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result;
   };
   // נכתב בטיפול בערוץ ונקרא בלולאת ההודעות של אותו thread, ולכן אין כאן
   // גישה חוצת-threads.
   std::queue<PendingSecondaryWindow> pending_secondary_windows_;
+  // בקשות "מסור את הגרירה ל-Windows" שממתינות ללולאת ההודעות.
+  //
+  // ⚠️ נענות **אחרי** שהמשתמש שחרר, כי התשובה היא המסגרת הסופית — כולל
+  // הצמדה. הן אינן מבוצעות בתוך הטיפול בערוץ: `DragWithSystem` נכנס
+  // ללולאה מודאלית, וחסימה מתוך קריאת ערוץ היא ריאנטרנטית.
+  std::queue<std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>>>
+      pending_system_drags_;
   // ערוץ לסגירת חלון ה-splash הנייטיב (otzaria/splash) — Dart קורא "close"
   // בעת חשיפת החלון הראשי.
   std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>>

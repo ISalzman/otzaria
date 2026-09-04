@@ -170,6 +170,10 @@ bool ConfigureProcessJob(HANDLE job, std::string& failure) {
 // עצמו**. ראו `CreateSecondaryWindowOnThisThread`.
 constexpr UINT kMsgOpenSecondaryWindow = WM_APP + 0x101;
 
+// הודעה פרטית שמבקשת למסור ל-Windows את המשך גרירת הכרטיסיה.
+// ראו `drag_preview::DragWithSystem`.
+constexpr UINT kMsgDragOutToSystem = WM_APP + 0x103;
+
 // החלונות המשניים שנוצרו על ה-thread הזה. `FlutterWindow` חייב לחיות כל
 // עוד החלון שלו קיים, ולכן הבעלות נשמרת כאן ולא במחסנית.
 std::vector<std::unique_ptr<FlutterWindow>>& SecondaryWindowsOnThisThread() {
@@ -267,11 +271,72 @@ Win32Window::Point OriginForDrop(int drop_x, int drop_y, int width,
   return Win32Window::Point(left, top);
 }
 
+// מתאר את היעד שתחת הסמן, בשפה ש-Dart מבין.
+//
+// ⚠️ עוזר משותף ל-`windowAtCursor` ול-`dragOutToSystem`, ובמכוון: שני
+// המסלולים מקבלים את אותה החלטה — "מה נמצא שם" — ושתי גרסאות שלה היו
+// נפרדות בשקט ברגע שאחת מהן משתנה.
+flutter::EncodableMap DescribeTarget(HWND under, POINT cursor, HWND self) {
+  flutter::EncodableMap info;
+  info[flutter::EncodableValue("x")] =
+      flutter::EncodableValue(static_cast<int>(cursor.x));
+  info[flutter::EncodableValue("y")] =
+      flutter::EncodableValue(static_cast<int>(cursor.y));
+
+  // ⚠️ שורת המשימות מדווחת בנפרד. היא נגישה גם כשהחלון ממוקסם, ולכן
+  // שחרור עליה הוא כמעט תמיד החטאה ולא בקשה לפתוח חלון — ומשתמש בחלון
+  // יחיד שאינו מכיר את הפיצ'ר גילה פתאום חלון שני.
+  wchar_t class_name[64] = {0};
+  if (under) {
+    ::GetClassNameW(under, class_name,
+                    sizeof(class_name) / sizeof(class_name[0]));
+  }
+  const bool is_shell_tray =
+      ::wcscmp(class_name, L"Shell_TrayWnd") == 0 ||
+      ::wcscmp(class_name, L"Shell_SecondaryTrayWnd") == 0 ||
+      ::wcscmp(class_name, L"TopLevelWindowForOverflowXamlIsland") == 0;
+  info[flutter::EncodableValue("isShellTray")] =
+      flutter::EncodableValue(is_shell_tray);
+
+  const auto& slots = WindowSlots();
+  const auto it = slots.find(under);
+  if (it != slots.end() && ::IsWindowVisible(under)) {
+    info[flutter::EncodableValue("slot")] =
+        flutter::EncodableValue(it->second);
+    info[flutter::EncodableValue("isSelf")] =
+        flutter::EncodableValue(under == self);
+  }
+  return info;
+}
+
+// מתאר גרירה שהמערכת ניהלה: היעד, והמסגרת שהמשתמש עצר בה.
+flutter::EncodableValue DescribeSystemDrag(
+    const drag_preview::SystemDragResult& drag, HWND self) {
+  flutter::EncodableMap info = DescribeTarget(drag.under, drag.cursor, self);
+  info[flutter::EncodableValue("ran")] = flutter::EncodableValue(drag.ran);
+  // ⚠️ `snapped` הוא מה שמבדיל בין "פתח כאן" לבין "פתח **במסגרת הזו**".
+  // התצוגה היא בגודל כרטיסיה, ושימוש עיוור במסגרת היה יוצר חלון אוצריא
+  // של 176×40.
+  info[flutter::EncodableValue("snapped")] =
+      flutter::EncodableValue(drag.snapped);
+  info[flutter::EncodableValue("left")] =
+      flutter::EncodableValue(static_cast<int>(drag.rect.left));
+  info[flutter::EncodableValue("top")] =
+      flutter::EncodableValue(static_cast<int>(drag.rect.top));
+  info[flutter::EncodableValue("width")] =
+      flutter::EncodableValue(static_cast<int>(drag.rect.right -
+                                               drag.rect.left));
+  info[flutter::EncodableValue("height")] =
+      flutter::EncodableValue(static_cast<int>(drag.rect.bottom -
+                                               drag.rect.top));
+  return flutter::EncodableValue(info);
+}
+
 bool CreateSecondaryWindowOnThisThread(const flutter::DartProject& base,
                                        const std::string& payload,
                                        int inherited_width,
                                        int inherited_height, int drop_x,
-                                       int drop_y) {
+                                       int drop_y, const RECT* bounds) {
   // ניקוי חלונות שנסגרו, כדי שהרשימה לא תגדל בלי גבול.
   auto& windows = SecondaryWindowsOnThisThread();
   windows.erase(
@@ -292,7 +357,7 @@ bool CreateSecondaryWindowOnThisThread(const flutter::DartProject& base,
       continue;
     }
     existing->ReviveWith(payload, inherited_width, inherited_height, drop_x,
-                         drop_y);
+                         drop_y, bounds);
     return true;
   }
 
@@ -312,9 +377,14 @@ bool CreateSecondaryWindowOnThisThread(const flutter::DartProject& base,
   const int height = inherited_height > 300 ? inherited_height : 760;
   Win32Window::Size size(width, height);
 
-  // נקודת השחרור קובעת את המיקום; בהיעדרה — היסט מדורג, כמו קודם.
+  // מסגרת מדויקת (הצמדה) קודמת לכול, אחריה נקודת השחרור, ובהיעדר
+  // שתיהן — היסט מדורג, כמו קודם.
   Win32Window::Point origin(0, 0);
-  if (drop_x != 0 || drop_y != 0) {
+  if (bounds != nullptr) {
+    origin = Win32Window::Point(bounds->left, bounds->top);
+    size = Win32Window::Size(bounds->right - bounds->left,
+                             bounds->bottom - bounds->top);
+  } else if (drop_x != 0 || drop_y != 0) {
     origin = OriginForDrop(drop_x, drop_y, width, height);
   } else {
     static int spawn_index = 0;
@@ -626,37 +696,13 @@ bool FlutterWindow::OnCreate() {
         if (call.method_name() == "windowAtCursor") {
           POINT cursor{};
           ::GetCursorPos(&cursor);
-          const HWND under = ::GetAncestor(::WindowFromPoint(cursor), GA_ROOT);
-
-          flutter::EncodableMap info;
-          info[flutter::EncodableValue("x")] =
-              flutter::EncodableValue(static_cast<int>(cursor.x));
-          info[flutter::EncodableValue("y")] =
-              flutter::EncodableValue(static_cast<int>(cursor.y));
-          // ⚠️ שורת המשימות מדווחת בנפרד. היא נגישה גם כשהחלון ממוקסם,
-          // ולכן שחרור עליה הוא כמעט תמיד החטאה ולא בקשה לפתוח חלון —
-          // ומשתמש בחלון יחיד שאינו מכיר את הפיצ'ר גילה פתאום חלון שני.
-          wchar_t class_name[64] = {0};
-          if (under) {
-            ::GetClassNameW(under, class_name,
-                            sizeof(class_name) / sizeof(class_name[0]));
-          }
-          const bool is_shell_tray =
-              ::wcscmp(class_name, L"Shell_TrayWnd") == 0 ||
-              ::wcscmp(class_name, L"Shell_SecondaryTrayWnd") == 0 ||
-              ::wcscmp(class_name, L"TopLevelWindowForOverflowXamlIsland") == 0;
-          info[flutter::EncodableValue("isShellTray")] =
-              flutter::EncodableValue(is_shell_tray);
-
-          const auto& slots = WindowSlots();
-          const auto it = slots.find(under);
-          if (it != slots.end() && ::IsWindowVisible(under)) {
-            info[flutter::EncodableValue("slot")] =
-                flutter::EncodableValue(it->second);
-            info[flutter::EncodableValue("isSelf")] =
-                flutter::EncodableValue(under == GetHandle());
-          }
-          result->Success(flutter::EncodableValue(info));
+          // ⚠️ `drag_preview::WindowUnderCursor` ולא `WindowFromPoint`
+          // ישירות: התצוגה אינה `WS_EX_TRANSPARENT` יותר (בלי זה ה-shell
+          // אינו רואה בה חלון שנגרר, ואין Snap Layouts), ולכן היא הייתה
+          // מחזירה את עצמה כיעד וכל שחרור מעל חלון אחר לא היה מזוהה.
+          const HWND under = drag_preview::WindowUnderCursor(cursor);
+          result->Success(flutter::EncodableValue(
+              DescribeTarget(under, cursor, GetHandle())));
           return;
         }
 
@@ -712,22 +758,25 @@ bool FlutterWindow::OnCreate() {
               return v ? *v : fallback;
             };
             const auto bytes_it = args->find(flutter::EncodableValue("bytes"));
-            const auto dpr_it = args->find(flutter::EncodableValue("dpr"));
-            double dpr = 1.0;
-            if (dpr_it != args->end()) {
-              if (const auto* v = std::get_if<double>(&dpr_it->second)) {
-                dpr = *v;
-              }
-            }
             if (bytes_it != args->end()) {
               if (const auto* bytes =
                       std::get_if<std::vector<uint8_t>>(&bytes_it->second)) {
                 drag_preview::SetImage(bytes->data(), get_int("width", 0),
-                                       get_int("height", 0), dpr);
+                                       get_int("height", 0));
               }
             }
           }
           result->Success();
+          return;
+        }
+        // מסירת הגרירה ל-Windows — כך מגיעים Snap Layouts.
+        //
+        // ⚠️ הבקשה מתפרסמת ולא מבוצעת כאן: `DragWithSystem` נכנס ללולאה
+        // מודאלית שנמשכת כל זמן הגרירה, וחסימה כזו מתוך טיפול בערוץ היא
+        // ריאנטרנטית. התשובה נשלחת מלולאת ההודעות, עם המסגרת הסופית.
+        if (call.method_name() == "dragOutToSystem") {
+          pending_system_drags_.push(std::move(result));
+          ::PostMessageW(GetHandle(), kMsgDragOutToSystem, 0, 0);
           return;
         }
         if (call.method_name() == "freezeTabDrag") {
@@ -848,6 +897,32 @@ bool FlutterWindow::OnCreate() {
           if (dy_it != args->end()) {
             if (const auto* v = std::get_if<int>(&dy_it->second)) {
               pending.drop_y = *v;
+            }
+          }
+          // מסגרת מדויקת, כשהגרירה הסתיימה בהצמדה של Windows.
+          //
+          // ⚠️ מחליפה את `dropX/dropY`: חלון שהמשתמש הצמיד לחצי מסך
+          // חייב להיווצר **באותה מסגרת**, אחרת ההצמדה שהוא ראה נעלמת
+          // ברגע שהחלון האמיתי מופיע.
+          const auto b_it = args->find(flutter::EncodableValue("bounds"));
+          if (b_it != args->end()) {
+            if (const auto* b =
+                    std::get_if<flutter::EncodableMap>(&b_it->second)) {
+              const auto at = [b](const char* key) -> int {
+                const auto it = b->find(flutter::EncodableValue(key));
+                if (it == b->end()) return 0;
+                const auto* v = std::get_if<int>(&it->second);
+                return v ? *v : 0;
+              };
+              const int w = at("width");
+              const int h = at("height");
+              if (w > 0 && h > 0) {
+                pending.has_bounds = true;
+                pending.bounds.left = at("left");
+                pending.bounds.top = at("top");
+                pending.bounds.right = pending.bounds.left + w;
+                pending.bounds.bottom = pending.bounds.top + h;
+              }
             }
           }
         }
@@ -1122,7 +1197,8 @@ bool RestoreLastHiddenWindow() {
 }  // namespace
 
 void FlutterWindow::ReviveWith(const std::string& payload, int width,
-                               int height, int drop_x, int drop_y) {
+                               int height, int drop_x, int drop_y,
+                               const RECT* bounds) {
   const HWND self = GetHandle();
   if (!self) return;
 
@@ -1136,7 +1212,13 @@ void FlutterWindow::ReviveWith(const std::string& payload, int width,
 
   const int final_width = width > 400 ? width : 0;
   const int final_height = height > 300 ? height : 0;
-  if (drop_x != 0 || drop_y != 0) {
+  if (bounds != nullptr) {
+    // ⚠️ המסגרת שההצמדה נתנה, מילה במילה. חישוב מחדש ממיקום וגודל היה
+    // מחמיץ אותה בפיקסלים, וחלון "כמעט מוצמד" נראה שבור.
+    ::SetWindowPos(self, nullptr, bounds->left, bounds->top,
+                   bounds->right - bounds->left, bounds->bottom - bounds->top,
+                   SWP_NOZORDER | SWP_NOACTIVATE);
+  } else if (drop_x != 0 || drop_y != 0) {
     // נקודת שחרור: מזיזים **וגם** משנים גודל בקריאה אחת, כדי שלא ייראה
     // קפיצה בשני שלבים.
     RECT current{};
@@ -1222,7 +1304,8 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
     pending_secondary_windows_.pop();
     const bool created = CreateSecondaryWindowOnThisThread(
         project_, pending.payload, pending.width, pending.height,
-        pending.drop_x, pending.drop_y);
+        pending.drop_x, pending.drop_y,
+        pending.has_bounds ? &pending.bounds : nullptr);
     // יצירה שנכשלה — אין מה להחליף את הרוח, והיא לא יכולה להישאר תלויה.
     if (!created) drag_preview::End();
     // ⚠️ **כאן** נענה Dart, ולא בטיפול בערוץ. זו התשובה שעל פיה הוא מוחק
@@ -1230,6 +1313,17 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
     if (pending.result) {
       pending.result->Success(flutter::EncodableValue(created));
     }
+    return 0;
+  }
+
+  // מסירת הגרירה למערכת — ראו `drag_preview::DragWithSystem`. נפתח כאן,
+  // לפני Flutter, כי מכאן נכנסים ללולאה מודאלית ואין לתוספים מה לעשות בה.
+  if (message == kMsgDragOutToSystem) {
+    if (pending_system_drags_.empty()) return 0;
+    auto pending = std::move(pending_system_drags_.front());
+    pending_system_drags_.pop();
+    const auto drag = drag_preview::DragWithSystem();
+    if (pending) pending->Success(DescribeSystemDrag(drag, GetHandle()));
     return 0;
   }
 

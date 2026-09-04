@@ -618,17 +618,16 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
       ),
       // גרירה אינה בוחרת כרטיסיה: התצוגה נשארת על הספר שהמשתמש קורא, ומשתנה
       // רק אם הוא משתהה מעל כרטיסיה אחרת.
-      onDragStarted: (draggedTab) {
+      onDragStarted: (draggedTab, cancelDrag) {
         _pendingTabSelection = null;
         _crossWindowDrag.begin(
-          draggedTab.title,
+          draggedTab,
           DragPreviewColors.of(context),
+          tabsBloc: context.read<TabsBloc>(),
+          cancelDrag: cancelDrag,
         );
       },
-      onTabSnapshot: (_, snapshot) => _crossWindowDrag.applySnapshot(
-        snapshot,
-        View.of(context).devicePixelRatio,
-      ),
+      onTabSnapshot: (_, snapshot) => _crossWindowDrag.applySnapshot(snapshot),
       onDragFinishedAnywhere: _crossWindowDrag.end,
       onDroppedOutside: MultiWindowService.isSupported
           ? (tab) => _crossWindowDrag.handleDroppedOutside(

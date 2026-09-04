@@ -878,6 +878,7 @@ void main() {
       );
       strip.onDragStarted!(
         strip.tabs.firstWhere((tab) => tab.title == 'ספר ב'),
+        () {},
       );
       await gesture.up();
       await tester.pumpAndSettle();
