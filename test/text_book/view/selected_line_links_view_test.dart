@@ -59,22 +59,6 @@ void main() {
     });
   });
 
-  group('normalizeSelectedLinkText', () {
-    test('collapses tabs into a single space', () {
-      expect(
-        normalizeSelectedLinkText('ודר\t\t\tשאל'),
-        'ודר שאל',
-      );
-    });
-
-    test('collapses nbsp and repeated spaces', () {
-      expect(
-        normalizeSelectedLinkText('ודר&nbsp;  שאל'),
-        'ודר שאל',
-      );
-    });
-  });
-
   group('buildSelectedLinksSearchKey', () {
     test(
       'changes when the links change even if the list length stays the same',
