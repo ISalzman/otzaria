@@ -12,30 +12,38 @@ fi
 
 # Read version from JSON (requires python3 or jq)
 if command -v python3 &>/dev/null; then
-    NEW_VERSION=$(python3 - "$VERSION_FILE" <<'PY'
+    VERSION_FIELDS=$(python3 - "$VERSION_FILE" <<'PY'
 import json
 import sys
 
 with open(sys.argv[1], encoding='utf-8') as fh:
-    print(json.load(fh)['version'])
+    data = json.load(fh)
+print(data['version'], data.get('hotfix', 0))
 PY
 )
 elif command -v jq &>/dev/null; then
-    NEW_VERSION=$(jq -r '.version' "$VERSION_FILE")
+    VERSION_FIELDS=$(jq -r '"\(.version) \(.hotfix // 0)"' "$VERSION_FILE")
 else
     echo "Error: python3 or jq is required to parse version.json" >&2
     exit 1
 fi
+read -r NEW_VERSION HOTFIX <<< "$VERSION_FIELDS"
 
-# Calculate version code: (major * 1000000) + (minor * 10000) + (patch * 10)
+# Calculate version code: (major * 1000000) + (minor * 10000) + (patch * 100) + hotfix.
+# Two digits are reserved for hotfixes, so a burnt version code on Google Play
+# (which can never be reused) does not block re-releasing the same version.
 IFS='.' read -r V_MAJOR V_MINOR V_PATCH <<< "$NEW_VERSION"
 if [[ -z "${V_MAJOR:-}" || -z "${V_MINOR:-}" || -z "${V_PATCH:-}" ]]; then
     echo "Error: version '$NEW_VERSION' must have format major.minor.patch" >&2
     exit 1
 fi
-VERSION_CODE=$(( (V_MAJOR * 1000000) + (V_MINOR * 10000) + (V_PATCH * 10) ))
+if (( V_MINOR > 99 || V_PATCH > 99 || HOTFIX < 0 || HOTFIX > 99 )); then
+    echo "Error: minor/patch/hotfix must each be 0-99 (got $NEW_VERSION hotfix=$HOTFIX)" >&2
+    exit 1
+fi
+VERSION_CODE=$(( (V_MAJOR * 1000000) + (V_MINOR * 10000) + (V_PATCH * 100) + HOTFIX ))
 
-echo "Updating version to: $NEW_VERSION (code: $VERSION_CODE)"
+echo "Updating version to: $NEW_VERSION (code: $VERSION_CODE, hotfix: $HOTFIX)"
 
 # Support both GNU sed (Linux) and BSD sed (macOS)
 sedi() {
@@ -101,11 +109,12 @@ mv "$GITIGNORE_TMP" .gitignore
 echo "Updated .gitignore"
 
 # ---- pubspec.yaml ----
-# Update msix_version (4-part format: major.minor.patch.build) BEFORE version,
+# Update msix_version (4-part format: major.minor.patch.hotfix) BEFORE version,
+# The 4th part must change too, or Windows sees no update on a hotfix-only bump.
 # because the version: regex would otherwise also match msix_version: lines via greedy whitespace.
-sedi -E "s/^([[:space:]]*)msix_version:[[:space:]]*.*/\1msix_version: $NEW_VERSION.0/" pubspec.yaml
+sedi -E "s/^([[:space:]]*)msix_version:[[:space:]]*.*/\1msix_version: $NEW_VERSION.$HOTFIX/" pubspec.yaml
 sedi -E "s/^version: .*/version: $NEW_VERSION+$VERSION_CODE/" pubspec.yaml
-echo "Updated pubspec.yaml (version: $NEW_VERSION+$VERSION_CODE, msix_version: $NEW_VERSION.0)"
+echo "Updated pubspec.yaml (version: $NEW_VERSION+$VERSION_CODE, msix_version: $NEW_VERSION.$HOTFIX)"
 
 # ---- installer/otzaria_full.iss ----
 ISS_FULL="installer/otzaria_full.iss"

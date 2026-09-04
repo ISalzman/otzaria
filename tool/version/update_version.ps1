@@ -16,10 +16,12 @@ if (-not (Test-Path $VersionFile)) {
 
 $versionData = Get-Content $VersionFile | ConvertFrom-Json
 $newVersion = $versionData.version
+$hotfix = if ($null -ne $versionData.hotfix) { [int64]$versionData.hotfix } else { [int64]0 }
 
 function Get-VersionCode {
     param(
-        [string]$Version
+        [string]$Version,
+        [int64]$Hotfix = 0
     )
 
     $versionParts = $Version.Split('.')
@@ -31,14 +33,18 @@ function Get-VersionCode {
     $minor = [int64]$versionParts[1]
     $patch = [int64]$versionParts[2]
 
-    # Keep the last digit available for manual hotfix bumps while preserving
-    # monotonic ordering across major/minor/patch increments.
-    return (($major * 1000000) + ($minor * 10000) + ($patch * 10)).ToString()
+    if ($minor -gt 99 -or $patch -gt 99 -or $Hotfix -lt 0 -or $Hotfix -gt 99) {
+        throw "minor/patch/hotfix must each be 0-99 (got $major.$minor.$patch hotfix=$Hotfix)"
+    }
+
+    # Two digits are reserved for hotfixes, so a burnt version code on Google Play
+    # (which can never be reused) does not block re-releasing the same version.
+    return (($major * 1000000) + ($minor * 10000) + ($patch * 100) + $Hotfix).ToString()
 }
 
-$versionCode = Get-VersionCode -Version $newVersion
+$versionCode = Get-VersionCode -Version $newVersion -Hotfix $hotfix
 
-Write-Host "Updating version to: $newVersion"
+Write-Host "Updating version to: $newVersion (code: $versionCode, hotfix: $hotfix)"
 
 # Update .gitignore (managed Windows installer outputs)
 $installerStartMarker = "# Generated Windows installers"
@@ -96,9 +102,10 @@ Write-Host "Updated .gitignore"
 $pubspecContent = Get-Content "pubspec.yaml"
 
 for ($i = 0; $i -lt $pubspecContent.Length; $i++) {
-    # msix_version uses 4 parts: major.minor.patch.build
+    # msix_version uses 4 parts: major.minor.patch.hotfix - the 4th part must
+    # change too, or Windows sees no update when only the hotfix is bumped.
     if ($pubspecContent[$i] -match "^(\s*)msix_version:\s*") {
-        $pubspecContent[$i] = "$($matches[1])msix_version: $newVersion.0"
+        $pubspecContent[$i] = "$($matches[1])msix_version: $newVersion.$hotfix"
     }
     # Top-level version (no leading whitespace) — keep this check AFTER msix_version
     # so the more specific key isn't shadowed.
@@ -107,7 +114,7 @@ for ($i = 0; $i -lt $pubspecContent.Length; $i++) {
     }
 }
 $pubspecContent | Set-Content "pubspec.yaml" -Encoding $Utf8NoBom
-Write-Host "Updated pubspec.yaml (version: $newVersion+$versionCode, msix_version: $newVersion.0)"
+Write-Host "Updated pubspec.yaml (version: $newVersion+$versionCode, msix_version: $newVersion.$hotfix)"
 
 # Update installer/otzaria_full.iss (line 5)
 $fullIssContent = Get-Content "installer/otzaria_full.iss"

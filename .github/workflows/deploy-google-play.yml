@@ -25,6 +25,19 @@ jobs:
         with:
           ref: ${{ github.ref }}
 
+      - name: Verify versionCode is free on Google Play
+        env:
+          PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+        run: |
+          set -e
+          python3 -m pip install --quiet --disable-pip-version-check google-auth requests
+          VERSION_CODE=$(awk '/^version:/ {split($2, v, "+"); print v[2]; exit}' pubspec.yaml)
+          if [ -z "$VERSION_CODE" ]; then
+            echo "::error::pubspec.yaml has no build number after '+' in the version line"
+            exit 1
+          fi
+          VERSION_CODE="$VERSION_CODE" python3 tool/version/check_play_version_code.py
+
       - name: Free up disk space
         run: |
           echo "Disk space before cleanup:"
