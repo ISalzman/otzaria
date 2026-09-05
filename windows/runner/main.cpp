@@ -232,6 +232,31 @@ static void BringWindowToFront(HWND hwnd) {
   SetForegroundWindow(hwnd);
 }
 
+namespace {
+
+HHOOK g_activation_hook = nullptr;
+
+// חוסם הפעלה תוכניתית שגוזלת מהמשתמש את החלון שהרגע בחר.
+//
+// ⚠️ `WH_CBT` הוא המקום היחיד שמאפשר **לסרב** להפעלה, והוא רץ סינכרונית
+// בהקשר של הקורא — כלומר גם על הפעלה שמגיעה מתוך מנוע Flutter ולא דרך
+// לולאת ההודעות שלנו. ראו [Win32Window::ShouldVetoActivation] להסבר
+// מלא על מה שנמדד.
+LRESULT CALLBACK ActivationGuardProc(int code, WPARAM wparam, LPARAM lparam) {
+  if (code == HCBT_ACTIVATE &&
+      Win32Window::ShouldVetoActivation(reinterpret_cast<HWND>(wparam))) {
+    return 1;  // מסרב להפעלה.
+  }
+  return ::CallNextHookEx(g_activation_hook, code, wparam, lparam);
+}
+
+void InstallActivationGuard() {
+  g_activation_hook = ::SetWindowsHookExW(WH_CBT, ActivationGuardProc, nullptr,
+                                          ::GetCurrentThreadId());
+}
+
+}  // namespace
+
 int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
                       _In_ wchar_t* command_line, _In_ int show_command) {
   // Attach to console when present (e.g., 'flutter run') or create a
@@ -333,6 +358,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   if (const HWND main_hwnd = window.GetHandle()) {
     ::SetPropW(main_hwnd, kMainWindowPropName, reinterpret_cast<HANDLE>(1));
   }
+
+  InstallActivationGuard();
 
   ::MSG msg;
   while (::GetMessage(&msg, nullptr, 0, 0)) {

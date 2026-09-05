@@ -956,6 +956,10 @@ bool FlutterWindow::OnCreate() {
             // ממשיכים לתאר חלון סגור: המונה חסר אחד, וסגירת שאר החלונות
             // מסיימת את התהליך בעוד החלון הזה גלוי. `ReviveWith` הוא
             // המסלול היחיד שמחזיר חלון מוסתר יחד עם הספירה.
+            // ⚠️ העלאה **מכוונת** (כרטיסיה שהועברה לכאן, `otzaria://`),
+            // ולכן היא נרשמת ככוונה מפורשת ולא נחסמת בשער ההפעלה —
+            // ראו [Win32Window::ShouldVetoActivation].
+            Win32Window::NoteUserActivation(self);
             if (IsClosedByUser()) {
               ReviveWith(std::string(), 0, 0);
             } else {
@@ -1394,6 +1398,9 @@ void FlutterWindow::ReviveWith(const std::string& payload, int width,
                    SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
   }
   AllowActivation(self);
+  // ⚠️ החזרת חלון לשימוש היא כוונה מפורשת — ראו
+  // [Win32Window::ShouldVetoActivation].
+  NoteUserActivation(self);
   ::ShowWindow(self, SW_SHOW);
   ::BringWindowToTop(self);
   ::SetForegroundWindow(self);
@@ -1428,6 +1435,9 @@ void FlutterWindow::RevealOnFirstFrame() {
     // ⚠️ לפני ההצגה. עד כאן החלון לא היה יכול להיות מופעל כלל
     // ([kNoActivateUntilRevealed]) — זה מה שמנע את תנודת ההפעלות.
     AllowActivation(hwnd);
+    // ⚠️ חשיפת חלון חדש היא כוונה מפורשת — ראו
+    // [Win32Window::ShouldVetoActivation].
+    Win32Window::NoteUserActivation(hwnd);
     ::ShowWindow(hwnd, SW_SHOW);
     ::BringWindowToTop(hwnd);
     ::SetForegroundWindow(hwnd);
