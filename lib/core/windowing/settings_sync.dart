@@ -33,6 +33,12 @@ class SettingsSync {
   /// סוג הבקשה באפיק.
   static const String requestChanged = 'settingChanged';
 
+  /// "כל ההגדרות נמחקו" — הודעה אחת במקום אחת לכל מפתח.
+  ///
+  /// איפוס הגדרות מוחק מאות מפתחות, ושידור נפרד לכל אחד מהם היה פותח
+  /// `ReceivePort` פר-מפתח פר-חלון.
+  static const String requestReset = 'settingsReset';
+
   /// ⚠️ debounce לכל מפתח. גרירת מחוון גודל גופן כותבת עשרות פעמים
   /// בשנייה, וכל כתיבה הייתה שידור לשלושה חלונות. הערך האחרון הוא היחיד
   /// שמעניין.
@@ -41,6 +47,9 @@ class SettingsSync {
   /// הפונקציה שכותבת ערך ל-box המקומי. מוזרקת על ידי `HiveCache`, כדי
   /// שהקובץ הזה לא יהיה תלוי בשכבת הנתונים.
   Future<void> Function(String key, Object? value)? applyLocally;
+
+  /// הפונקציה שמוחקת את כל ההגדרות המקומיות. מוזרקת על ידי `HiveCache`.
+  Future<void> Function()? clearLocally;
 
   final Map<String, Timer> _pending = {};
   final Map<String, Object?> _latest = {};
@@ -89,6 +98,17 @@ class SettingsSync {
     });
   }
 
+  /// מודיע לשאר החלונות שכל ההגדרות אופסו.
+  ///
+  /// ⚠️ בלי זה החלון השני ממשיך עם הערכים הישנים בזיכרון וכותב אותם בחזרה
+  /// בשמירה הבאה — כלומר האיפוס מתבטל מעצמו.
+  void broadcastReset() {
+    if (_applyingRemote) return;
+    // הכתיבות התלויות מתייתרות: הן עומדות להימחק בכל מקרה.
+    dispose();
+    WindowBus.instance.broadcast({'type': requestReset});
+  }
+
   /// רק ערכים שעוברים את גבול ה-isolate כפי שהם.
   ///
   /// `SendPort` מעביר גרפים של אובייקטים, אבל ערך שאינו פרימיטיבי יגיע
@@ -103,6 +123,7 @@ class SettingsSync {
 
   /// מטפל בהודעת שינוי שהגיעה מחלון אחר. מחזיר null כשהבקשה אינה שלנו.
   Future<Object?> handleRequest(Map<String, dynamic> request) async {
+    if (request['type'] == requestReset) return _applyReset();
     if (request['type'] != requestChanged) return null;
     final key = request['key'];
     if (key is! String) return null;
@@ -119,6 +140,26 @@ class SettingsSync {
       _applyingRemote = false;
     }
     _changes.add(key);
+    return true;
+  }
+
+  /// מוחק את ההגדרות המקומיות בעקבות איפוס בחלון אחר, ומרענן את ה-state.
+  Future<Object?> _applyReset() async {
+    final clear = clearLocally;
+    if (clear == null) return false;
+    // שידור בהמתנה היה כותב ערך ישן בחזרה אחרי המחיקה.
+    dispose();
+    _applyingRemote = true;
+    try {
+      await clear();
+    } catch (e) {
+      debugPrint('SettingsSync: failed to apply reset: $e');
+      return false;
+    } finally {
+      _applyingRemote = false;
+    }
+    // ה-key הריק הוא "הכול" — המאזין היחיד טוען מחדש בכל מקרה.
+    _changes.add('');
     return true;
   }
 

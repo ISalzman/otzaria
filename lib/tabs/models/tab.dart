@@ -119,7 +119,7 @@ abstract class OpenedTab {
         pinpointHighlightSectionIndex: pinpointSectionIndex,
       );
     } else if (tab is PdfBookTab) {
-      return PdfBookTab(
+      final copy = PdfBookTab(
         book: tab.book,
         pageNumber: tab.pageNumber,
         openLeftPane: tab.showLeftPane.value,
@@ -135,6 +135,15 @@ abstract class OpenedTab {
         dedupeKey: tab.dedupeKey,
         requiresStableLayout: tab.requiresStableLayout,
       );
+      // ⚠️ שדות שנקבעים **אחרי** הבנייה, ולכן אינם עוברים בפרמטרים.
+      // בלעדיהם שיכפול כרטיסיה, מעבר שולחן עבודה ופיצול לשתי חלוניות
+      // איפסו את המפרשים הפעילים ואת התקריב — אף שאותם שדות שורדים
+      // `toJson`/`fromJson`. `PdfCommentatorsTab.clone` העתיק אותם ידנית
+      // כדי לעקוף בדיוק את הפער הזה.
+      copy.activeCommentators = Set<String>.of(tab.activeCommentators);
+      copy.savedZoom = tab.savedZoom;
+      copy.savedLayoutMode = tab.savedLayoutMode;
+      return copy;
     } else if (tab is CombinedTab) {
       return CombinedTab(
         rightTab: OpenedTab.from(tab.rightTab),

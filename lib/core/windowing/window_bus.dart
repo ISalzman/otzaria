@@ -50,6 +50,21 @@ class WindowBus {
   /// ה-port של הבעלים, או null אם אינו רשום.
   SendPort? get ownerPort => IsolateNameServer.lookupPortByName(_ownerName);
 
+  /// האם משבצת אחרת תפוסה, כלומר קיים isolate של חלון נוסף.
+  ///
+  /// בדיקה סינכרונית וזולה, בלי סבב אפיק. אינה מבחינה בין חלון גלוי לחלון
+  /// מוסתר — שניהם isolates חיים עם קובצי Hive פתוחים, וזו בדיוק השאלה של
+  /// מי שצריך לדעת אם מותר לגעת בהם.
+  bool get hasOtherWindows {
+    for (var candidate = 1; candidate <= slotCount; candidate++) {
+      if (candidate == _slot) continue;
+      if (IsolateNameServer.lookupPortByName(_slotName(candidate)) != null) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   /// מטפל בבקשות נכנסות. נקבע פעם אחת על ידי החלון.
   ///
   /// מקבל את גוף הבקשה ומחזיר תשובה שתישלח חזרה לשולח. חריגה בתוכו

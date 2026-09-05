@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:bloc_concurrency/bloc_concurrency.dart';
+import 'package:collection/collection.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/workspaces/bloc/workspace_event.dart';
 import 'package:otzaria/workspaces/bloc/workspace_state.dart';
@@ -38,10 +39,19 @@ class WorkspaceBloc extends Bloc<WorkspaceEvent, WorkspaceState> {
     return tabs.map(OpenedTab.from).toList(growable: false);
   }
 
+  /// חלון אחר שינה את רשימת השולחנות — העותק שבזיכרון התיישן.
+  ///
+  /// ⚠️ בלי המנוי הרשימה כאן נשארה כפי שנטענה: שולחן שנוסף בחלון אחר לא
+  /// הופיע בתפריט, ושולחן שנמחק שם עוד הוצג ולחיצה עליו זרקה.
+  StreamSubscription<void>? _remoteChanges;
+
   WorkspaceBloc({
     required this._repository,
     this.onWorkspaceTabsChanged,
   }) : super(WorkspaceState.initial()) {
+    _remoteChanges = _repository.remoteChanges.listen((_) {
+      if (!isClosed) add(LoadWorkspaces());
+    });
     on<LoadWorkspaces>(_onLoadWorkspaces, transformer: sequential());
     on<AddWorkspace>(_onAddWorkspace, transformer: sequential());
     on<RemoveWorkspace>(_onRemoveWorkspace, transformer: sequential());
@@ -53,6 +63,12 @@ class WorkspaceBloc extends Bloc<WorkspaceEvent, WorkspaceState> {
       transformer: sequential(),
     );
     on<MoveTabToWorkspace>(_onMoveTabToWorkspace, transformer: sequential());
+  }
+
+  @override
+  Future<void> close() {
+    _remoteChanges?.cancel();
+    return super.close();
   }
 
   Future<void> _onLoadWorkspaces(
@@ -169,9 +185,16 @@ class WorkspaceBloc extends Bloc<WorkspaceEvent, WorkspaceState> {
       final updatedWorkspaces = stash(state.workspaces);
 
       // 2. Get the target workspace
-      final targetWorkspace = updatedWorkspaces.firstWhere(
+      //
+      // ⚠️ `firstWhereOrNull`: השולחן יכול להיעלם בין בניית התפריט
+      // לבחירה, אם חלון אחר מחק אותו. `firstWhere` זרק `StateError`.
+      final targetWorkspace = updatedWorkspaces.firstWhereOrNull(
         (w) => w.id == event.targetWorkspaceId,
       );
+      if (targetWorkspace == null) {
+        emit(state.copyWith(workspaces: updatedWorkspaces));
+        return;
+      }
 
       // 3. Notify UI to update TabsBloc before exposing the new workspace.
       if (onWorkspaceTabsChanged != null) {

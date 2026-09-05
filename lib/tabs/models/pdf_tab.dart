@@ -146,10 +146,10 @@ class PdfBookTab extends OpenedTab {
   /// `OpenedTab.from` מטפל ב-[PdfBookTab] בענף ייעודי ואינו מגיע לכאן;
   /// המימוש קיים כדי שהחוזה המופשט של [OpenedTab.clone] יתקיים.
   ///
-  /// שים לב: הענף שם מעביר פרמטרי קונסטרוקטור בלבד. [activeCommentators],
-  /// [pdfHeadings], [currentTextLineNumber] ו-[currentTextLineNumberEnd]
-  /// נקבעים אחרי הבנייה, ומי שצריך אותם משכפל אותם בעצמו — ראו
-  /// `PdfCommentatorsTab.clone`.
+  /// הענף שם מעתיק גם [activeCommentators], [savedZoom] ו-[savedLayoutMode]
+  /// — שדות שנקבעים אחרי הבנייה. [pdfHeadings], [currentTextLineNumber]
+  /// ו-[currentTextLineNumberEnd] הם מצב נגזר שנטען מחדש, ומי שצריך אותם
+  /// משכפל אותם בעצמו (ראו `PdfCommentatorsTab.clone`).
   @override
   OpenedTab clone() => OpenedTab.from(this);
 

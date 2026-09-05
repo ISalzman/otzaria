@@ -42,6 +42,11 @@ class _WindowBusHostState extends State<WindowBusHost> {
   @override
   void initState() {
     super.initState();
+    // ⚠️ כל השכבה הזו מגודרת בפלטפורמה. בלי הגידור מובייל שילם
+    // `Timer.periodic` של שלוש שניות, `ReceivePort` פתוח ושלוש שאילתות
+    // אפיק בכל פעימה — בשביל יכולת שאינה קיימת שם בכלל.
+    if (!MultiWindowService.isSupported) return;
+
     // ⚠️ החלון הראשון רושם גם את כינוי הבעלים. בלעדיו איתור מחזיק המאגרים
     // המשותפים היה סריקת `describe` עם timeout — והבעלים דווקא עסוק בזמן
     // שנפתח חלון שני, כלומר הסריקה פקעה בדיוק כשהיא נחוצה.
@@ -56,8 +61,8 @@ class _WindowBusHostState extends State<WindowBusHost> {
     // יכולה להמתין לסריקה. בלי זה הלחיצה הימנית הראשונה אחרי פתיחת חלון
     // הייתה מציגה תת-תפריט ריק.
     //
-    // המחיר זניח — עד שלוש שאילתות port מקומיות, והן נחסכות לגמרי כשאין
-    // חלונות אחרים.
+    // הפעימה מופסקת כשאין עוד חלון אחר: הבדיקה סינכרונית וזולה
+    // ([WindowBus.hasOtherWindows]), והמקרה השכיח הוא חלון יחיד.
     unawaited(_refreshPeers());
     _peerRefresh = Timer.periodic(
       const Duration(seconds: 3),
@@ -100,9 +105,16 @@ class _WindowBusHostState extends State<WindowBusHost> {
   }
 
   Future<void> _refreshPeers() async {
+    // חלון יחיד: אין את מי לשאול, ואין טעם לצאת לנייטיב בשביל `visibleSlots`.
+    if (!WindowBus.instance.hasOtherWindows) {
+      if (MultiWindowService.knownPeers.isNotEmpty) {
+        MultiWindowService.publishKnownPeers(const []);
+      }
+      return;
+    }
     final peers = await const MultiWindowService().otherWindows();
     if (!mounted) return;
-    MultiWindowService.knownPeers = peers;
+    MultiWindowService.publishKnownPeers(peers);
   }
 
   @override
@@ -110,10 +122,14 @@ class _WindowBusHostState extends State<WindowBusHost> {
     _peerRefresh?.cancel();
     unawaited(_settingsChanged?.cancel());
     SettingsSync.instance.dispose();
-    WindowBus.instance.onRequest = null;
     MultiWindowService.channel.setMethodCallHandler(null);
-    WindowBus.instance.unregister();
-    MultiWindowService.knownPeers = const [];
+    // ⚠️ **המשבצת וה-`onRequest` אינם משוחררים כאן.** ה-widget מתפרק גם
+    // כשהוא רק נבנה מחדש (`RestartWidget`, למשל בשינוי נתיב הספרייה),
+    // וה-isolate ממשיך לחיות עם קובצי ה-Hive פתוחים. שחרור הכינוי `owner`
+    // לאורך האתחול מחדש הפיל כל `mutate` בחלונות המשניים
+    // ל-`SharedHiveUnavailable`. חלון שנסגר גם הוא אינו משחרר, במכוון —
+    // ראו [WindowBus.unregister].
+    MultiWindowService.publishKnownPeers(const []);
     super.dispose();
   }
 
