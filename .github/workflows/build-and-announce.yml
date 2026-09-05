@@ -7,35 +7,35 @@ on:
   workflow_dispatch:
     inputs:
       build_windows:
-        description: Build Windows artifacts
+        description: בניית גרסת Windows
         type: boolean
         default: true
       build_windows_arm64:
-        description: Build Windows ARM64 artifacts
+        description: בניית גרסת Windows ARM64
         type: boolean
         default: true
       build_linux:
-        description: Build Linux artifacts
+        description: בניית גרסת Linux
         type: boolean
         default: true
       build_android:
-        description: Build Android artifacts
+        description: בניית גרסת Android
         type: boolean
         default: true
       build_macos:
-        description: Build macOS artifacts
+        description: בניית גרסת macOS
         type: boolean
         default: true
       create_release:
-        description: Create a GitHub release
+        description: יצירת release ב-GitHub
         type: boolean
         default: true
       announce_release:
-        description: Publish the forum post and Yemot notification
+        description: פרסום הודעה בפורום והתראה בימות המשיח
         type: boolean
         default: true
       new_version:
-        description: "Bump to this version (X.Y.Z) first: runs tool/version, commits to this branch, builds the new commit. Leave empty to skip."
+        description: "העלאת גרסה (X.Y.Z) לפני הבנייה: מריץ את סקריפט הגרסה, מקמט לענף הזה ובונה מהקומיט החדש. ריק = בלי שינוי גרסה"
         type: string
         default: ""
 
@@ -58,7 +58,7 @@ jobs:
           NEW_VERSION: ${{ inputs.new_version }}
         run: |
           if ! printf '%s' "$NEW_VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
-            echo "::error::new_version must be major.minor.patch, got '$NEW_VERSION'"
+            echo "::error::new_version חייב להיות בפורמט major.minor.patch, התקבל '$NEW_VERSION'"
             exit 1
           fi
 
