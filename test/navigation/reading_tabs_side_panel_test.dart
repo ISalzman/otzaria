@@ -441,7 +441,7 @@ void main() {
     expect(tabsBloc.addedEvents.whereType<SetCurrentTab>(), isEmpty);
   });
 
-  testWidgets('בכרטיסיה מוצמדת הנעץ בקצה הסיום, אחרי הכותרת ואייקון הסוג', (
+  testWidgets('נעצי כרטיסיות מוצמדות מיושרים גם כשהפעילה מציגה X', (
     tester,
   ) async {
     final pdfTab = PdfBookTab(
@@ -450,8 +450,7 @@ void main() {
     )..isPinned = true;
     addTearDown(pdfTab.dispose);
     final textTab = _StubTab('ספר ב')..isPinned = true;
-    // הכרטיסיה הראשונה נבחרת ומציגה X, ולכן המוצמדות מגיעות אחריה.
-    await pumpPanel(tester, withTabs: [_StubTab('ספר א'), pdfTab, textTab]);
+    await pumpPanel(tester, withTabs: [pdfTab, textTab]);
 
     final pdfIcon = tester.getCenter(
       find.byIcon(FluentIcons.document_pdf_16_regular),

@@ -281,12 +281,6 @@ class _VerticalTabRow extends StatelessWidget {
                             child: buildFadedTabTitle(context, displayTitle),
                           ),
                         ),
-                        // הנעץ בקצה הסיום, אחרי הכותרת: כך אייקון הסוג לא דוחק
-                        // אותו והנעצים של כל הכרטיסיות מיושרים.
-                        if (tab.isPinned) ...[
-                          const SizedBox(width: 4),
-                          const Icon(FluentIcons.pin_24_filled, size: 14),
-                        ],
                         if (showClose)
                           IconButton(
                             style: IconButton.styleFrom(
@@ -306,6 +300,10 @@ class _VerticalTabRow extends StatelessWidget {
                               size: 12,
                             ),
                           ),
+                        if (tab.isPinned) ...[
+                          const SizedBox(width: 4),
+                          const Icon(FluentIcons.pin_24_filled, size: 14),
+                        ],
                       ],
                     ),
             ),
