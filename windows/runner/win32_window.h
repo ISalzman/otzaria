@@ -7,9 +7,6 @@
 #include <memory>
 #include <string>
 
-// A class abstraction for a high DPI-aware Win32 Window. Intended to be
-// inherited from by classes that wish to specialize with custom
-// rendering and input handling
 // בקשה לסגור את החלון.
 //
 // ⚠️ **החלון מוסתר, לא נהרס** — וזו החלטה שנכפתה על ידי מדידה.
@@ -21,7 +18,7 @@
 // ריאנטרנטיות אלא אי-בטיחות של ההריסה עצמה בתצורה הזו.
 //
 // בספייק, כשלכל מנוע היה thread ייעודי, הריסה **כן** עבדה נקי
-// (docs/P-2-two-windows.md §9). אבל יצירת מנוע על thread ייעודי מפילה
+// (ראו docs/multi-window.md). אבל יצירת מנוע על thread ייעודי מפילה
 // את התהליך כשחלון אחר כבר רץ. שתי הדרישות סותרות, ולכן: יוצרים על
 // ה-thread הראשי, ולא הורסים עד ליציאת התהליך.
 //
@@ -42,6 +39,9 @@ constexpr UINT kMsgDeferredDestroy = WM_APP + 0x102;
 // מוסר ב-[Win32Window::AllowActivation] רגע לפני ההצגה.
 constexpr DWORD kNoActivateUntilRevealed = WS_EX_NOACTIVATE;
 
+// A class abstraction for a high DPI-aware Win32 Window. Intended to be
+// inherited from by classes that wish to specialize with custom
+// rendering and input handling
 class Win32Window {
  public:
   struct Point {

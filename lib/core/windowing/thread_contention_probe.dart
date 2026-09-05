@@ -147,7 +147,7 @@ class ThreadContentionProbe {
       stdout.writeln(
         '[contention] שתי הדרכים שלא נבדקו: יצירה על ה-thread הראשי ואז\n'
         '             העברת בעלות ל-thread ייעודי, או RunOnSeparateThread —\n'
-        '             שעובד אך המנוע מכריז שיוסר. ראו docs/multi-window-handoff.md §5.',
+        '             שעובד אך המנוע מכריז שיוסר. ראו docs/multi-window.md.',
       );
     }
   }

@@ -263,7 +263,7 @@ std::atomic<int> g_live_engine_count{0};
 //
 // המחיר ידוע ומדוד: ה-platform thread וה-UI thread ממוזגים ב-3.47, ולכן
 // כל המנועים חולקים scheduler אחד — חלון עסוק מקפיא את השני
-// (docs/P-0-stage3-result.md §2). זה חוב פתוח, לא פתרון סופי.
+// (ראו docs/multi-window.md). זה חוב פתוח, לא פתרון סופי.
 // מיקום החלון החדש: פינתו **בנקודה שנמסרה**, מהודקת למסך שתחתיה.
 //
 // ⚠️ הפינה, ולא חישוב סביבה. הגרסה הקודמת הזיזה את החלון
@@ -550,7 +550,7 @@ FlutterWindow::FlutterWindow(const flutter::DartProject& project,
   // `KILL_ON_JOB_CLOSE` והתהליך שלנו כחבר, סגירת ה-handle כשחלון **משני**
   // נסגר מורה לגרעין להרוג את כל חברי ה-Job — כלומר אותנו. נמדד: הדסטרקטור
   // של החלון המשני נכנס ל-`~FlutterWindow` ולעולם אינו חוזר
-  // (docs/P-2-two-windows.md §9). לכן: נוצר פעם אחת, ואינו נסגר לעולם —
+  // (ראו docs/multi-window.md). לכן: נוצר פעם אחת, ואינו נסגר לעולם —
   // סגירת ה-handle בעת יציאת התהליך היא בדיוק הרגע שבו KILL_ON_JOB_CLOSE
   // אמור לפעול.
   static std::once_flag job_once;
@@ -706,7 +706,7 @@ bool FlutterWindow::OnCreate() {
   // בו-זמנית, שתי הכתיבות מתערבבות והתוצאה שנמדדה היא קריסה בשיעור ~1%:
   // "Isolate main is owned by os thread X, failed to schedule from os
   // thread Y" — thread אחד שמנסה להריץ Dart של ה-isolate של האחר.
-  // ראו docs/P-2-two-windows.md §3.
+  // ראו docs/multi-window.md.
   static std::mutex plugin_registration_mutex;
   std::lock_guard<std::mutex> plugin_registration_lock(
       plugin_registration_mutex);
@@ -1320,7 +1320,7 @@ void FlutterWindow::OnDestroy() {
   if (flutter_controller_) {
     // ⚠️ הריסת המנוע קורית **בתוך** ה-window proc של WM_DESTROY. נמדד
     // שהריסת שני מנועים במקביל, משני threads, ננעלת — ולכן סגירת חלונות
-    // חייבת להיות מסוריאלית. ראו docs/P-2-two-windows.md §9.
+    // חייבת להיות מסוריאלית. ראו docs/multi-window.md.
     flutter_controller_.reset();
     flutter_controller_ = nullptr;
   }

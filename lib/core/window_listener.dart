@@ -440,7 +440,7 @@ class AppWindowListener extends WindowListener {
         // `window_manager` בולע את `WM_CLOSE` ומחזיר `-1` — כלומר מסלול
         // ה-hide אינו נגיש בחלון הראשי, וכל מסלולי הסגירה שלו (X, Alt+F4,
         // "סיים משימה") עוברים דרך Dart. זו הסיבה שהמעבר ל"מוסתר ולא
-        // נהרס" לא השאיר את התהליך תלוי. ראו docs/T-1.3-window-registry.md §5.
+        // נהרס" לא השאיר את התהליך תלוי.
         await windowManager.setPreventClose(false);
         // סגירה רגילה דרך ה-WindowManager
         await _window.destroy();
@@ -570,7 +570,6 @@ class AppWindowListener extends WindowListener {
       // אחר. מה שכן צריך תשומת לב: `dispose` **אינו נקרא** כשחלון נסגר,
       // כי הוא מוסתר ולא נהרס ועץ ה-widgets אינו מתפרק. ניקוי שחייב
       // לקרות בסגירת חלון תולים על המסלול שקורא ל-`closeSelf`.
-      // ראו docs/T-1.3-window-registry.md §5.
       windowManager.removeListener(this);
     }
   }

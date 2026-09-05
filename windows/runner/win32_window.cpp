@@ -28,7 +28,7 @@ constexpr const wchar_t kGetPreferredBrightnessRegKey[] =
 constexpr const wchar_t kGetPreferredBrightnessRegValue[] = L"AppsUseLightTheme";
 
 // The number of Win32Window objects that currently exist.
-// ⚠️ מודל A יוצר חלון לכל thread (ראו docs/P-0-stage3-result.md), ולכן
+// ⚠️ חלונות נוספים נוצרים על אותו thread (ראו docs/multi-window.md), ולכן
 // המונה הזה נקרא ונכתב משני threads. כ-`int` רגיל זה מרוץ נתונים: שני
 // חלונות שנסגרים במקביל עלולים שניהם לראות 0 ולבטל את רישום המחלקה
 // פעמיים, או לפספס את האפס ולא לבטל כלל. בחלון יחיד זה לא הופיע.
