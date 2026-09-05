@@ -1,4 +1,3 @@
-#include <flutter/flutter_engine.h>
 #include <flutter/dart_project.h>
 #include <flutter/flutter_view_controller.h>
 #include <initguid.h>
@@ -10,8 +9,6 @@
 #include <iomanip>
 #include <sstream>
 #include <string>
-#include <atomic>
-#include <thread>
 #include <vector>
 
 #include "flutter_window.h"
@@ -38,7 +35,10 @@ static const wchar_t* kMainWindowPropName = L"OtzariaMainWindow";
 namespace {
 
 struct MainWindowSearch {
-  HWND found = nullptr;
+  // חלון אוצריא **גלוי**, אם נמצא — היעד המועדף.
+  HWND visible = nullptr;
+  // חלון אוצריא כלשהו, כנפילה-לאחור.
+  HWND any = nullptr;
 };
 
 BOOL CALLBACK FindMainWindowProc(HWND hwnd, LPARAM param) {
@@ -46,19 +46,36 @@ BOOL CALLBACK FindMainWindowProc(HWND hwnd, LPARAM param) {
   ::GetClassNameW(hwnd, class_name,
                   sizeof(class_name) / sizeof(class_name[0]));
   if (::wcscmp(class_name, kFlutterWindowClassName) != 0) return TRUE;
-  if (::GetPropW(hwnd, kMainWindowPropName) == nullptr) return TRUE;
-  reinterpret_cast<MainWindowSearch*>(param)->found = hwnd;
-  return FALSE;  // נמצא — אין טעם להמשיך לסרוק.
+  auto* search = reinterpret_cast<MainWindowSearch*>(param);
+
+  // ⚠️ **גלוי** קודם לכול, וזה לא ניואנס. חלון שהמשתמש סגר מוסתר ולא
+  // נהרס, והמאפיין נשאר עליו — כלומר הסריקה החזירה חלון בלתי-נראה, ומופע
+  // שני או `otzaria://` "העלו" חלון שאיש אינו רואה. עם ריבוי חלונות זה
+  // הפסיק להיות תרחיש תיאורטי.
+  if (::IsWindowVisible(hwnd)) {
+    // בין חלונות גלויים מעדיפים את זה שנושא את המאפיין — הראשי.
+    if (search->visible == nullptr ||
+        ::GetPropW(hwnd, kMainWindowPropName) != nullptr) {
+      search->visible = hwnd;
+    }
+    return TRUE;
+  }
+  if (search->any == nullptr &&
+      ::GetPropW(hwnd, kMainWindowPropName) != nullptr) {
+    search->any = hwnd;
+  }
+  return TRUE;
 }
 
-// החלון הראשי של המופע שרץ, או nullptr.
+// החלון של המופע שרץ שיש להעלות, או nullptr.
 //
 // נפילה-לאחור ל-`FindWindowW`: מופע שרץ מבנייה קודמת אינו מציב את המאפיין,
 // והתנהגות ההעלאה שלו צריכה להישאר כשהייתה.
 HWND FindRunningMainWindow() {
   MainWindowSearch search;
   ::EnumWindows(FindMainWindowProc, reinterpret_cast<LPARAM>(&search));
-  if (search.found) return search.found;
+  if (search.visible) return search.visible;
+  if (search.any) return search.any;
   return ::FindWindowW(kFlutterWindowClassName, kMainWindowTitle);
 }
 
@@ -321,6 +338,13 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   while (::GetMessage(&msg, nullptr, 0, 0)) {
     ::TranslateMessage(&msg);
     ::DispatchMessage(&msg);
+  }
+
+  // ⚠️ מאפיין חלון שלא הוסר לפני ההריסה נחשב דליפה על ידי Windows
+  // (`DestroyWindow` מדווח עליו ב-debug heap). המסלול הרגיל יוצא ב-
+  // `TerminateProcess` ולא מגיע לכאן; זה המסלול המסודר.
+  if (const HWND main_hwnd = window.GetHandle()) {
+    ::RemovePropW(main_hwnd, kMainWindowPropName);
   }
 
   if (mutex) CloseHandle(mutex);

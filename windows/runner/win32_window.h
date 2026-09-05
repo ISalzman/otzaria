@@ -56,6 +56,16 @@ class Win32Window {
   // |Show| is called. Returns true if the window was created successfully.
   bool Create(const std::wstring& title, const Point& origin, const Size& size);
 
+  // יוצר חלון במסגרת שנתונה ב**פיקסלים פיזיים**, בלי שום המרת DPI.
+  //
+  // ⚠️ קיים כי [Create] מכפיל גם את המיקום וגם את הגודל ב-scale factor,
+  // כלומר הוא מצפה ליחידות **לוגיות**. מיקומים שמגיעים מגרירה
+  // (`GetWindowRect`, `GetCursorPos`, מסגרת שההצמדה נתנה) הם פיזיים,
+  // והעברתם ל-[Create] הכפילה אותם שוב: במסך 150% חלון שנגרר ל-x=1000
+  // נוצר ב-1500, והצמדה לחצי מסך של 960px נתנה חלון של 1440px. במסך יחיד
+  // ב-100% שום דבר מזה אינו נראה.
+  bool CreatePhysical(const std::wstring& title, const RECT& frame);
+
   // Show the current window. Returns true if the window was successfully shown.
   bool Show();
 

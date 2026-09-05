@@ -80,8 +80,10 @@ void Begin(const std::wstring& title, HWND source, const Colors& colors);
 //
 // הקריאה אופציונלית: התצוגה מופיעה מיד עם שרטוט, והצילום מחליף אותו
 // פריים אחר כך. כך אין רגע שבו לא נראה כלום.
-void SetImage(const unsigned char* rgba, int width, int height,
-              int target_width, int target_height);
+// [rgba_size] הוא אורך המאגר בבתים. נדרש כי המידות מגיעות מ-Dart בנפרד
+// ממנו, וקריאה של `width*height*4` בלי לאמת אותן קראה מעבר לסופו.
+void SetImage(const unsigned char* rgba, size_t rgba_size, int width,
+              int height, int target_width, int target_height);
 
 // עוצר את המעקב אחרי הסמן ומשאיר את התצוגה **גלויה במקום השחרור**.
 //

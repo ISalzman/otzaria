@@ -431,9 +431,15 @@ void Begin(const std::wstring& title, HWND source, const Colors& colors) {
   MoveToCursor();
 }
 
-void SetImage(const unsigned char* rgba, int width, int height,
-              int target_width, int target_height) {
+void SetImage(const unsigned char* rgba, size_t rgba_size, int width,
+              int height, int target_width, int target_height) {
   if (!rgba || width <= 0 || height <= 0) return;
+  // ⚠️ המידות מגיעות מ-Dart בנפרד מהמאגר, ולכן הן נבדקות מולו. בלי
+  // הבדיקה קריאה עם מידות שאינן תואמות קראה מעבר לסוף המאגר.
+  if (static_cast<size_t>(width) * static_cast<size_t>(height) * 4 >
+      rgba_size) {
+    return;
+  }
   if (target_width <= 0 || target_height <= 0) {
     target_width = width;
     target_height = height;
@@ -472,11 +478,31 @@ SystemDragResult DragWithSystem() {
 
   // ⚠️ רק אם הכפתור עוד לחוץ. `WM_NCLBUTTONDOWN` בלי כפתור לחוץ נכנס
   // ללולאה שנתקעת עד הלחיצה הבאה — חלון שנתפס לסמן בלי סיבה.
-  if ((::GetAsyncKeyState(VK_LBUTTON) & 0x8000) == 0) {
+  //
+  // ⚠️ `VK_LBUTTON` הוא הכפתור **הפיזי** ואינו מתחשב בהחלפת כפתורים.
+  // למשתמש שהחליף אותם הבדיקה נכשלה תמיד, המסירה למערכת נדחתה, וכל
+  // הגרירה רצה במסלול הנפילה — בלי Snap Layouts ועם התצוגה הנייטיבית
+  // מתחדשת ב-60Hz.
+  const int drag_button =
+      ::GetSystemMetrics(SM_SWAPBUTTON) ? VK_RBUTTON : VK_LBUTTON;
+  if ((::GetAsyncKeyState(drag_button) & 0x8000) == 0) {
     ::GetWindowRect(g_window, &out.rect);
     out.under = WindowUnderCursor(cursor);
     return out;
   }
+
+  // ⚠️ הגודל הצפוי נדגם **לפני** הלולאה המודאלית, ולא אחריה.
+  //
+  // `PreviewSize` מחזיר את גודל היעד שנקבע ב-`SetImage`, ו-`SetImage`
+  // יכול להגיע מ-Dart באמצע הגרירה — ואז הוא מדלג על `Compose`
+  // (`g_system_dragging`), כלומר החלון **אינו** משתנה אבל הציפייה כן.
+  // דגימה אחרי הלולאה השוותה גודל חלון ישן מול ציפייה חדשה, החזירה
+  // `snapped=true` כוזב, ובצד Dart `snapped` גובר על היעד שתחת הסמן:
+  // שחרור מעל חלון אוצריא אחר פתח חלון חדש במסגרת של 176×40 במקום להעביר
+  // אליו.
+  int expected_w = 0;
+  int expected_h = 0;
+  PreviewSize(&expected_w, &expected_h);
 
   g_system_dragging.store(true);
   ::KillTimer(g_window, kFollowTimerId);
@@ -501,10 +527,8 @@ SystemDragResult DragWithSystem() {
   out.ran = true;
   ::GetWindowRect(g_window, &out.rect);
   // הצמדה = המערכת שינתה את הגודל. סבילות של 2 פיקסלים כי חלון מוצמד
-  // מקבל מסגרת שאינה בהכרח זהה לפיקסל למה שביקשנו.
-  int expected_w = 0;
-  int expected_h = 0;
-  PreviewSize(&expected_w, &expected_h);
+  // מקבל מסגרת שאינה בהכרח זהה לפיקסל למה שביקשנו. הגודל הצפוי נדגם לפני
+  // הלולאה — ראו ההערה שם.
   const int actual_w = out.rect.right - out.rect.left;
   const int actual_h = out.rect.bottom - out.rect.top;
   out.snapped =
@@ -556,6 +580,17 @@ void End() {
   ::KillTimer(g_window, kFollowTimerId);
   ::KillTimer(g_window, kHoldTimerId);
   ::ShowWindow(g_window, SW_HIDE);
+  // ⚠️ גרירה שהסתיימה בהצמדה ל"מקסום" משאירה על החלון את `WS_MAXIMIZE`,
+  // וכל `SetWindowPos` בגרירה הבאה מתעלם ממנו — התצוגה נשארת בגודל מסך
+  // מלא. `SetWindowPlacement` עם `SW_HIDE` מנקה את המצב **בלי** להציג,
+  // בעוד ש-`ShowWindow(SW_RESTORE)` היה חושף את החלון.
+  WINDOWPLACEMENT placement{};
+  placement.length = sizeof(placement);
+  if (::GetWindowPlacement(g_window, &placement) &&
+      placement.showCmd == SW_SHOWMAXIMIZED) {
+    placement.showCmd = SW_HIDE;
+    ::SetWindowPlacement(g_window, &placement);
+  }
   // חזרה ל-topmost לגרירה הבאה, שמתחילה לפני שהמערכת מקבלת אותה.
   ::SetWindowPos(g_window, HWND_TOPMOST, 0, 0, 0, 0,
                  SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);

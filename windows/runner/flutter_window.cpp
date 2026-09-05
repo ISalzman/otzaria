@@ -93,6 +93,16 @@ void LogSessionEndDiagnostic(const wchar_t* stage, UINT message, WPARAM wparam,
 // דיין שלא ייראו כתקיעה.
 constexpr DWORD kSessionEndFlushTimeoutMs = 3000;
 
+// הרגע שבו שטיפת סיום הסשן נגמרת — **משותף לכל החלונות בתהליך**.
+//
+// ⚠️ Windows שואל כל חלון עליון בנפרד, כולל מוסתרים, וכל חלון חסם עד
+// שלוש שניות בנפרד: ארבעה מנועים = עד 12 שניות, בעוד שהמערכת מסמנת
+// "לא מגיב" אחרי ~5 והמשתמש רואה את אוצריא מעכבת את הכיבוי. התקציב הוא
+// של התהליך, ולכן הדדליין נקבע פעם אחת וכולם מתחלקים בו.
+//
+// 0 פירושו "עוד לא התחיל". מאותחל מחדש כשהכיבוי מבוטל (`shutdown /a`).
+ULONGLONG g_session_end_deadline = 0;
+
 // חלון-ההודעות של תור המשימות של Flutter, אם הוא שייך ל-thread הזה.
 //
 // `TaskRunnerWindow` מפרסם `WM_NULL` ומשתמש ב-`SetTimer` כדי להריץ את תורי
@@ -191,6 +201,20 @@ constexpr size_t kMaxWindows = 4;
 // את כל החלונות ולא פועל על אחד מסוים.
 bool RestoreLastHiddenWindow();
 
+// הגודל המינימלי שממנו מסגרת נחשבת מסגרת של חלון אמיתי, בפיקסלים פיזיים.
+//
+// אזור שהצמדת Windows נותנת הוא חצי מסך ומעלה; כל דבר בסדר גודל של
+// כרטיסיה הוא סימן שמשהו בצד המשלח שגוי.
+constexpr int kMinReasonableWindowWidth = 320;
+constexpr int kMinReasonableWindowHeight = 240;
+
+// מונה סידורי של הסתרות, כדי שהשחזור יתחיל **מהאחרון שנסגר**.
+//
+// ⚠️ סדר היצירה אינו סדר הסגירה. הסריקה הקודמת רצה על רשימת החלונות
+// מהסוף להתחלה, כלומר בסדר יצירה הפוך — ומשתמש שסגר את החלון הראשון
+// ואחריו את השני קיבל ב-Ctrl+Shift+T דווקא את הראשון.
+unsigned long long g_hidden_sequence = 0;
+
 // מיפוי חלון → משבצת באפיק ההודעות של Dart.
 //
 // ⚠️ נדרש לגרירה בין חלונות. Win32 יודע איזה **חלון** נמצא תחת הסמן, אבל
@@ -250,8 +274,11 @@ std::atomic<int> g_live_engine_count{0};
 //
 // הנקודה שמגיעה לכאן היא הפינה שבה **התצוגה** נעצרה, כלומר המקום שבו
 // המשתמש ראה את הכרטיסיה בשחרור. לכן אין מה לחשב סביבה.
-Win32Window::Point OriginForDrop(int origin_x, int origin_y, int width,
-                                 int height) {
+// ⚠️ הכול כאן ב**פיקסלים פיזיים**: הנקודה, המידות והתוצאה. `POINT`
+// (מסומן) ולא `Win32Window::Point` (unsigned) — קואורדינטה שלילית היא
+// מסך שמאלי, מצב לגיטימי לחלוטין, ואין טעם להעביר אותה דרך גלישה
+// מודולרית וחזרה.
+POINT OriginForDrop(int origin_x, int origin_y, int width, int height) {
   int left = origin_x;
   int top = origin_y;
 
@@ -268,7 +295,7 @@ Win32Window::Point OriginForDrop(int origin_x, int origin_y, int width,
     if (top + height > work.bottom) top = work.bottom - height;
     if (top < work.top) top = work.top;
   }
-  return Win32Window::Point(left, top);
+  return POINT{left, top};
 }
 
 // מתאר את היעד שתחת הסמן, בשפה ש-Dart מבין.
@@ -350,18 +377,32 @@ bool CreateSecondaryWindowOnThisThread(const flutter::DartProject& base,
   // שלו נשאר חם. שימוש חוזר בו במקום יצירת מנוע חדש חוסך את כל האתחול —
   // זה ההבדל בין ~1800ms לפתיחה מיידית — **וגם** מונע גידול בזיכרון
   // במחזורי פתיחה-סגירה, כי אין מנוע נוסף.
-  for (auto& existing : windows) {
-    if (existing == nullptr) continue;
+  //
+  // ⚠️ סורק את **כל** החלונות ולא רק את המשניים. חלון ראשון שהמשתמש סגר
+  // לא הוחזר לשימוש, ובמקומו נוצר מנוע חמישי — ראו
+  // [FlutterWindow::AllWindowsInProcess]. הבחירה היא באחרון שנסגר, כמו
+  // בשחזור.
+  FlutterWindow* reusable = nullptr;
+  for (FlutterWindow* existing : FlutterWindow::AllWindowsInProcess()) {
+    if (existing == nullptr || existing->GetHandle() == nullptr) continue;
     // ⚠️ `IsClosedByUser()` ולא `IsWindowVisible` — ראו ההערה שם.
-    if (existing->GetHandle() == nullptr || !existing->IsClosedByUser()) {
-      continue;
+    if (!existing->IsClosedByUser()) continue;
+    if (reusable == nullptr || existing->hidden_at() > reusable->hidden_at()) {
+      reusable = existing;
     }
-    existing->ReviveWith(payload, inherited_width, inherited_height, origin_x,
+  }
+  if (reusable != nullptr) {
+    reusable->ReviveWith(payload, inherited_width, inherited_height, origin_x,
                          origin_y, bounds);
     return true;
   }
 
-  if (g_live_window_count.load() >= static_cast<int>(kMaxWindows)) {
+  // ⚠️ התקרה נאכפת על **המנועים** ולא על החלונות הגלויים. מנוע אינו נהרס
+  // לעולם (ראו [g_live_engine_count]), ולכן ספירת החלונות הגלויים אפשרה
+  // ליצור מנוע נוסף כל עוד חלון אחד מוסתר — וכאן זה כבר לא יכול לקרות,
+  // כי לולאת המיחזור שמעל הייתה מוצאת אותו.
+  if (g_live_engine_count.load() >= static_cast<int>(kMaxWindows) ||
+      g_live_window_count.load() >= static_cast<int>(kMaxWindows)) {
     return false;
   }
 
@@ -373,26 +414,62 @@ bool CreateSecondaryWindowOnThisThread(const flutter::DartProject& base,
   // ⚠️ יורש את מידות החלון שפתח אותו. חלון בגודל קבוע נראה שרירותי —
   // המשתמש שהגדיל את החלון שלו מצפה שהחדש יהיה דומה. נופלים לברירת מחדל
   // רק כשהמידות לא הגיעו (מסלול ישן, או קריאה בלי ארגומנטים).
-  const int width = inherited_width > 400 ? inherited_width : 1100;
-  const int height = inherited_height > 300 ? inherited_height : 760;
-  Win32Window::Size size(width, height);
+  // ⚠️ **לוגיים.** `windowManager.getSize()` מחלק ב-DPR לפני שהוא מחזיר
+  // ל-Dart, ולכן המידות שמגיעות משם אינן פיקסלים של המסך.
+  const int logical_width = inherited_width > 400 ? inherited_width : 1100;
+  const int logical_height = inherited_height > 300 ? inherited_height : 760;
 
   // מסגרת מדויקת (הצמדה) קודמת לכול, אחריה הפינה שנמסרה, ובהיעדר
   // שתיהן — היסט מדורג, כמו קודם.
-  Win32Window::Point origin(0, 0);
+  //
+  // ⚠️ שתי הראשונות מגיעות **בפיקסלים פיזיים** (`GetWindowRect` /
+  // `GetCursorPos` בצד הגרירה), ולכן הן עוברות ל-`CreatePhysical` ולא
+  // ל-`Create` שמכפיל ב-scale factor. ראו [Win32Window::CreatePhysical].
+  //
+  // ⚠️ מסגרת קטנה מדי אינה הצמדה אמיתית. אזור שההצמדה נותנת הוא חצי מסך
+  // ומעלה, ואילו תצוגת הגרירה עצמה היא בגודל כרטיסיה. באג בצד המשלח
+  // (`snapped` כוזב) הגיע לכאן עם 176×40 ויצר חלון אוצריא ברוחב סרגל —
+  // עדיף להתעלם ולפתוח בגודל תקין מאשר לכבד מסגרת שברור שאינה מסגרת חלון.
+  if (bounds != nullptr &&
+      (bounds->right - bounds->left < kMinReasonableWindowWidth ||
+       bounds->bottom - bounds->top < kMinReasonableWindowHeight)) {
+    OutputDebugStringW(L"Otzaria: ignoring implausible snapped bounds.\n");
+    bounds = nullptr;
+  }
   if (bounds != nullptr) {
-    origin = Win32Window::Point(bounds->left, bounds->top);
-    size = Win32Window::Size(bounds->right - bounds->left,
-                             bounds->bottom - bounds->top);
+    if (!window->CreatePhysical(L"אוצריא", *bounds)) {
+      return false;
+    }
   } else if (origin_x != 0 || origin_y != 0) {
-    origin = OriginForDrop(origin_x, origin_y, width, height);
+    // המידות הלוגיות מומרות לפיזיות לפי ה-DPI של המסך שתחת נקודת
+    // השחרור — לא של המסך הראשי, כי גרירה למסך שני היא המקרה השכיח.
+    const POINT drop{origin_x, origin_y};
+    const UINT dpi = FlutterDesktopGetDpiForMonitor(
+        ::MonitorFromPoint(drop, MONITOR_DEFAULTTONEAREST));
+    const double scale = dpi / 96.0;
+    const int physical_width = static_cast<int>(logical_width * scale);
+    const int physical_height = static_cast<int>(logical_height * scale);
+    // ⚠️ ההידוק למסך נעשה בפיקסלים פיזיים בשני הצדדים — הן הנקודה והן
+    // המידות. השוואת נקודה פיזית מול רוחב לוגי הידקה לפי חלון קטן יותר
+    // ממה שנוצר בפועל, וקצה החלון יצא מחוץ למסך.
+    const POINT corner =
+        OriginForDrop(origin_x, origin_y, physical_width, physical_height);
+    RECT frame{};
+    frame.left = corner.x;
+    frame.top = corner.y;
+    frame.right = frame.left + physical_width;
+    frame.bottom = frame.top + physical_height;
+    if (!window->CreatePhysical(L"אוצריא", frame)) {
+      return false;
+    }
   } else {
     static int spawn_index = 0;
     const int offset = 40 + (spawn_index++ % 6) * 32;
-    origin = Win32Window::Point(offset, offset);
-  }
-  if (!window->Create(L"אוצריא", origin, size)) {
-    return false;
+    // כאן הכול לוגי — היסט קטן שנקבע אצלנו, ולא מיקום שהגיע מ-Win32.
+    if (!window->Create(L"אוצריא", Win32Window::Point(offset, offset),
+                        Win32Window::Size(logical_width, logical_height))) {
+      return false;
+    }
   }
   // ⚠️ `false` במפורש: סגירת חלון משני אסור לה לפרסם `WM_QUIT` ל-thread
   // הראשי — זה היה סוגר את כל האפליקציה. היציאה מנוהלת ב-`OnDestroy` לפי
@@ -411,15 +488,28 @@ bool CreateSecondaryWindowOnThisThread(const flutter::DartProject& base,
   // מחלון שמופיע מאוחר.
   const HWND handle = window->GetHandle();
   auto hidden = window->hidden_flag();
-  std::thread([handle, hidden]() {
-    ::Sleep(20000);
-    // ⚠️ רק אם המשתמש לא סגר אותו בינתיים: `IsWindowVisible` לבדו היה
-    // מחזיר לחיים חלון שנסגר לפני שהשעון פקע.
-    if (::IsWindow(handle) && !::IsWindowVisible(handle) &&
-        !hidden->load()) {
-      ::ShowWindow(handle, SW_SHOW);
-    }
-  }).detach();
+  // ⚠️ ה-`try` אינו קוסמטי: הפונקציה נקראת מ-`MessageHandler`, שהוא
+  // `noexcept`, וכשל בהקצאת thread היה מגיע ל-`std::terminate` — כלומר
+  // קריסת התהליך כולו במקום חלון שנחשף מאוחר.
+  try {
+    std::thread([handle, hidden]() {
+      ::Sleep(20000);
+      // ⚠️ רק אם המשתמש לא סגר אותו בינתיים: `IsWindowVisible` לבדו היה
+      // מחזיר לחיים חלון שנסגר לפני שהשעון פקע.
+      if (::IsWindow(handle) && !::IsWindowVisible(handle) &&
+          !hidden->load()) {
+        // ⚠️ גם הבאה לחזית, ולא רק הצגה. זהו המסלול היחיד שנשאר כשהפריים
+        // הראשון לא הגיע, ו-`presentMainWindow` כבר אינו מעלה חלון משני
+        // (זה היה חטיפת פוקוס שניות אחרי החשיפה). בלי זה חלון שנחשף
+        // במסלול הזה היה מופיע מאחורי החלון שפתח אותו.
+        ::ShowWindow(handle, SW_SHOW);
+        ::BringWindowToTop(handle);
+        ::SetForegroundWindow(handle);
+      }
+    }).detach();
+  } catch (const std::exception&) {
+    OutputDebugStringW(L"Otzaria: reveal watchdog thread not started.\n");
+  }
 
   windows.push_back(std::move(window));
   return true;
@@ -428,9 +518,15 @@ bool CreateSecondaryWindowOnThisThread(const flutter::DartProject& base,
 
 }  // namespace
 
+std::vector<FlutterWindow*>& FlutterWindow::AllWindowsInProcess() {
+  static std::vector<FlutterWindow*> windows;
+  return windows;
+}
+
 FlutterWindow::FlutterWindow(const flutter::DartProject& project,
                              bool headless)
     : project_(project), headless_(headless) {
+  AllWindowsInProcess().push_back(this);
   // Create a Job Object early — before any child processes can spawn. We
   // assign our own process to it with JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
   // so that *any* child process created from this point onward (WebView2's
@@ -471,19 +567,18 @@ FlutterWindow::FlutterWindow(const flutter::DartProject& project,
     }
   });
 
-  job_handle_ = process_job;
   job_object_failure_ = process_job_failure;
   job_object_ready_.store(process_job != nullptr &&
                           process_job_failure.empty());
-  return;
 }
 
 FlutterWindow::~FlutterWindow() {
+  auto& all = AllWindowsInProcess();
+  all.erase(std::remove(all.begin(), all.end(), this), all.end());
   // ⚠️ ה-Job **אינו** נסגר כאן. הוא משאב של התהליך, ולא של החלון: סגירתו
   // מפעילה `KILL_ON_JOB_CLOSE` על כל החברים, והתהליך שלנו הוא אחד מהם.
   // כשחלון משני נסגר, זה פירושו הריגה עצמית. ראו ההערה בקונסטרוקטור.
   // יציאת התהליך סוגרת את ה-handle ממילא — וזה בדיוק העיתוי הנכון.
-  job_handle_ = nullptr;
   if (session_end_flush_event_) {
     CloseHandle(session_end_flush_event_);
     session_end_flush_event_ = nullptr;
@@ -719,12 +814,24 @@ bool FlutterWindow::OnCreate() {
               }
             }
             // הצבעים מגיעים כ-ARGB מ-`colorScheme`; GDI רוצה BGR.
+            //
+            // ⚠️ `int64_t` וגם `int`. צבע אטום הוא `0xFF......` — כלומר
+            // גדול מ-`INT32_MAX` — ו-`StandardMessageCodec` מקודד אותו
+            // כ-int64. `get_if<int>` לבדו החזיר null לכל צבע אטום, ולכן
+            // `colors.valid` היה תמיד false והתצוגה נצבעה בפלטה הבהירה
+            // המוטמעת — גם בערכת נושא כהה.
             const auto read = [&](const char* key, COLORREF* out) -> bool {
               const auto it = args->find(flutter::EncodableValue(key));
               if (it == args->end()) return false;
-              const auto* v = std::get_if<int>(&it->second);
-              if (!v) return false;
-              const unsigned argb = static_cast<unsigned>(*v);
+              int64_t argb_value = 0;
+              if (const auto* wide = std::get_if<int64_t>(&it->second)) {
+                argb_value = *wide;
+              } else if (const auto* narrow = std::get_if<int>(&it->second)) {
+                argb_value = *narrow;
+              } else {
+                return false;
+              }
+              const unsigned argb = static_cast<unsigned>(argb_value);
               *out = RGB((argb >> 16) & 0xFF, (argb >> 8) & 0xFF, argb & 0xFF);
               return true;
             };
@@ -760,8 +867,9 @@ bool FlutterWindow::OnCreate() {
               if (const auto* bytes =
                       std::get_if<std::vector<uint8_t>>(&bytes_it->second)) {
                 drag_preview::SetImage(
-                    bytes->data(), get_int("width", 0), get_int("height", 0),
-                    get_int("targetWidth", 0), get_int("targetHeight", 0));
+                    bytes->data(), bytes->size(), get_int("width", 0),
+                    get_int("height", 0), get_int("targetWidth", 0),
+                    get_int("targetHeight", 0));
               }
             }
           }
@@ -774,8 +882,17 @@ bool FlutterWindow::OnCreate() {
         // מודאלית שנמשכת כל זמן הגרירה, וחסימה כזו מתוך טיפול בערוץ היא
         // ריאנטרנטית. התשובה נשלחת מלולאת ההודעות, עם המסגרת הסופית.
         if (call.method_name() == "dragOutToSystem") {
+          // ⚠️ בלי handle ההודעה נשלחת ל-**thread** ולא לחלון, ואז
+          // `MessageHandler` לא יראה אותה לעולם — הבקשה נשארת בתור
+          // וה-`Future` בצד Dart תלוי בלי timeout.
+          const HWND self = GetHandle();
+          if (self == nullptr) {
+            result->Success(
+                DescribeSystemDrag(drag_preview::SystemDragResult{}, nullptr));
+            return;
+          }
           pending_system_drags_.push(std::move(result));
-          ::PostMessageW(GetHandle(), kMsgDragOutToSystem, 0, 0);
+          ::PostMessageW(self, kMsgDragOutToSystem, 0, 0);
           return;
         }
         if (call.method_name() == "freezeTabDrag") {
@@ -830,8 +947,17 @@ bool FlutterWindow::OnCreate() {
         if (call.method_name() == "raiseSelf") {
           const HWND self = GetHandle();
           if (self) {
-            ::BringWindowToTop(self);
-            ::SetForegroundWindow(self);
+            // ⚠️ חלון שהמשתמש סגר **מוסתר ולא נהרס**, ו-`ShowWindow` עליו
+            // מצד Dart היה מציג אותו בעוד `counted_`/`hidden_flag_`
+            // ממשיכים לתאר חלון סגור: המונה חסר אחד, וסגירת שאר החלונות
+            // מסיימת את התהליך בעוד החלון הזה גלוי. `ReviveWith` הוא
+            // המסלול היחיד שמחזיר חלון מוסתר יחד עם הספירה.
+            if (IsClosedByUser()) {
+              ReviveWith(std::string(), 0, 0);
+            } else {
+              ::BringWindowToTop(self);
+              ::SetForegroundWindow(self);
+            }
           }
           result->Success();
           return;
@@ -933,9 +1059,16 @@ bool FlutterWindow::OnCreate() {
         //
         // ⚠️ ה-`result` נוסע איתה ונענה שם. Dart מוחק את הכרטיסיה על סמך
         // התשובה הזו, ולכן היא חייבת לתאר את מה שקרה בפועל.
+        // ⚠️ בלי handle ההודעה נשלחת ל-thread ולא לחלון, כלומר לא תטופל
+        // לעולם — ראו את אותו טיפול ב-`dragOutToSystem`.
+        const HWND self = GetHandle();
+        if (self == nullptr) {
+          result->Success(flutter::EncodableValue(false));
+          return;
+        }
         pending.result = std::move(result);
         pending_secondary_windows_.push(std::move(pending));
-        ::PostMessageW(GetHandle(), kMsgOpenSecondaryWindow, 0, 0);
+        ::PostMessageW(self, kMsgOpenSecondaryWindow, 0, 0);
       });
 
   process_control_channel_ =
@@ -1152,6 +1285,17 @@ void FlutterWindow::OnDestroy() {
       pending.result->Success(flutter::EncodableValue(false));
     }
   }
+  // ⚠️ אותו חוזה בדיוק לתור השני, שנשכח. ל-`dragOutToSystem` אין timeout
+  // בצד Dart — ובמכוון, גרירה יכולה להימשך דקות — ולכן בקשה שנהרסת בלי
+  // מענה משאירה את הגרירה תלויה לנצח, עם הכרטיסיה מעומעמת במקומה.
+  while (!pending_system_drags_.empty()) {
+    auto pending = std::move(pending_system_drags_.front());
+    pending_system_drags_.pop();
+    if (pending) {
+      pending->Success(
+          DescribeSystemDrag(drag_preview::SystemDragResult{}, nullptr));
+    }
+  }
   // ⚠️ **לא** לפי `GetHandle()`. במסלול `WM_DESTROY` השדה `window_handle_`
   // מתאפס **לפני** הקריאה ל-`Destroy()` שמגיעה לכאן, ולכן מחיקה לפיו
   // הייתה no-op שקט שנראה כמו ניקוי. סריקה של עד ארבע רשומות היא זולה,
@@ -1179,18 +1323,25 @@ void FlutterWindow::OnDestroy() {
 namespace {
 
 bool RestoreLastHiddenWindow() {
-  auto& windows = SecondaryWindowsOnThisThread();
-  // מהאחרון שנסגר לראשון — התנהגות Ctrl+Shift+T.
-  for (auto it = windows.rbegin(); it != windows.rend(); ++it) {
-    if (*it == nullptr) continue;
-    const HWND handle = (*it)->GetHandle();
-    if (handle == nullptr || ::IsWindowVisible(handle)) continue;
-    // מחזיר בלי מטען: הכרטיסיות שהיו בחלון עדיין שם, וזה בדיוק מה
-    // שהמשתמש מצפה לקבל בשחזור.
-    (*it)->ReviveWith(std::string(), 0, 0);
-    return true;
+  // ⚠️ `IsClosedByUser()` ולא `IsWindowVisible` — חלון שנוצר הרגע ועוד לא
+  // הגיע לפריים הראשון אינו נראה, אבל המשתמש לא סגר אותו. השחזור שלו הציג
+  // חלון באמצע טעינה (ריצוד) והחזיר true כאילו שוחזר חלון סגור.
+  //
+  // ⚠️ **לפי חותמת ההסתרה** ולא לפי סדר הרשימה: הסריקה מהסוף להתחלה היא
+  // סדר יצירה הפוך, לא סדר סגירה.
+  FlutterWindow* newest = nullptr;
+  for (FlutterWindow* window : FlutterWindow::AllWindowsInProcess()) {
+    if (window == nullptr || window->GetHandle() == nullptr) continue;
+    if (!window->IsClosedByUser()) continue;
+    if (newest == nullptr || window->hidden_at() > newest->hidden_at()) {
+      newest = window;
+    }
   }
-  return false;
+  if (newest == nullptr) return false;
+  // מחזיר בלי מטען: הכרטיסיות שהיו בחלון עדיין שם, וזה בדיוק מה
+  // שהמשתמש מצפה לקבל בשחזור.
+  newest->ReviveWith(std::string(), 0, 0);
+  return true;
 }
 
 }  // namespace
@@ -1209,8 +1360,15 @@ void FlutterWindow::ReviveWith(const std::string& payload, int width,
   }
   hidden_flag_->store(false);
 
-  const int final_width = width > 400 ? width : 0;
-  const int final_height = height > 300 ? height : 0;
+  // ⚠️ `width`/`height` מגיעים מ-Dart והם **לוגיים**
+  // (`windowManager.getSize` מחלק ב-DPR), אבל `SetWindowPos` מצפה
+  // לפיקסלים פיזיים. בלי ההמרה חלון שהוחזר לשימוש במסך 150% קיבל 733
+  // פיקסלים לוגיים במקום 1100 — כלומר התכווץ בכל פתיחה חוזרת.
+  const double scale = ::GetDpiForWindow(self) / 96.0;
+  const int final_width =
+      width > 400 ? static_cast<int>(width * scale) : 0;
+  const int final_height =
+      height > 300 ? static_cast<int>(height * scale) : 0;
   if (bounds != nullptr) {
     // ⚠️ המסגרת שההצמדה נתנה, מילה במילה. חישוב מחדש ממיקום וגודל היה
     // מחמיץ אותה בפיקסלים, וחלון "כמעט מוצמד" נראה שבור.
@@ -1224,7 +1382,7 @@ void FlutterWindow::ReviveWith(const std::string& payload, int width,
     ::GetWindowRect(self, &current);
     const int w = final_width > 0 ? final_width : current.right - current.left;
     const int h = final_height > 0 ? final_height : current.bottom - current.top;
-    const auto origin = OriginForDrop(origin_x, origin_y, w, h);
+    const POINT origin = OriginForDrop(origin_x, origin_y, w, h);
     ::SetWindowPos(self, nullptr, origin.x, origin.y, w, h,
                    SWP_NOZORDER | SWP_NOACTIVATE);
   } else if (final_width > 0 && final_height > 0) {
@@ -1269,7 +1427,10 @@ void FlutterWindow::RevealOnFirstFrame() {
     // ברגע שיש מה להחליף אותה.
     drag_preview::End();
     // הזמן שהמשתמש באמת מרגיש: מהלחיצה ועד שמשהו מופיע על המסך.
-    printf("[window] נראה למשתמש אחרי %lums\n", ::GetTickCount() - started);
+    // ⚠️ אנגלית, ובמכוון: `printf` צר כותב UTF-8 גולמי לקונסולה שקוראת
+    // אותו ב-code page 862, והשורה יצאה ג'יבריש.
+    printf("[window] visible to user after %lums\n",
+           ::GetTickCount() - started);
     fflush(stdout);
   });
   flutter_controller_->ForceRedraw();
@@ -1285,9 +1446,32 @@ void FlutterWindow::OnWindowHidden() {
   }
   counted_ = false;
   hidden_flag_->store(true);
-  if (g_live_window_count.fetch_sub(1) <= 1) {
-    ::PostQuitMessage(0);
+  // חותמת ההסתרה קובעת את סדר השחזור ב-`RestoreLastHiddenWindow`.
+  hidden_at_ = ++g_hidden_sequence;
+  if (g_live_window_count.fetch_sub(1) > 1) {
+    return;
   }
+
+  // ⚠️ נסגר החלון האחרון. **לא** `PostQuitMessage`.
+  //
+  // `PostQuitMessage` מוציא את הלולאה ב-`main.cpp`, ואז `~FlutterWindow`
+  // של החלון הראשי הורס את ה-controller ואת המנוע על ה-thread הראשי בעוד
+  // מנועים של חלונות מוסתרים חיים — בדיוק התצורה ש-`win32_window.h`
+  // מתעדת כקורסת, ושהמסלול הרגיל (`TerminateProcess`) קיים כדי להימנע
+  // ממנה.
+  //
+  // המסלול הזה נגיש רק כשחלון הוסתר בלי לעבור את מסלול הסגירה של Dart
+  // (שם `windowCount() <= 1` מוביל לכיבוי מלא). ה-flush הפר-חלוני כבר רץ
+  // לפני `closeSelf`, ולכן אין כאן מה לשטוף — רק לצאת בבטחה.
+  if (job_object_ready_.load()) {
+    ::TerminateProcess(::GetCurrentProcess(), 0);
+    return;  // לא נגיש בפועל.
+  }
+  // בלי Job Object אין למי להבטיח שתהליכי WebView2 הילדים ימותו איתנו,
+  // ולכן נשארת היציאה המסודרת — אותה התנהגות שהייתה כאן קודם.
+  OutputDebugStringW(L"Otzaria: last window hidden without a Job Object — "
+                     L"falling back to PostQuitMessage.\n");
+  ::PostQuitMessage(0);
 }
 
 LRESULT
@@ -1372,6 +1556,8 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
         if (session_end_flush_event_) {
           ResetEvent(session_end_flush_event_);
         }
+        // גם התקציב המשותף מתאפס, אחרת הכיבוי הבא לא יקבל זמן בכלל.
+        g_session_end_deadline = 0;
         if (process_control_channel_) {
           process_control_channel_->InvokeMethod("sessionEndCancelled",
                                                  nullptr);
@@ -1405,7 +1591,11 @@ bool FlutterWindow::FlushBeforeSessionEnd() {
   process_control_channel_->InvokeMethod("prepareForSessionEnd", nullptr);
 
   const HWND task_runner = FindFlutterTaskRunnerWindow();
-  const ULONGLONG deadline = GetTickCount64() + kSessionEndFlushTimeoutMs;
+  // תקציב אחד לכל התהליך — ראו [g_session_end_deadline].
+  if (g_session_end_deadline == 0) {
+    g_session_end_deadline = GetTickCount64() + kSessionEndFlushTimeoutMs;
+  }
+  const ULONGLONG deadline = g_session_end_deadline;
   while (true) {
     const ULONGLONG now = GetTickCount64();
     if (now >= deadline) {

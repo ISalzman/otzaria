@@ -10,6 +10,7 @@
 #include <memory>
 #include <queue>
 #include <string>
+#include <vector>
 
 #include "win32_window.h"
 
@@ -125,6 +126,9 @@ class FlutterWindow : public Win32Window {
   // כשמגיעות שתי בקשות סגירה, **וגם** ספירה כפולה בשימוש חוזר.
   bool counted_ = true;
 
+  // ראו [hidden_at].
+  unsigned long long hidden_at_ = 0;
+
  public:
   // האם החלון נסגר על ידי המשתמש (הוסתר), להבדיל מחלון חדש שטרם נחשף.
   //
@@ -135,11 +139,29 @@ class FlutterWindow : public Win32Window {
   // התוכנה גם לא ניתנת להפעלה מחדש.
   bool IsClosedByUser() const { return hidden_flag_->load(); }
 
+  // מתי החלון הוסתר, בסידור עולה. 0 פירושו "לא הוסתר מעולם".
+  //
+  // ⚠️ נדרש כי סדר היצירה אינו סדר הסגירה, ו-Ctrl+Shift+T מחזיר את
+  // **האחרון שנסגר**.
+  unsigned long long hidden_at() const { return hidden_at_; }
+
   // דגל משותף עם שעון-הביטחון של החשיפה, שרץ על thread מנותק ואינו יכול
   // להחזיק מצביע לחלון.
   std::shared_ptr<std::atomic<bool>> hidden_flag() const {
     return hidden_flag_;
   }
+
+  // כל חלונות אוצריא בתהליך, **כולל הראשון**.
+  //
+  // ⚠️ מצביעים גולמיים, והבעלות נשארת במקומה: הראשון יושב במחסנית של
+  // `wWinMain` והמשניים ב-`SecondaryWindowsOnThisThread`. הרישום נעשה
+  // בקונסטרוקטור ומוסר בדסטרקטור, ולכן אין כאן מצביע תלוי.
+  //
+  // קיים כי שתי הלולאות שמחפשות חלון מוסתר — מיחזור בפתיחה ושחזור
+  // ב-Ctrl+Shift+T — סרקו את המשניים בלבד. חלון ראשון שהמשתמש סגר לא היה
+  // ניתן לשחזור לעולם, ולא מוחזר לשימוש: במקומו נוצר מנוע נוסף, והתקרה
+  // נחרגה באחד.
+  static std::vector<FlutterWindow*>& AllWindowsInProcess();
 
  private:
   std::shared_ptr<std::atomic<bool>> hidden_flag_ =
@@ -156,7 +178,8 @@ class FlutterWindow : public Win32Window {
   // enterprise MDM/AV configurations). `job_object_ready_` reflects whether
   // every setup step succeeded; we only honour forceTerminate when it did,
   // otherwise the Dart side falls back to the existing graceful close path.
-  HANDLE job_handle_ = nullptr;
+  // ⚠️ ה-handle עצמו אינו נשמר: הוא `static` בתוך הקונסטרוקטור (משאב של
+  // התהליך), ולעולם אינו נסגר. השדה שהחזיק אותו כאן נכתב ולא נקרא.
   std::atomic_bool job_object_ready_ = false;
   // סיבת כשל הקמת ה-Job Object (ריק בהצלחה) — מדווח ל-Dart דרך
   // "jobObjectStatus" ונרשם ל-errors.txt לאבחון msedgewebview2 יתומים.

@@ -126,22 +126,31 @@ Win32Window::~Win32Window() {
 bool Win32Window::Create(const std::wstring& title,
                          const Point& origin,
                          const Size& size) {
-  Destroy();
-
-  const wchar_t* window_class =
-      WindowClassRegistrar::GetInstance()->GetWindowClass();
-
   const POINT target_point = {static_cast<LONG>(origin.x),
                               static_cast<LONG>(origin.y)};
   HMONITOR monitor = MonitorFromPoint(target_point, MONITOR_DEFAULTTONEAREST);
   UINT dpi = FlutterDesktopGetDpiForMonitor(monitor);
   double scale_factor = dpi / 96.0;
 
+  RECT frame{};
+  frame.left = Scale(origin.x, scale_factor);
+  frame.top = Scale(origin.y, scale_factor);
+  frame.right = frame.left + Scale(size.width, scale_factor);
+  frame.bottom = frame.top + Scale(size.height, scale_factor);
+  return CreatePhysical(title, frame);
+}
+
+bool Win32Window::CreatePhysical(const std::wstring& title,
+                                 const RECT& frame) {
+  Destroy();
+
+  const wchar_t* window_class =
+      WindowClassRegistrar::GetInstance()->GetWindowClass();
+
   HWND window = CreateWindow(
-      window_class, title.c_str(), WS_OVERLAPPEDWINDOW,
-      Scale(origin.x, scale_factor), Scale(origin.y, scale_factor),
-      Scale(size.width, scale_factor), Scale(size.height, scale_factor),
-      nullptr, nullptr, GetModuleHandle(nullptr), this);
+      window_class, title.c_str(), WS_OVERLAPPEDWINDOW, frame.left, frame.top,
+      frame.right - frame.left, frame.bottom - frame.top, nullptr, nullptr,
+      GetModuleHandle(nullptr), this);
 
   if (!window) {
     return false;
@@ -274,7 +283,17 @@ void Win32Window::SetChildContent(HWND content) {
   MoveWindow(content, frame.left, frame.top, frame.right - frame.left,
              frame.bottom - frame.top, true);
 
-  SetFocus(child_content_);
+  // ⚠️ **רק כשהחלון כבר גלוי.** `SetFocus` על ילד מפעיל גם את החלון העליון
+  // שלו, וחלון אוצריא נוצר **מוסתר** ונחשף רק בפריים הראשון — כשנייה
+  // שלמה אחר כך. השורה הזו (מקוד ה-runner הסטנדרטי, שנכתב לחלון יחיד)
+  // גנבה אפוא את הפוקוס מהחלון הראשי לפני שהיה בכלל מה לראות: המשתמש
+  // המשיך להקליד, וההקלדה הלכה לחלון בלתי-נראה.
+  //
+  // אין כאן אובדן: `WM_ACTIVATE` שמעל מעביר את הפוקוס לתוכן בכל הפעלה,
+  // כולל זו שהחשיפה (`RevealOnFirstFrame`) מייצרת.
+  if (::IsWindowVisible(window_handle_)) {
+    SetFocus(child_content_);
+  }
 }
 
 RECT Win32Window::GetClientArea() {
