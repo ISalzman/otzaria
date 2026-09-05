@@ -60,6 +60,14 @@ String decodeHtmlEntities(String text) {
   });
 }
 
+/// ממיר ישויות רווח לצורה שההדגשה מזהה, בלי לשנות תגיות או ישויות תוכן.
+String normalizeHtmlWhitespaceEntities(String text) {
+  return text.replaceAll(
+    RegExp(r'&(nbsp|thinsp|ensp|emsp);', caseSensitive: false),
+    ' ',
+  );
+}
+
 /// רגקס להסרת ניקוד וטעמים.
 final RegExp _vowelsAndCantillation = RegExp(r'[֑-ׇ]');
 

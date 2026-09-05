@@ -1004,7 +1004,7 @@ class _LinksListViewState extends State<LinksListView> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             SmartTextWidget(
-              text: content,
+              text: utils.normalizeHtmlWhitespaceEntities(content),
               settings: buildSelectedLinkRenderSettings(
                 settingsState: settingsState,
                 displayProfile: widget.displayProfile,

@@ -9,6 +9,8 @@ import 'package:otzaria/settings/engine/settings_event.dart';
 import 'package:otzaria/settings/engine/settings_state.dart';
 import 'package:otzaria/text_display/models/text_display_profile.dart';
 import 'package:otzaria/widgets/commentary/links_list_view.dart';
+import 'package:otzaria/widgets/smart_text/smart_text_widget.dart';
+import 'package:otzaria/widgets/smart_text/text_renderer_service.dart';
 import 'package:otzaria/widgets/text/rtl_text_field.dart';
 
 import '../../helpers/memory_settings_cache.dart';
@@ -140,6 +142,17 @@ void main() {
       await _searchInContent(tester, 'ודר שאל');
 
       expect(find.text('לא נמצאו קישורים התואמים לחיפוש'), findsNothing);
+      await tester.tap(find.byType(ExpansionTile));
+      await tester.pumpAndSettle();
+      final renderedLink = tester.widget<SmartTextWidget>(
+        find.byType(SmartTextWidget),
+      );
+      final highlighted = TextRendererService.processText(
+        renderedLink.text,
+        renderedLink.settings,
+      );
+      expect(highlighted, contains('<span style="color: red">ודר</span>'));
+      expect(highlighted, contains('<span style="color: red">שאל</span>'));
     });
 
     testWidgets('תגית inline בתוך הביטוי אינה חוסמת אותו', (tester) async {
