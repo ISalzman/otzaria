@@ -1434,10 +1434,10 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     );
   }
 
-  Future<void> _onUpdateVisibleIndecies(
+  void _onUpdateVisibleIndecies(
     UpdateVisibleIndecies event,
     Emitter<TextBookState> emit,
-  ) async {
+  ) {
     if (state is TextBookLoaded) {
       final currentState = state as TextBookLoaded;
 
@@ -1469,9 +1469,11 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
           (currentState.visibleIndices.isEmpty ||
               currentState.visibleIndices.first !=
                   event.visibleIndecies.first)) {
-        newTitle = await refFromIndex(
+        // סינכרוני בכוונה: `await` כאן היה מאפשר לאירועים אחרים לפלוט מצב
+        // חדש, ואז ה-emit שבהמשך היה דורס אותם עם צילום מיושן.
+        newTitle = refFromTocList(
           event.visibleIndecies.first,
-          Future.value(currentState.tableOfContents),
+          currentState.tableOfContents,
         );
       }
 

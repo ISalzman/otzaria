@@ -3,6 +3,7 @@
 
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/tour/bloc/tour_state.dart';
@@ -413,9 +414,18 @@ class TourCubit extends Cubit<TourState> {
   }
 
   bool _canShowTip(LiveTipId tipId) {
+    if (liveTipSpecById(tipId).audience == LiveTipAudience.desktopOnly &&
+        _isMobilePlatform) {
+      return false;
+    }
     return !state.shownTips.contains(tipId) &&
         !state.resolvedTips.contains(tipId);
   }
+
+  /// נגזר מ-defaultTargetPlatform (ולא מ-Platform) כדי שיהיה ניתן לזיוף בטסט.
+  static bool get _isMobilePlatform =>
+      defaultTargetPlatform == TargetPlatform.android ||
+      defaultTargetPlatform == TargetPlatform.iOS;
 
   /// טיפ "הידעת?" אינו מוצג בהפעלות הראשונות, אלא רק מהסף ואילך.
   bool _hasLaunchesAtLeast(int minimumLaunchCount) {

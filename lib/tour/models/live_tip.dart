@@ -78,21 +78,26 @@ class TourInteraction extends Equatable {
   ];
 }
 
+/// קהל היעד של טיפ: [desktopOnly] מסנן טיפ שמפנה לפעולה שאינה קיימת במובייל.
+enum LiveTipAudience { all, desktopOnly }
+
 class LiveTipSpec extends Equatable {
   final LiveTipId id;
   final TourSpotlightArea area;
   final String title;
   final String description;
+  final LiveTipAudience audience;
 
   const LiveTipSpec({
     required this.id,
     required this.area,
     required this.title,
     required this.description,
+    this.audience = LiveTipAudience.all,
   });
 
   @override
-  List<Object?> get props => [id, area, title, description];
+  List<Object?> get props => [id, area, title, description, audience];
 }
 
 const List<LiveTipSpec> liveTipSpecs = [
@@ -144,6 +149,7 @@ const List<LiveTipSpec> liveTipSpecs = [
         'כמעט לכל פעולה באוצריא יש קיצור מקלדת, ואפשר גם להתאים אותו אישית. '
         'היכנסו להגדרות ← קיצורי מקלדת כדי לצפות בכל הקיצורים ולשנות אותם '
         'להרגלי העבודה שלכם.',
+    audience: LiveTipAudience.desktopOnly,
   ),
   LiveTipSpec(
     id: LiveTipId.printHint,

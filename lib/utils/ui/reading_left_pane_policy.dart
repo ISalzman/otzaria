@@ -23,12 +23,9 @@ bool isCompactReadingLayout({double? screenWidth}) {
 }
 
 bool shouldAutoOpenReadingLeftPane({double? screenWidth}) {
-  if (Settings.getValue<bool>('key-pin-sidebar') ?? false) {
-    return true;
-  }
-
   final isDefaultOpen =
-      Settings.getValue<bool>('key-default-sidebar-open') ?? false;
+      (Settings.getValue<bool>('key-pin-sidebar') ?? false) ||
+      (Settings.getValue<bool>('key-default-sidebar-open') ?? false);
   if (!isDefaultOpen) {
     return false;
   }
@@ -41,7 +38,10 @@ bool resolveInitialReadingLeftPaneVisibility({
   required bool hasSearchText,
   double? screenWidth,
 }) {
-  if (Settings.getValue<bool>('key-pin-sidebar') ?? false) {
+  // הנעיצה אינה עוקפת מסך צר: שם החלונית היא overlay עם scrim שחוסם את
+  // התוכן, וכפתור ביטול הנעיצה מוסתר.
+  if ((Settings.getValue<bool>('key-pin-sidebar') ?? false) &&
+      !isCompactReadingLayout(screenWidth: screenWidth)) {
     return true;
   }
 

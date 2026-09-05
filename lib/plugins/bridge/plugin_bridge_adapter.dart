@@ -449,7 +449,8 @@ class PluginBridgeDependencies {
       })
     >
   >
-  Function(String reference)? resolveReference;
+  Function(String reference)?
+  resolveReference;
 
   /// פותר הפניה לרמת שורה (פסוק/סעיף) דרך ה-heRef הפר-שורתי — מדויק מתחת
   /// לרזולוציית ה-TOC. אופציונלי — אם לא סופק או שאין התאמה, `openBookAtRef`
@@ -1062,30 +1063,30 @@ class PluginBridgeAdapter {
           if (resolve == null) return <dynamic>[];
           final hits = await resolve(ref);
           final books = library.getAllBooks();
-          return hits
-              .take(limit)
-              .map((h) {
-                // ה-id המספרי חד-משמעי רק בספרי הספרייה: `user_books.db`
-                // מקצה מזהים באותו טווח, ולכן id של ספר אישי אינו מזהה
-                // ספר יחיד. מוחזר null כדי שצרכן לא יבנה עליו קישור עומק.
-                final identity = (h.isUserBook || h.bookId < 0)
-                    ? null
-                    : books.firstWhereOrNull((b) => b.id == h.bookId);
-                return {
-                  'id': identity?.id,
-                  'bookId': h.title,
-                  if (identity != null) 'bookUid': PluginBookIdentity.uidOf(identity),
-                  if (identity != null) 'type': PluginBookIdentity.typeOf(identity),
-                  'title': h.title,
-                  'reference': h.reference,
-                  'index': h.index,
-                  'isPdf': h.isPdf,
-                  'isSourceLine': h.isSourceLine,
-                  'isUserBook': h.isUserBook,
-                  'bookPath': h.bookPath,
-                };
-              })
-              .toList();
+          return hits.take(limit).map((h) {
+            // ה-id המספרי חד-משמעי רק בספרי הספרייה: `user_books.db`
+            // מקצה מזהים באותו טווח, ולכן id של ספר אישי אינו מזהה
+            // ספר יחיד. מוחזר null כדי שצרכן לא יבנה עליו קישור עומק.
+            final identity = (h.isUserBook || h.bookId < 0)
+                ? null
+                : books.firstWhereOrNull(
+                    (b) => b is TextBook && !b.isUserBook && b.id == h.bookId,
+                  );
+            return {
+              'id': identity?.id,
+              'bookId': h.title,
+              if (identity != null)
+                'bookUid': PluginBookIdentity.uidOf(identity),
+              if (identity != null) 'type': PluginBookIdentity.typeOf(identity),
+              'title': h.title,
+              'reference': h.reference,
+              'index': h.index,
+              'isPdf': h.isPdf,
+              'isSourceLine': h.isSourceLine,
+              'isUserBook': h.isUserBook,
+              'bookPath': h.bookPath,
+            };
+          }).toList();
         }
       case 'getBookMetadata':
         // spec: accepts id, bookId (= title in otzaria), type — all optional,

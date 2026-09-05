@@ -1355,6 +1355,7 @@ Future<void> main() async {
 
   group('PluginBridgeAdapter.library.resolveRef', () {
     late TextBook pesachim;
+    late Category category;
 
     PluginBridgeAdapter buildAdapter({
       Future<List<_RefHit>> Function(String)? resolveReference,
@@ -1385,7 +1386,7 @@ Future<void> main() async {
 
     setUp(() {
       pesachim = TextBook(id: 42, title: 'פסחים', categoryId: 1);
-      final category = Category(
+      category = Category(
         title: 'ש"ס',
         description: '',
         shortDescription: '',
@@ -1456,6 +1457,32 @@ Future<void> main() async {
       expect(hit['index'], 7);
     });
 
+    test('ספר אישי עם id חופף אינו מחליף זהות של ספר רשמי', () async {
+      category.books.insert(
+        0,
+        PdfBook(
+          id: 42,
+          title: 'ספר אישי',
+          path: '/tmp/personal.pdf',
+          isUserBook: true,
+        ),
+      );
+      final adapter = buildAdapter(
+        resolveReference: (reference) async => [
+          _refHit(title: 'פסחים', index: 1234, bookId: 42),
+        ],
+      );
+
+      final result =
+          await adapter.execute('library', 'resolveRef', {'ref': 'פסחים לד'})
+              as List<dynamic>;
+
+      final hit = result.single as Map<String, dynamic>;
+      expect(hit['id'], 42);
+      expect(hit['type'], 'text');
+      expect(hit['bookUid'], isNotNull);
+    });
+
     test('PDF ממערכת הקבצים מוחזר בלי id', () async {
       final adapter = buildAdapter(
         resolveReference: (reference) async => [
@@ -1516,7 +1543,6 @@ Future<void> main() async {
 
       expect(result, hasLength(2));
     });
-
   });
 
   group('PluginBridgeAdapter.library.getBookContent', () {

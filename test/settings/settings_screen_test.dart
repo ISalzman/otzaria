@@ -3,6 +3,7 @@
 // `_changeTab` שינה רק את `_selectedIndex` בלי לנקות את `_searchQuery`.
 
 import 'package:bloc_test/bloc_test.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
@@ -245,5 +246,62 @@ void main() {
         );
       },
     );
+    // "קיצורי מקשים" זמין רק בדסקטופ (ShortcutsSettingsTab מציג במובייל
+    // "זמין רק בדסקטופ"), ולכן אסור שהשורה תופיע ברשימת המובייל.
+    testWidgets('מובייל: "קיצורי מקשים" אינו ברשימת ההגדרות', (tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.android;
+      await tester.binding.setSurfaceSize(const Size(411, 731));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(buildScreen());
+      await tester.pump();
+      await tester.pump();
+
+      expect(find.text('קיצורי מקשים'), findsNothing);
+      expect(find.text('מערכת'), findsWidgets, reason: 'שאר הטאבים נשארו');
+      debugDefaultTargetPlatformOverride = null;
+    });
+
+    testWidgets('דסקטופ: "קיצורי מקשים" מוצג בסרגל הצד', (tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+      await tester.binding.setSurfaceSize(const Size(1400, 900));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(buildScreen());
+      await tester.pump();
+      await tester.pump();
+
+      expect(
+        find.widgetWithText(SidebarNavItem, 'קיצורי מקשים'),
+        findsOneWidget,
+      );
+      debugDefaultTargetPlatformOverride = null;
+    });
+
+    testWidgets('טאבלט Android: "קיצורי מקשים" אינו בסרגל הצד', (tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.android;
+      await tester.binding.setSurfaceSize(const Size(900, 900));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(buildScreen());
+      await tester.pump();
+      await tester.pump();
+
+      expect(find.text('קיצורי מקשים'), findsNothing);
+      debugDefaultTargetPlatformOverride = null;
+    });
+
+    testWidgets('חלון דסקטופ צר: "קיצורי מקשים" נשאר בתפריט', (tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+      await tester.binding.setSurfaceSize(const Size(411, 731));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(buildScreen());
+      await tester.pump();
+      await tester.pump();
+
+      expect(find.text('קיצורי מקשים'), findsOneWidget);
+      debugDefaultTargetPlatformOverride = null;
+    });
   });
 }
