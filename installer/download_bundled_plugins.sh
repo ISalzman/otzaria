@@ -71,7 +71,18 @@ for i in "${!store_ids[@]}"; do
   target="$output_dir/$manifest_id.otzplugin"
   url="$store_base_url/api/plugins/$store_id/download?appVersion=$app_version"
   echo "  $manifest_id <- $url"
-  curl -L --fail --silent --show-error "$url" -o "$target"
+  # 404 = אין בחנות גרסת תוסף תואמת לאוצריא הזו. שינוי שמפתח תוסף עושה באתר
+  # לא יפיל את כל הבנייה — מדלגים; כל שאר קודי התשובה נשארים קטלניים.
+  http_code="$(curl -L --silent --show-error --write-out '%{http_code}' "$url" -o "$target")"
+  if [ "$http_code" = '404' ]; then
+    echo "::warning::No '$manifest_id' release compatible with Otzaria $app_version - not bundled"
+    rm -f "$target"
+    continue
+  fi
+  case "$http_code" in
+    2??) ;;
+    *) echo "Download failed for '$manifest_id': HTTP $http_code" >&2; exit 1 ;;
+  esac
 
   # תשובת שגיאה שהוגשה כ-200 (דף HTML) נשמרת כארכיון תקין למראה ונכשלת רק
   # אצל המשתמש — בודקים את חתימת ה-ZIP כאן.
@@ -90,3 +101,10 @@ for i in "${!store_ids[@]}"; do
   size_kb=$(( ($(wc -c < "$target") + 512) / 1024 ))
   echo "    ok ($size_kb KB, v$(printf '%s' "$manifest_json" | jq -r '.version'))"
 done
+
+# כל התוספים דולגו — תיקייה ריקה תשבור צרכן שמעתיק ממנה בגלוב, ולכן מתנהגים
+# בדיוק כמו ברשימה ריקה: אין תיקייה.
+if [ -z "$(ls -A "$output_dir")" ]; then
+  echo 'No compatible bundled plugins - skipping.'
+  rm -rf "$output_dir"
+fi

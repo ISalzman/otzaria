@@ -73,7 +73,20 @@ foreach ($plugin in $plugins) {
     $target = Join-Path $outputDir "$($plugin.ManifestId).otzplugin"
     $url = "$storeBaseUrl/api/plugins/$($plugin.StoreId)/download?appVersion=$appVersion"
     Write-Host "  $($plugin.ManifestId) <- $url"
-    Invoke-WebRequest -Uri $url -OutFile $target -UseBasicParsing
+    # 404 = אין בחנות גרסת תוסף תואמת לאוצריא הזו. שינוי שמפתח תוסף עושה באתר
+    # לא יפיל את כל הבנייה — מדלגים; כל שאר קודי התשובה נשארים קטלניים.
+    $notCompatible = $false
+    try {
+        Invoke-WebRequest -Uri $url -OutFile $target -UseBasicParsing
+    } catch {
+        $response = $_.Exception.Response
+        if ($null -eq $response -or [int]$response.StatusCode -ne 404) { throw }
+        Write-Host "::warning::No '$($plugin.ManifestId)' release compatible with Otzaria $appVersion - not bundled"
+        Remove-Item $target -Force -ErrorAction SilentlyContinue
+        $notCompatible = $true
+    }
+    # continue בתוך catch יוצא מהלולאה כולה ב-PowerShell — לכן דגל.
+    if ($notCompatible) { continue }
 
     # תשובת שגיאה שהוגשה כ-200 (דף HTML) נשמרת כארכיון תקין למראה ונכשלת רק
     # אצל המשתמש — בודקים את חתימת ה-ZIP כאן.
@@ -101,4 +114,10 @@ foreach ($plugin in $plugins) {
 
     $sizeKb = [math]::Round((Get-Item $target).Length / 1KB, 1)
     Write-Host "    ok ($sizeKb KB, v$($manifest.version))"
+}
+
+# כל התוספים דולגו — Source ריק במתקין, ולכן מתנהגים בדיוק כמו ברשימה ריקה.
+if (-not (Get-ChildItem $outputDir -File)) {
+    Write-Host 'No compatible bundled plugins - skipping.'
+    Remove-Item -Path $outputDir -Recurse -Force
 }
