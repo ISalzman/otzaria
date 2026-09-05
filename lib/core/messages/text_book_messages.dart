@@ -30,6 +30,8 @@ abstract class TextBookMessages {
       'לא ניתן לצלם את תצוגת "צורת הדף" לצורך הדפסה';
   static const String wordFileSaved = 'קובץ Word נשמר בהצלחה';
   static const String textFileSaved = 'קובץ טקסט נשמר בהצלחה';
+  static const String editableExportRestricted =
+      'ספר זה אינו ניתן לייצוא לפורמט הניתן לעריכה. ניתן להדפיסו או לשמרו כ-PDF.';
   static const String exportFileLocked =
       'לא ניתן לשמור את הקובץ כי הוא פתוח בתוכנה אחרת. יש לסגור אותו ולנסות שוב.';
   static const String noCommentatorsToPrint = 'אין מפרשים להדפסה';

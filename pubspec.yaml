@@ -199,6 +199,7 @@ flutter:
     - assets/dictionary.json
     - assets/Acronyms.json
     - assets/support_organizations.json
+    - assets/export_restricted_books.json
 
   fonts:
     - family: TaameyAshkenaz

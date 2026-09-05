@@ -708,6 +708,9 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
         bookId: bookTitle,
         documentTitle: bookTitle,
         prebuiltBlocks: blocks,
+        activeCommentators: groups
+            .map((group) => group.bookTitle)
+            .toList(growable: false),
         removeNikud: profile.removeNikud,
         removeTaamim: profile.removeTeamim,
       ),

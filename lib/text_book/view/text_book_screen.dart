@@ -53,6 +53,7 @@ import 'package:otzaria/models/books.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/printing/print_content_models.dart';
 import 'package:otzaria/printing/view/printing_screen.dart';
+import 'package:otzaria/printing/export_restriction_service.dart';
 import 'package:otzaria/printing/word_export_service.dart';
 import 'package:otzaria/text_book/view/tabbed_commentary_panel.dart';
 import 'package:otzaria/text_book/view/text_book_scaffold.dart';
@@ -668,6 +669,10 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   }
 
   Future<void> _exportWholeBook(TextBookLoaded state) async {
+    if (ExportRestrictionService.isRestricted(state.book.title)) {
+      UiSnack.showError(TextBookMessages.editableExportRestricted);
+      return;
+    }
     if (!await verifySaferModePassword(context)) return;
     if (!mounted) return;
 
@@ -1981,7 +1986,8 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       ),
 
       // ייצוא הספר המלא - Word מעוצב או טקסט פשוט
-      if (!widget.isInCombinedView)
+      if (!widget.isInCombinedView &&
+          !ExportRestrictionService.isRestricted(state.book.title))
         (
           50,
           ActionButtonData(
@@ -2055,12 +2061,13 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
                 tooltip: 'הדפסה',
                 onPressed: () => _handlePrintPress(state),
               ),
-              ActionButtonData(
-                widget: const SizedBox.shrink(),
-                icon: FluentIcons.arrow_export_ltr_24_regular,
-                tooltip: 'ייצוא הספר',
-                onPressed: () => _exportWholeBook(state),
-              ),
+              if (!ExportRestrictionService.isRestricted(state.book.title))
+                ActionButtonData(
+                  widget: const SizedBox.shrink(),
+                  icon: FluentIcons.arrow_export_ltr_24_regular,
+                  tooltip: 'ייצוא הספר',
+                  onPressed: () => _exportWholeBook(state),
+                ),
               ActionButtonData(
                 widget: const SizedBox.shrink(),
                 icon: OtzariaIcons.book_information_24_regular,

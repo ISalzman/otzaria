@@ -19,5 +19,8 @@ abstract class PdfMessages {
   static const String fileLockedByAnotherApp =
       'לא ניתן לשמור את הקובץ כי הוא פתוח בתוכנה אחרת. יש לסגור אותו ולנסות שוב.';
 
+  static const String editableExportRestricted =
+      'ספר זה אינו ניתן לייצוא לפורמט הניתן לעריכה. ניתן להדפיסו או לשמרו כ-PDF.';
+
   static String fileExportFailed(Object error) => 'ייצוא הקובץ נכשל: $error';
 }

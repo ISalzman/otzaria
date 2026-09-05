@@ -20,6 +20,7 @@ import 'package:otzaria/printing/print_content_models.dart';
 import 'package:otzaria/printing/serial_latest_runner.dart';
 import 'package:otzaria/printing/printing_helpers.dart';
 import 'package:otzaria/printing/pdf_text_rasterizer.dart';
+import 'package:otzaria/printing/export_restriction_service.dart';
 import 'package:otzaria/printing/word_export_service.dart';
 import 'package:otzaria/utils/file/save_file_with_extension.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart';
@@ -195,7 +196,24 @@ class _PrintingScreenState extends State<PrintingScreen> {
   static const _destinationKey = 'key-print-destination';
   late _PrintDestination _destination;
 
-  bool get _supportsWord => widget.createPdfOverride == null;
+  bool get _supportsWord =>
+      widget.createPdfOverride == null && !_editableExportRestricted;
+
+  /// ספר שהוגבל לייצוא לפורמט קל לעריכה — גם כשהוא מגיע רק כמפרש שנכלל בפלט.
+  bool get _editableExportRestricted =>
+      ExportRestrictionService.blocksEditableExport(
+        documentTitle: widget.documentTitle ?? widget.bookId,
+        commentariesIncluded:
+            widget.prebuiltBlocks != null || _includeCommentaries,
+        commentators: widget.activeCommentators,
+      );
+
+  /// מחזיר את היעד ל-PDF כשייצוא Word חדל להיות זמין (למשל בהכללת מפרש מוגבל).
+  void _syncDestinationWithWordSupport() {
+    if (_destination == _PrintDestination.word && !_supportsWord) {
+      _destination = _PrintDestination.pdf;
+    }
+  }
 
   void _setDestination(_PrintDestination value) {
     setState(() => _destination = value);
@@ -219,6 +237,10 @@ class _PrintingScreenState extends State<PrintingScreen> {
     if (_destination == _PrintDestination.word && !_supportsWord) {
       _destination = _PrintDestination.pdf;
     }
+    // הרשימה נטענת מ-assets ולכן עשויה עוד לא להיות זמינה כאן.
+    ExportRestrictionService.ensureLoaded().then((_) {
+      if (mounted) setState(_syncDestinationWithWordSupport);
+    });
 
     // אתחול הגדרות ניקוד וטעמים לפי תצוגת הספר
     final profile = widget.displayProfile;
@@ -1558,6 +1580,10 @@ class _PrintingScreenState extends State<PrintingScreen> {
       case _PrintDestination.pdf:
         await _saveToFile(_ExportFormat.pdf);
       case _PrintDestination.word:
+        if (_editableExportRestricted) {
+          UiSnack.showError(PdfMessages.editableExportRestricted);
+          return;
+        }
         await _saveToFile(_ExportFormat.word);
     }
   }
@@ -2038,6 +2064,7 @@ class _PrintingScreenState extends State<PrintingScreen> {
                                               onChanged: (value) {
                                                 setState(() {
                                                   _includeCommentaries = value;
+                                                  _syncDestinationWithWordSupport();
                                                   _refreshPreview();
                                                 });
                                               },

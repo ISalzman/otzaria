@@ -58,6 +58,7 @@ import 'package:otzaria/library_update/services/startup_recovery_check.dart';
 import 'package:seforim_library_updater/seforim_library_updater.dart';
 import 'package:zstandard/zstandard.dart';
 import 'package:otzaria/work_status/work_status_cubit.dart';
+import 'package:otzaria/printing/export_restriction_service.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_bloc.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_event.dart';
 import 'package:otzaria/plugins/bloc/plugin_updates_cubit.dart';
@@ -818,6 +819,11 @@ Future<void> _runDeferredCacheWarmups() async {
   unawaited(
     DictionaryLookupRepository.instance.ensureLoaded().catchError((e) {
       if (kDebugMode) debugPrint('Failed to warm up dictionary: $e');
+    }),
+  );
+  unawaited(
+    ExportRestrictionService.ensureLoaded().catchError((e) {
+      if (kDebugMode) debugPrint('Failed to load export restrictions: $e');
     }),
   );
   unawaited(

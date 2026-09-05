@@ -1218,6 +1218,9 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
         bookId: bookTitle,
         documentTitle: bookTitle,
         prebuiltBlocks: blocks,
+        activeCommentators: groups
+            .map((group) => group.bookTitle)
+            .toList(growable: false),
         removeNikud: widget.displayProfile.removeNikud,
         removeTaamim: widget.displayProfile.removeTeamim,
       ),
