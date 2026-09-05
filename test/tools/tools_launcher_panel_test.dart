@@ -54,6 +54,7 @@ ToolCatalogEntry _pluginEntry(
   String? name,
   String sourceType = 'packaged',
   bool allowOrderBeforeBuiltIns = false,
+  bool networkEnabled = false,
 }) => ToolCatalogEntry(
   toolId: pluginId,
   label: label,
@@ -70,7 +71,7 @@ ToolCatalogEntry _pluginEntry(
     pinnedToNavRail: false,
     showInTools: true,
     allowOrderBeforeBuiltInsGranted: allowOrderBeforeBuiltIns,
-    networkAccessGranted: false,
+    networkAccessGranted: networkEnabled,
     sourceType: sourceType,
     devRootPath: sourceType == 'development' ? '/dev/$pluginId' : null,
     manifest: PluginManifest(
@@ -85,7 +86,7 @@ ToolCatalogEntry _pluginEntry(
       minAppVersion: '1.0.0',
       sdkVersion: '1.x',
       permissions: const [],
-      networkEnabled: false,
+      networkEnabled: networkEnabled,
       networkAllowlist: const [],
       toolTabTitle: label,
       toolTabOrder: 900,
@@ -2014,6 +2015,105 @@ void main() {
         find.byType(ToolTile),
         findsNWidgets(kBuiltInToolsCatalog.length + 2),
       );
+    });
+
+    group('שולי התוספים', () {
+      const disclaimer =
+          'התוספים אינם מפותחים ע"י אוצריא, ואין לפנות אליהם בנושא';
+      const storeLink = 'לחנות התוספים המלאה';
+
+      Future<void> scrollToEnd(WidgetTester tester) async {
+        await tester.drag(
+          find.byType(CustomScrollView),
+          const Offset(0, -2000),
+        );
+        await tester.pumpAndSettle();
+      }
+
+      testWidgets('בלי תוספים — קישור לחנות בלי ההבהרה', (tester) async {
+        await pumpPanel(tester, pluginState: PluginSystemLoaded(const []));
+        await scrollToEnd(tester);
+        expect(find.text(disclaimer), findsNothing);
+        expect(find.text(storeLink), findsOneWidget);
+      });
+
+      testWidgets('עם תוספים — הבהרה וקישור לחנות בתחתית הרשימה', (
+        tester,
+      ) async {
+        await pumpPanel(tester);
+        await scrollToEnd(tester);
+        expect(find.text(disclaimer), findsOneWidget);
+        expect(find.text(storeLink), findsOneWidget);
+        expect(find.textContaining('מוסתרים במצב מנותק'), findsNothing);
+      });
+
+      testWidgets('מצב מנותק — שורת ספירת התוספים המוסתרים מעל ההבהרה', (
+        tester,
+      ) async {
+        await pumpPanel(
+          tester,
+          settings: SettingsState.initial().copyWith(isOfflineMode: true),
+          pluginState: PluginSystemLoaded([
+            _pluginEntry('com.example.a', 'תוסף א').plugin!,
+            _pluginEntry(
+              'com.example.net1',
+              'רשת א',
+              networkEnabled: true,
+            ).plugin!,
+            _pluginEntry(
+              'com.example.net2',
+              'רשת ב',
+              networkEnabled: true,
+            ).plugin!,
+          ]),
+        );
+        await scrollToEnd(tester);
+        expect(find.text('רשת א'), findsNothing);
+        final counter = find.text('2 תוספים הדורשים רשת מוסתרים במצב מנותק');
+        expect(counter, findsOneWidget);
+        expect(
+          tester.getTopLeft(counter).dy,
+          lessThan(tester.getTopLeft(find.text(disclaimer)).dy),
+        );
+      });
+
+      testWidgets('מצב מנותק וכל התוספים מוסתרים — עדיין מוצגת הספירה', (
+        tester,
+      ) async {
+        await pumpPanel(
+          tester,
+          settings: SettingsState.initial().copyWith(isOfflineMode: true),
+          pluginState: PluginSystemLoaded([
+            _pluginEntry(
+              'com.example.net1',
+              'רשת א',
+              networkEnabled: true,
+            ).plugin!,
+          ]),
+        );
+        await scrollToEnd(tester);
+        expect(
+          find.text('1 תוספים הדורשים רשת מוסתרים במצב מנותק'),
+          findsOneWidget,
+        );
+        expect(find.text(storeLink), findsOneWidget);
+      });
+
+      testWidgets('מצב מקוון — תוסף רשת מוצג ואין ספירה', (tester) async {
+        await pumpPanel(
+          tester,
+          pluginState: PluginSystemLoaded([
+            _pluginEntry(
+              'com.example.net1',
+              'רשת א',
+              networkEnabled: true,
+            ).plugin!,
+          ]),
+        );
+        await scrollToEnd(tester);
+        expect(find.text('רשת א'), findsOneWidget);
+        expect(find.textContaining('מוסתרים במצב מנותק'), findsNothing);
+      });
     });
   });
 
