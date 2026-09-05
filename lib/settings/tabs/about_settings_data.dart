@@ -41,6 +41,11 @@ const aboutRegularEditorsLabel = 'מהדירים שההדירו בין 5 ל-10 �
 
 const aboutTopEditors = <Map<String, String>>[
   {
+    'name': 'חנניה',
+    'url': 'https://otzaria.org/forum/user/%D7%97%D7%A0%D7%A0%D7%99%D7%94',
+    'description': 'טרח והשיג ספרים רבים לאוצריא',
+  },
+  {
     'name': 'י. פל',
     'url': 'https://forum.otzaria.org/user/%D7%99.-%D7%A4%D7%9C.',
   },
