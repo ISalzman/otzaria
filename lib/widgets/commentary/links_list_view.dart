@@ -12,6 +12,7 @@ import 'package:otzaria/services/commentary_service.dart';
 import 'package:otzaria/services/target_line_links_service.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/tabs/models/tab.dart';
+import 'package:otzaria/text_book/utils/commentary_search_utils.dart';
 import 'package:otzaria/text_book/utils/link_anchor_markers.dart';
 import 'package:otzaria/tools/dictionary/widgets/laaz_commentary_subblock.dart';
 import 'package:otzaria/widgets/feedback/app_future_builder.dart';
@@ -44,15 +45,10 @@ RenderSettings buildSelectedLinkRenderSettings({
     fontWeight: settingsState.commentatorsFontBold ? FontWeight.bold : null,
     lineHeight: settingsState.lineHeight,
     justifyText: true,
+    // חייב להתאים ל-partialWordMatch של הסינון, אחרת קישור נכנס לרשימה
+    // בלי שההתאמה שהכניסה אותו מודגשת בו.
+    partialWordHighlight: true,
   );
-}
-
-@visibleForTesting
-String normalizeSelectedLinkText(String text) {
-  return text
-      .replaceAll('&nbsp;', ' ')
-      .replaceAll(RegExp(r'[^\S\r\n]+'), ' ')
-      .trim();
 }
 
 @visibleForTesting
@@ -689,30 +685,37 @@ class _LinksListViewState extends State<LinksListView> {
 
       // חיפוש בתוכן אם הופעל
       if (_searchInContent) {
+        String content;
         try {
-          final content = await link.content;
-          final cleanContent = normalizeSelectedLinkText(
-            utils.stripHtmlIfNeeded(content),
-          ).toLowerCase();
-          if (cleanContent.contains(query)) {
-            filteredLinks.add(link);
-            _linksWithSearchResults.add(instanceKey); // מסמן שיש תוצאות בתוכן
-            _contentCache[contentKey] = link.content; // טוען את התוכן למטמון
-
-            // פותח אוטומטית את הקישור הראשון עם תוצאות
-            if (_linksWithSearchResults.length == 1) {
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                if (mounted) {
-                  setState(() {
-                    _expanded[instanceKey] = true;
-                  });
-                }
-              });
-            }
-          }
+          content = await link.content;
         } catch (_) {
-          // אם יש שגיאה בטעינת התוכן, מוסיף בכל זאת אם מתאים לכותרת
-          // (כבר בדקנו את זה למעלה)
+          content = '';
+        }
+        // אותו מונה של חיפוש המפרשים: מתעלם מניקוד ומפיסוק כמו כל משטחי
+        // החיפוש, ותואם את ההדגשה ש-SmartTextWidget מרנדר על אותו תוכן.
+        // הפענוח קודם לספירה — `&nbsp;` בין מילים היה חוסם ביטוי שהמשתמש רואה
+        // כרווח רגיל.
+        final matches = countCommentarySearchMatches(
+          content: utils.stripHtmlIfNeeded(content),
+          query: _searchQuery,
+          displayProfile: widget.displayProfile,
+          partialWordMatch: true,
+        );
+        if (matches > 0) {
+          filteredLinks.add(link);
+          _linksWithSearchResults.add(instanceKey); // מסמן שיש תוצאות בתוכן
+          _contentCache[contentKey] = link.content; // טוען את התוכן למטמון
+
+          // פותח אוטומטית את הקישור הראשון עם תוצאות
+          if (_linksWithSearchResults.length == 1) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) {
+                setState(() {
+                  _expanded[instanceKey] = true;
+                });
+              }
+            });
+          }
         }
       }
     }
@@ -1001,7 +1004,7 @@ class _LinksListViewState extends State<LinksListView> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             SmartTextWidget(
-              text: content,
+              text: utils.normalizeHtmlWhitespaceEntities(content),
               settings: buildSelectedLinkRenderSettings(
                 settingsState: settingsState,
                 displayProfile: widget.displayProfile,
