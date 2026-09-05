@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:otzaria/core/windowing/window_role.dart';
 import 'package:otzaria/data/cache/books_cache.dart';
 import 'package:otzaria/data/cache/acronyms_cache.dart';
 import 'package:otzaria/data/data_providers/book_composite_key.dart';
@@ -476,12 +477,14 @@ class ReferenceBooksCache {
   ///
   /// Respects [clear] via the generation counter — if the cache is cleared
   /// mid-run, the remaining batches are aborted.
+  /// בחלון משני PDFium שייך ל-isolate אחר, לכן אין הקדמה.
   Future<void> prewarmAllPdfOutlines({int maxConcurrent = 1}) async {
     // ולידציה רצה גם ב-release: ערך לא חיובי יוצר לולאה אינסופית
     // (i += 0), עדיף להיכשל בקול מאשר להקפיא את ה-isolate.
     if (maxConcurrent <= 0) {
       throw ArgumentError.value(maxConcurrent, 'maxConcurrent', 'must be > 0');
     }
+    if (WindowRole.isSecondary) return;
     final gen = _generation;
     final paths = _fsPdfBooks
         .map((entry) => entry.$2.filePath)
