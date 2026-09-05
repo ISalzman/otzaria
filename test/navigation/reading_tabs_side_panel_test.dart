@@ -23,6 +23,7 @@ import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/bloc/tabs_event.dart';
 import 'package:otzaria/tabs/bloc/tabs_state.dart';
 import 'package:otzaria/tabs/models/combined_tab.dart';
+import 'package:otzaria/tabs/models/pdf_tab.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
@@ -40,6 +41,10 @@ class _StubTab extends OpenedTab {
 }
 
 void main() {
+  setUpAll(() async {
+    await Settings.init(cacheProvider: MemorySettingsCache());
+  });
+
   late _TestTabsBloc tabsBloc;
   late _TestSettingsBloc settingsBloc;
   late _TestHistoryBloc historyBloc;
@@ -434,6 +439,43 @@ void main() {
       contains(same(tabs[2])),
     );
     expect(tabsBloc.addedEvents.whereType<SetCurrentTab>(), isEmpty);
+  });
+
+  testWidgets('נעצי כרטיסיות מוצמדות מיושרים גם כשהפעילה מציגה X', (
+    tester,
+  ) async {
+    final pdfTab = PdfBookTab(
+      book: PdfBook(title: 'ספר PDF', path: '/tmp/book.pdf'),
+      pageNumber: 1,
+    )..isPinned = true;
+    addTearDown(pdfTab.dispose);
+    final textTab = _StubTab('ספר ב')..isPinned = true;
+    await pumpPanel(tester, withTabs: [pdfTab, textTab]);
+
+    final pdfIcon = tester.getCenter(
+      find.byIcon(FluentIcons.document_pdf_16_regular),
+    );
+    final pdfTitle = tester.getCenter(find.text('ספר PDF'));
+    final textTitle = tester.getCenter(find.text('ספר ב'));
+    final pinFinder = find.byIcon(FluentIcons.pin_24_filled);
+    expect(pinFinder, findsNWidgets(2));
+    final pins = [
+      tester.getCenter(pinFinder.at(0)),
+      tester.getCenter(pinFinder.at(1)),
+    ];
+
+    // RTL: הפריט הראשון בשורה הוא הימני ביותר.
+    expect(pdfIcon.dx, greaterThan(pdfTitle.dx));
+    for (final pin in pins) {
+      expect(
+        pin.dx,
+        lessThan(pdfTitle.dx),
+        reason: 'הנעץ בקצה השמאלי, אחרי הכותרת (issue #1134)',
+      );
+      expect(pin.dx, lessThan(textTitle.dx));
+    }
+    // הנעצים של כרטיסיית PDF ושל כרטיסיית טקסט מיושרים באותו קו אנכי.
+    expect(pins[0].dx, closeTo(pins[1].dx, 0.5));
   });
 
   testWidgets('לחיצה ימנית על כרטיסיה פותחת את תפריט ההקשר', (tester) async {

@@ -274,10 +274,6 @@ class _VerticalTabRow extends StatelessWidget {
                           leading,
                           const SizedBox(width: 6),
                         ],
-                        if (tab.isPinned) ...[
-                          const Icon(FluentIcons.pin_24_filled, size: 14),
-                          const SizedBox(width: 4),
-                        ],
                         Expanded(
                           child: TabTitleTooltip(
                             message: tooltipMessage,
@@ -304,6 +300,10 @@ class _VerticalTabRow extends StatelessWidget {
                               size: 12,
                             ),
                           ),
+                        if (tab.isPinned) ...[
+                          const SizedBox(width: 4),
+                          const Icon(FluentIcons.pin_24_filled, size: 14),
+                        ],
                       ],
                     ),
             ),
