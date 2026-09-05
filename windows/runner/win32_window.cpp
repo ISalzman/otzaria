@@ -254,7 +254,7 @@ Win32Window::MessageHandler(HWND hwnd,
       ShowWindow(hwnd, SW_HIDE);
       OnWindowHidden();
       return 0;
-      
+
     case WM_DESTROY:
       window_handle_ = nullptr;
       Destroy();
@@ -312,10 +312,6 @@ Win32Window::MessageHandler(HWND hwnd,
       // ~16ms בין שלושה חלונות (783 הפעלות בהרצה של 40 שניות; עם הבדיקה
       // הזו: 77, ובלי לולאה). הגידור ב-`WA_INACTIVE` לבדו שבר רק את
       // המקרה הפשוט של שני חלונות.
-      //
-      // ⚠️ וגם **רק כשהחלון גלוי**: חלון מוסתר שקיבל הפעלה (המנוע קורא
-      // `SetFocus` על ה-view שלו ביצירה) היה מושך את המיקוד לתוכן שלו
-      // ובכך מחזק הפעלה מדומה.
       if (LOWORD(wparam) != WA_INACTIVE && child_content_ != nullptr &&
           ::IsWindowVisible(hwnd) && ::GetFocus() != child_content_) {
         SetFocus(child_content_);
