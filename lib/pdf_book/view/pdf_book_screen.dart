@@ -36,6 +36,7 @@ import 'package:otzaria/pdf_book/bloc/pdf_book_bloc.dart';
 import 'package:otzaria/pdf_book/bloc/pdf_book_event.dart' as pdf_events;
 import 'package:otzaria/pdf_book/bloc/pdf_book_state.dart';
 import 'package:otzaria/pdf_book/utils/pdf_spread_layout.dart';
+import 'package:otzaria/pdf_book/utils/pdf_viewer_activity.dart';
 import 'package:otzaria/pdf_book/utils/trackpad_axis_lock.dart';
 import 'package:otzaria/pdf_book/utils/trackpad_pan_recognizer.dart';
 import 'package:otzaria/widgets/misc/app_cursors.dart';
@@ -3708,6 +3709,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     // יכול לירות לפני onViewerReady, ואיפוס היה מאבד את הסימון. הוא
     // מנוהל ריכוזית ב-_createDocumentRef.
     if (!_waitingForStableLayout) {
+      PdfViewerActivity.instance.begin();
       setState(() {
         _waitingForStableLayout = true;
       });
@@ -3722,15 +3724,21 @@ class _PdfBookScreenState extends State<PdfBookScreen>
 
   void _onLayoutMaybeStable() {
     if (!mounted || !_waitingForStableLayout) return;
-    final controller = widget.tab.pdfViewerController;
-    if (!controller.isReady) {
-      _restartStableLayoutDebounce();
-      return;
-    }
     final startedAt = _stableLayoutStartedAt;
     final maxWaitReached =
         startedAt != null &&
         DateTime.now().difference(startedAt) >= _kStableLayoutMaxWait;
+    final controller = widget.tab.pdfViewerController;
+    if (!controller.isReady) {
+      // גם controller שלא נעשה ready מוגבל בזמן — אחרת ה-overlay ומונה
+      // PdfViewerActivity היו נשארים תקועים.
+      if (maxWaitReached) {
+        _completeStableLayoutTracking();
+      } else {
+        _restartStableLayoutDebounce();
+      }
+      return;
+    }
     if (!_isTargetPagePrefixLoaded() && !maxWaitReached) {
       _restartStableLayoutDebounce();
       return;
@@ -3776,6 +3784,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     _stableLayoutTargetPage = null;
     _stableLayoutStartedAt = null;
     if (!_waitingForStableLayout) return;
+    PdfViewerActivity.instance.end();
     if (mounted) {
       setState(() {
         _waitingForStableLayout = false;
@@ -3793,6 +3802,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     _stableLayoutStartedAt = null;
     _stableLayoutRetryCount = 0;
     _stableLayoutPrefixChecked = false;
+    if (_waitingForStableLayout) PdfViewerActivity.instance.end();
     _waitingForStableLayout = false;
     // לא מאפסים _documentFullyLoaded כאן — ראה הסבר ב-_beginStableLayoutTracking.
   }
@@ -3918,8 +3928,8 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     textSearcher?.removeListener(_onTextSearcherUpdated);
     textSearcher?.dispose();
     textSearcher = null;
-    _stableLayoutTimer?.cancel();
-    _stableLayoutTimer = null;
+    _cancelStableLayoutTracking();
+    _pageMetadataTimer?.cancel();
     pdfController.removeListener(_onPdfViewerControllerUpdate);
     _leftPaneTabController?.removeListener(_leftPaneTabControllerListener);
     widget.tab.showLeftPane.removeListener(_showLeftPaneListener);
@@ -3957,6 +3967,10 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   // מצב התצוגה האחרון שנצפה ב-BlocListener, לזיהוי מעבר בין מצבים.
   PdfLayoutMode? _lastObservedLayoutMode;
   int _lastComputedForPage = -1;
+
+  /// פתרון הכותרת, מספר השורה והקישורים ניגש ל-DB — נדחה עד שהגלילה נרגעת.
+  static const Duration _kPageMetadataDebounce = Duration(milliseconds: 150);
+  Timer? _pageMetadataTimer;
   int? _initialPageNumber; // שמירת מספר העמוד ההתחלתי
   bool _isJumping = false; // flag לציון שאנחנו בתהליך קפיצה
   bool _linksLoading = true; // true עד שטעינת הקישורים מסתיימת
@@ -4025,7 +4039,6 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     // loading. Cheap & idempotent — guarded by `_lastPrerenderTriggeredSpread`.
     _schedulePrerenderForAdjacentSpreads();
 
-    final tourCubit = context.read<TourCubit>();
     final newZoom = widget.tab.pdfViewerController.value.zoom;
     widget.tab.savedZoom = newZoom;
 
@@ -4072,7 +4085,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
 
     if (newPage == widget.tab.pageNumber) return;
     widget.tab.pageNumber = newPage;
-    final token = _lastComputedForPage = newPage;
+    _lastComputedForPage = newPage;
 
     final immediateRange = _spreadPageRangeFor(newPage);
     widget.tab.currentTitle.value =
@@ -4080,30 +4093,36 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         ? 'עמודים ${immediateRange.startPage}-${immediateRange.endPageExclusive - 1}'
         : 'עמוד $newPage';
 
-    final titles = await _resolveTitlesForPage(newPage);
-    if (!mounted) return;
-    if (token == _lastComputedForPage) {
-      widget.tab.currentTitle.value = titles.display;
+    _pageMetadataTimer?.cancel();
+    _pageMetadataTimer = Timer(
+      _kPageMetadataDebounce,
+      () => _resolvePageMetadata(newPage),
+    );
+  }
 
-      final resolved = await _resolveTextLineNumberForPage(
-        newPage,
-        resolvedTitle: titles.single,
-      );
-      if (!mounted) return;
-      widget.tab.currentTextLineNumber = resolved.start;
-      widget.tab.currentTextLineNumberEnd = resolved.end;
-      unawaited(_refreshLinksWindow());
-      _maybeRegisterPdfCommentaryOpportunity();
-      tourCubit.recordInteraction(
-        TourInteraction(
-          type: TourInteractionType.readerPositionChanged,
-          primaryValue: widget.tab.title,
-        ),
-      );
-      if (mounted) {
-        setState(() {});
-      }
-    }
+  Future<void> _resolvePageMetadata(int page) async {
+    if (!mounted) return;
+    final tourCubit = context.read<TourCubit>();
+    final titles = await _resolveTitlesForPage(page);
+    if (!mounted || page != _lastComputedForPage) return;
+    widget.tab.currentTitle.value = titles.display;
+
+    final resolved = await _resolveTextLineNumberForPage(
+      page,
+      resolvedTitle: titles.single,
+    );
+    if (!mounted || page != _lastComputedForPage) return;
+    widget.tab.currentTextLineNumber = resolved.start;
+    widget.tab.currentTextLineNumberEnd = resolved.end;
+    unawaited(_refreshLinksWindow());
+    _maybeRegisterPdfCommentaryOpportunity();
+    tourCubit.recordInteraction(
+      TourInteraction(
+        type: TourInteractionType.readerPositionChanged,
+        primaryValue: widget.tab.title,
+      ),
+    );
+    setState(() {});
   }
 
   @override

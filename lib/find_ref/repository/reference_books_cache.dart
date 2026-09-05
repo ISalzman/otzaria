@@ -12,6 +12,7 @@ import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/migration/database/repository/seforim_repository.dart';
 import 'package:otzaria/migration/models/category.dart' as db_models;
 import 'package:otzaria/migration/models/pdf_outline_cache_entry.dart';
+import 'package:otzaria/pdf_book/utils/pdf_viewer_activity.dart';
 import 'package:otzaria/services/commentary_service.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart';
 import 'package:pdfrx/pdfrx.dart';
@@ -465,16 +466,17 @@ class ReferenceBooksCache {
 
   /// Pre-warms the PDF outline cache for all currently-known FS PDF books.
   ///
-  /// Runs in bounded batches of [maxConcurrent] files at a time to avoid
-  /// opening dozens of PdfDocument objects simultaneously (pdfrx serializes
-  /// work in a single background isolate, but each open file holds memory).
+  /// Runs in bounded batches of [maxConcurrent] files at a time. pdfrx
+  /// serializes all PDFium work through a single worker isolate, so a larger
+  /// batch only holds more documents in memory and lengthens that queue —
+  /// hence the default of 1.
   ///
   /// Idempotent and cheap to re-run: entries already cached are skipped
   /// automatically by [getPdfOutlineEntries]'s `putIfAbsent`.
   ///
   /// Respects [clear] via the generation counter — if the cache is cleared
   /// mid-run, the remaining batches are aborted.
-  Future<void> prewarmAllPdfOutlines({int maxConcurrent = 4}) async {
+  Future<void> prewarmAllPdfOutlines({int maxConcurrent = 1}) async {
     // ולידציה רצה גם ב-release: ערך לא חיובי יוצר לולאה אינסופית
     // (i += 0), עדיף להיכשל בקול מאשר להקפיא את ה-isolate.
     if (maxConcurrent <= 0) {
@@ -488,6 +490,8 @@ class ReferenceBooksCache {
     if (paths.isEmpty) return;
 
     for (var i = 0; i < paths.length; i += maxConcurrent) {
+      // הקורא קודם — טאב שממתין לעמוד היעד לא יחכה בתור מאחורי ה-outline.
+      await PdfViewerActivity.instance.waitUntilIdle();
       if (gen != _generation) return;
       final end = (i + maxConcurrent < paths.length)
           ? i + maxConcurrent
