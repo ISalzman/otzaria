@@ -40,6 +40,29 @@ class _GrowingItemState extends State<_GrowingItem> {
   Widget build(BuildContext context) => SizedBox(height: _height);
 }
 
+/// כמו [_RecordingItemScrollController], אך מדווח שהוא מחובר: הגלילה בתוך
+/// פריט נדחית ל-postFrameCallback שיוצא מוקדם כשאין רשימה אמיתית מאחוריו.
+class _AttachedRecordingItemScrollController
+    extends _RecordingItemScrollController {
+  @override
+  bool get isAttached => true;
+}
+
+/// מתעד קריאות גלילה בתוך פריט. הסרגל משתמש ב-offsetController כדי לגלול
+/// *בתוך* קטע גבוה מהמסך; בלעדיו הגרירה מסוגלת רק לקפוץ בין אינדקסים.
+class _RecordingOffsetController extends ScrollOffsetController {
+  final List<double> offsets = <double>[];
+
+  @override
+  Future<void> animateScroll({
+    required double offset,
+    required Duration duration,
+    Curve curve = Curves.linear,
+  }) async {
+    offsets.add(offset);
+  }
+}
+
 /// ילד שמדווח [ScrollMetricsNotification] בלי Scrollable אמיתי. הסרגל נשען על
 /// המטריקות כדי להחליט אם להציג את המסילה, והטסטים כאן מזינים את הפוזיציות
 /// בעצמם ולכן אין להם רשימה שתדווח אותן.
@@ -1643,5 +1666,130 @@ void main() {
       expect(track.left, closeTo(scrollbar.left, 0.5));
       expect(track.center.dx, lessThan(scrollbar.center.dx));
     });
+  });
+
+  testWidgets(
+    'גלילה לסוף ספר ארוך אינה מעלימה את המסילה (issue #1169)',
+    (tester) async {
+      final listener = ItemPositionsListener.create();
+      final controller = ItemScrollController();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: ScrollablePositionedListScrollbar(
+              scrollController: controller,
+              itemPositionsListener: listener,
+              itemCount: 200,
+              // ScrollablePositionedList מרנדר חלון סביב העוגן, ולכן בקצה
+              // הרשימה maxScrollExtent מתאפס אף שיש עוד 198 פריטים.
+              child: const _ScrollableStub(maxScrollExtent: 0),
+            ),
+          ),
+        ),
+      );
+
+      (listener.itemPositions as ValueNotifier<Iterable<ItemPosition>>).value =
+          const [
+            ItemPosition(index: 198, itemLeadingEdge: 0, itemTrailingEdge: 0.4),
+            ItemPosition(
+              index: 199,
+              itemLeadingEdge: 0.4,
+              itemTrailingEdge: 0.8,
+            ),
+          ];
+      await tester.pump();
+
+      expect(
+        find.byKey(ScrollablePositionedListScrollbar.thumbKey),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'ספר בקטע יחיד: גרירה גוללת בתוך הקטע דרך offsetController (issue #1169)',
+    (tester) async {
+      final listener = ItemPositionsListener.create();
+      final controller = _AttachedRecordingItemScrollController();
+      final offsets = _RecordingOffsetController();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: ScrollablePositionedListScrollbar(
+              scrollController: controller,
+              itemPositionsListener: listener,
+              offsetController: offsets,
+              itemCount: 1,
+              child: const _ScrollableStub(),
+            ),
+          ),
+        ),
+      );
+
+      // קטע יחיד הגבוה פי כמה מהמסך: אין אינדקס אחר לקפוץ אליו, וכל
+      // הגלילה חייבת להתרחש בתוך אותו פריט.
+      (listener.itemPositions as ValueNotifier<Iterable<ItemPosition>>).value =
+          const [
+            ItemPosition(index: 0, itemLeadingEdge: 0, itemTrailingEdge: 5.0),
+          ];
+      await tester.pump();
+
+      final track = find.byType(GestureDetector);
+      final trackTopLeft = tester.getTopLeft(track);
+      final trackBottomRight = tester.getBottomRight(track);
+      final gesture = await tester.startGesture(
+        Offset(
+          (trackTopLeft.dx + trackBottomRight.dx) / 2,
+          trackBottomRight.dy - 5,
+        ),
+      );
+      await tester.pump();
+      await gesture.moveBy(const Offset(0, 30));
+      await tester.pump();
+      await gesture.up();
+      await tester.pumpAndSettle();
+
+      expect(
+        offsets.offsets.where((offset) => offset > 0),
+        isNotEmpty,
+        reason: 'בלי גלילה בתוך הפריט הגרירה בספר בעל קטע אחד אינה מזיזה דבר',
+      );
+    },
+  );
+
+  testWidgets('רשימה קצרה שרק פריט אחד ממנה נמדד — המסילה מוצגת', (
+    tester,
+  ) async {
+    final listener = ItemPositionsListener.create();
+    final controller = ItemScrollController();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ScrollablePositionedListScrollbar(
+            scrollController: controller,
+            itemPositionsListener: listener,
+            itemCount: 2,
+            child: const _ScrollableStub(maxScrollExtent: 0),
+          ),
+        ),
+      ),
+    );
+
+    // רק הפריט האחרון מרונדר: אומדן הגובה מגיע ל-0.8 בלבד, אבל הפריט שמעליו
+    // מחוץ למסך ומוכיח שיש לאן לגלול.
+    (listener.itemPositions as ValueNotifier<Iterable<ItemPosition>>).value =
+        const [
+          ItemPosition(index: 1, itemLeadingEdge: 0.4, itemTrailingEdge: 0.8),
+        ];
+    await tester.pump();
+
+    expect(
+      find.byKey(ScrollablePositionedListScrollbar.thumbKey),
+      findsOneWidget,
+      reason: 'פריט מחוץ לחלון הנראה = יש מה לגלול',
+    );
   });
 }
