@@ -10,3 +10,4 @@ export 'report_messages.dart';
 export 'settings_messages.dart';
 export 'text_book_messages.dart';
 export 'tools_messages.dart';
+export 'window_messages.dart';

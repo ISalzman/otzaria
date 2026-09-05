@@ -1,6 +1,9 @@
 import 'package:bloc_concurrency/bloc_concurrency.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:otzaria/core/messages/window_messages.dart';
+import 'package:otzaria/core/ui_snack.dart';
+import 'package:otzaria/core/windowing/window_role.dart';
 import 'package:otzaria/indexing/bloc/indexing_event.dart';
 import 'package:otzaria/indexing/bloc/indexing_state.dart';
 import 'package:otzaria/indexing/models/indexing_run_result.dart';
@@ -193,6 +196,15 @@ class IndexingBloc extends Bloc<IndexingEvent, IndexingState> {
     StartIndexing event,
     Emitter<IndexingState> emit,
   ) async {
+    // ⚠️ אינדוקס בחלון משני **אינו יכול** להצליח: Tantivy נועל את ה-writer
+    // בלעדית, והחלון הראשון מחזיק את הנעילה (נמדד `LockBusy` בעליית כל
+    // חלון משני). בלי הגידור הפעולה נכשלה עמוק בתוך ה-FFI, המשתמש ראה
+    // סרגל התקדמות שלא זז, ואינדוקס אמיתי לא רץ בשום חלון.
+    if (WindowRole.isSecondary) {
+      UiSnack.show(WindowMessages.indexingOnlyInMainWindow);
+      emit(IndexingInitial());
+      return;
+    }
     final workId = ++_nextWorkId;
     _activeWorkId = workId;
 

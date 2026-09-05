@@ -67,6 +67,10 @@ abstract class LibraryMessages {
   static String tabMovedToWorkspace(String workspaceName) =>
       'הכרטיסיה הועברה לשולחן העבודה "$workspaceName"';
 
+  /// השולחן נמחק בחלון אחר בין בניית התפריט לבחירה.
+  static const String workspaceNoLongerExists =
+      'שולחן העבודה הזה אינו קיים יותר';
+
   // ===== עדכונים =====
   static const String updateCheckNetworkError =
       'שגיאה בחיבור לרשת במהלך בדיקת עדכונים';

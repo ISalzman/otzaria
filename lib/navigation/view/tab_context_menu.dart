@@ -1,7 +1,9 @@
+import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:otzaria/core/messages/library_messages.dart';
+import 'package:otzaria/core/messages/window_messages.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/core/windowing/multi_window_service.dart';
 import 'package:otzaria/history/bloc/history_bloc.dart';
@@ -133,28 +135,7 @@ List<AppContextMenuEntry> buildTabContextMenuEntries(
     if (MultiWindowService.isSupported)
       AppContextMenuEntry(
         label: context.settingsText('העבר לחלון חדש'),
-        onTap: () async {
-          final tabsBloc = context.read<TabsBloc>();
-          // ⚠️ נבדק לפני ההעברה. כרטיסיה שאינה שורדת סריאליזציה הייתה
-          // נעלמת מכאן ולא נפתחת שם.
-          if (!MultiWindowService.canTransfer(tab)) {
-            UiSnack.showError('לא ניתן להעביר את הכרטיסיה הזו לחלון אחר');
-            return;
-          }
-          final opened = await const MultiWindowService().openWindow(tab: tab);
-          if (opened) {
-            tabsBloc.add(RemoveTab(tab));
-          } else {
-            final info = await const MultiWindowService().windowCount();
-            if (info.count >= info.max) {
-              UiSnack.show(
-                'אפשר לפתוח עד ${info.max} חלונות. סגור חלון כדי לפתוח חדש.',
-              );
-            } else {
-              UiSnack.showError('פתיחת החלון נכשלה');
-            }
-          }
-        },
+        onTap: () => _moveTabToNewWindow(context, tab),
       ),
     // תת-תפריט של החלונות הפתוחים האחרים, בדיוק כמו "הצג לצד". מופיע רק
     // כשיש לאן להעביר — פריט מושבת לא היה מוסיף מידע.
@@ -166,23 +147,9 @@ List<AppContextMenuEntry> buildTabContextMenuEntries(
           for (final peer in MultiWindowService.transferTargets)
             AppContextMenuEntry(
               label: peer.tabCount > 1
-                  ? '${peer.title}  (${peer.tabCount} כרטיסיות)'
+                  ? WindowMessages.peerWithTabs(peer.title, peer.tabCount)
                   : peer.title,
-              onTap: () async {
-                final tabsBloc = context.read<TabsBloc>();
-                // ⚠️ ההסרה רק אחרי אישור מהיעד. הרשימה עשויה להיות מעט
-                // לא-עדכנית, וחלון שנסגר בדיוק עכשיו לא יאשר — ואז
-                // הכרטיסיה נשארת כאן במקום להיעלם משני הצדדים.
-                final sent = await const MultiWindowService().sendTabToWindow(
-                  peer.slot,
-                  tab,
-                );
-                if (sent) {
-                  tabsBloc.add(RemoveTab(tab));
-                } else {
-                  UiSnack.showError('העברת הכרטיסיה לחלון נכשלה');
-                }
-              },
+              onTap: () => _moveTabToExistingWindow(context, tab, peer.slot),
             ),
         ],
       ),
@@ -263,6 +230,66 @@ List<AppContextMenuEntry> buildTabContextMenuEntries(
   ]);
 
   return entries;
+}
+
+/// בדיקות משותפות ל"העבר לחלון חדש" ול"העבר לחלון קיים".
+///
+/// ⚠️ שלוש ההגנות האלה היו קיימות בגרירה ולא בתפריט, אף ששני המסלולים
+/// מסתיימים באותו `RemoveTab`: כרטיסיה שאינה ניתנת להעברה, כרטיסיה אחרונה
+/// שמשאירה חלון ריק, ומצב ה-JS של תוסף שאובד בהעברה — בדיוק מה
+/// ש-[_moveTabToWorkspace] כבר שואל עליו.
+Future<bool> _confirmTabTransfer(
+  BuildContext context,
+  OpenedTab tab,
+  TabsState state,
+) async {
+  if (!MultiWindowService.canTransfer(tab)) {
+    UiSnack.showError(WindowMessages.cannotTransferTab);
+    return false;
+  }
+  if (state.tabs.length <= 1) {
+    UiSnack.show(WindowMessages.cannotTransferLastTab);
+    return false;
+  }
+  return confirmCloseTabs(context, [tab]);
+}
+
+Future<void> _moveTabToNewWindow(BuildContext context, OpenedTab tab) async {
+  final tabsBloc = context.read<TabsBloc>();
+  // ⚠️ נבדק **לפני** הפעולה ולא בדיעבד: `openWindow` ממתין עד 20 שניות,
+  // והמשתמש היה מקבל "אפשר לפתוח עד N חלונות" רק בסופן.
+  if (!await const MultiWindowService().canOpenAnotherWindow()) {
+    await const MultiWindowService().reportOpenWindowFailure();
+    return;
+  }
+  if (!context.mounted) return;
+  if (!await _confirmTabTransfer(context, tab, tabsBloc.state)) return;
+
+  final opened = await const MultiWindowService().openWindow(tab: tab);
+  if (opened) {
+    tabsBloc.add(RemoveTab(tab));
+  } else {
+    await const MultiWindowService().reportOpenWindowFailure();
+  }
+}
+
+Future<void> _moveTabToExistingWindow(
+  BuildContext context,
+  OpenedTab tab,
+  int slot,
+) async {
+  final tabsBloc = context.read<TabsBloc>();
+  if (!await _confirmTabTransfer(context, tab, tabsBloc.state)) return;
+
+  // ⚠️ ההסרה רק אחרי אישור מהיעד. הרשימה עשויה להיות מעט לא-עדכנית, וחלון
+  // שנסגר בדיוק עכשיו לא יאשר — ואז הכרטיסיה נשארת כאן במקום להיעלם משני
+  // הצדדים.
+  final sent = await const MultiWindowService().sendTabToWindow(slot, tab);
+  if (sent) {
+    tabsBloc.add(RemoveTab(tab));
+  } else {
+    UiSnack.showError(WindowMessages.transferFailed);
+  }
 }
 
 /// החלפה בין רצועת הכרטיסיות שבכותרת לעמודה האנכית שבצד.
@@ -355,9 +382,15 @@ Future<void> _moveTabToWorkspace(
   final tabsState = tabsBloc.state;
   final workspaceState = workspaceBloc.state;
 
-  final targetWorkspace = workspaceState.workspaces.firstWhere(
+  // ⚠️ `firstWhereOrNull`: השולחן יכול להימחק בחלון אחר בין בניית התפריט
+  // לבחירה, ו-`firstWhere` זרק `StateError` באמצע הפעולה.
+  final targetWorkspace = workspaceState.workspaces.firstWhereOrNull(
     (w) => w.id == targetWorkspaceId,
   );
+  if (targetWorkspace == null) {
+    UiSnack.showError(LibraryMessages.workspaceNoLongerExists);
+    return;
+  }
 
   tabsBloc.add(RemoveTab(tab));
 
