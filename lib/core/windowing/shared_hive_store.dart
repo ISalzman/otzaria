@@ -64,6 +64,20 @@ class SharedHiveUnavailable implements Exception {
   String toString() => 'החלון הראשי לא זמין ($id)';
 }
 
+/// הקריאה מ-Hive עצמו נכשלה — לא בעיית ניתוב בין חלונות.
+///
+/// נפרד מ-[SharedHiveUnavailable] כדי שחלון יחיד לא יקבל את ההודעה "החלון
+/// הראשי לא זמין" על תקלה מקומית.
+class SharedHiveReadFailed implements Exception {
+  const SharedHiveReadFailed(this.id, this.reason);
+
+  final SharedHiveKey id;
+  final String reason;
+
+  @override
+  String toString() => 'קריאה מ-$id נכשלה: $reason';
+}
+
 /// הגרסה שהכתיבה נשענה עליה אינה עוד הנוכחית — חלון אחר כתב בינתיים.
 class SharedHiveConflict implements Exception {
   const SharedHiveConflict(this.id, this.fresh);
@@ -143,6 +157,15 @@ class SharedHiveStore {
   ///
   /// `notes` **אינו** ברשימה: אין box בשם הזה. הערות אישיות יושבות
   /// ב-`app_preferences`, שנזרע פעם אחת בפתיחת החלון.
+  ///
+  /// ⚠️ **פער ידוע:** `error_reports_queue` ו-`plugin_reports_queue` אינם
+  /// ברשימה, ולכן דיווח שנוצר בחלון משני ולא נשלח (המשתמש אופליין) נכתב
+  /// לשורש ה-Hive הפרטי שלו ואובד. הוספה פשוטה לרשימה כאן **אינה** הפתרון:
+  /// שני השירותים כותבים ב-`overwrite` בלי בדיקת גרסה, ולכן שני חלונות
+  /// היו מוחקים זה לזה את התור. הפתרון דורש הכרעה — מפתח פר-חלון עם אימוץ
+  /// בהפעלה קרה (כמו `TabsRepository.adoptOrphanWindowSessions`), או מסירה
+  /// לבעלים באפיק בסגירת החלון — ושתיהן משנות את סמנטיקת הדה-דופליקציה של
+  /// הדיווחים. ההשפעה מוגבלת לטלמטריה: אין כאן נתוני משתמש.
   static const Set<String> sharedBoxes = {
     'history',
     'bookmarks',
@@ -183,6 +206,12 @@ class SharedHiveStore {
   /// וכל החלונות מקבלים אותה מאותו מקור.
   final Map<SharedHiveKey, int> _revisions = {};
 
+  /// כתיבה בתהליך לכל מפתח, כדי שבדיקת הגרסה והקידום שלה יהיו אטומיים.
+  ///
+  /// ⚠️ `box.put` הוא נקודת yield. בלי התור שתי כתיבות עם אותו `ifRevision`
+  /// עברו שתיהן את הבדיקה, הראשונה נדרסה בשקט, והגרסה עלתה ב-1 בלבד.
+  final Map<SharedHiveKey, Future<void>> _writesInFlight = {};
+
   final StreamController<SharedHiveKey> _changes =
       StreamController<SharedHiveKey>.broadcast(sync: true);
 
@@ -208,7 +237,11 @@ class SharedHiveStore {
 
   Future<SharedHiveValue> read(String boxName, String key) async {
     final id = SharedHiveKey(boxName, key);
-    if (!_routesToOwner(boxName)) return _readLocal(id, authoritative: true);
+    if (!_routesToOwner(boxName)) {
+      final local = _readLocal(id, authoritative: true);
+      if (local.error != null) throw SharedHiveReadFailed(id, '${local.error}');
+      return local.value;
+    }
 
     final owner = WindowBus.instance.ownerPort;
     if (owner == null) return _unknown;
@@ -219,10 +252,13 @@ class SharedHiveStore {
       timeout: _ownerTimeout,
     );
     if (result is Map) {
+      // ⚠️ הבעלים ענה — אבל התשובה שלו יכולה להיות "גם אני לא הצלחתי לקרוא".
+      // סימון עיוור של `true` כאן הפך כשל קריאה אצל הבעלים ל-null מוסמך,
+      // כלומר לרשימה ריקה תקינה אצל הקורא.
       return SharedHiveValue(
         revision: (result['revision'] as int?) ?? 0,
         value: result['value'],
-        authoritative: true,
+        authoritative: result['authoritative'] != false,
       );
     }
     // ⚠️ אין עותק מקומי, ובמכוון. חלון משני מקבל שורש Hive פרטי וריק, ולכן
@@ -287,19 +323,32 @@ class SharedHiveStore {
   /// מוחק מפתח. משמש לניקוי סשן של חלון שנסגר.
   Future<void> delete(String boxName, String key) => write(boxName, key, null);
 
-  SharedHiveValue _readLocal(SharedHiveKey id, {required bool authoritative}) {
+  /// קריאה ישירה מ-Hive, עם התקלה עצמה כשהיא נכשלה.
+  ///
+  /// ה-[error] נדרש כדי להבדיל בין תקלה מקומית לבין בעלים שלא ענה — שתיהן
+  /// `authoritative: false`, אבל רק אחת מהן מצדיקה את ההודעה על חלון ראשי.
+  ({SharedHiveValue value, Object? error}) _readLocal(
+    SharedHiveKey id, {
+    required bool authoritative,
+  }) {
     try {
-      return SharedHiveValue(
-        revision: _revisions[id] ?? 0,
-        value: _box(id.box).get(id.key),
-        authoritative: authoritative,
+      return (
+        value: SharedHiveValue(
+          revision: _revisions[id] ?? 0,
+          value: _box(id.box).get(id.key),
+          authoritative: authoritative,
+        ),
+        error: null,
       );
     } catch (e) {
       debugPrint('SharedHiveStore: local read of $id failed: $e');
-      return SharedHiveValue(
-        revision: _revisions[id] ?? 0,
-        value: null,
-        authoritative: false,
+      return (
+        value: SharedHiveValue(
+          revision: _revisions[id] ?? 0,
+          value: null,
+          authoritative: false,
+        ),
+        error: e,
       );
     }
   }
@@ -314,10 +363,38 @@ class SharedHiveStore {
     Object? value, {
     int? ifRevision,
     required int? origin,
+  }) {
+    // הכתיבות לאותו מפתח מסתדרות בתור: בדיקת הגרסה, ה-put וקידום הגרסה
+    // חייבים להיות רצף אחד בלי החלפת הקשר באמצע.
+    final previous = _writesInFlight[id];
+    final done = Completer<void>();
+    _writesInFlight[id] = done.future;
+
+    Future<void> run() async {
+      if (previous != null) {
+        // כשל של הכתיבה הקודמת אינו מונע מהבאה בתור לרוץ.
+        await previous.catchError((_) {});
+      }
+      try {
+        await _applyWrite(id, value, ifRevision: ifRevision, origin: origin);
+      } finally {
+        if (_writesInFlight[id] == done.future) _writesInFlight.remove(id);
+        done.complete();
+      }
+    }
+
+    return run();
+  }
+
+  Future<void> _applyWrite(
+    SharedHiveKey id,
+    Object? value, {
+    int? ifRevision,
+    required int? origin,
   }) async {
     final current = _revisions[id] ?? 0;
     if (ifRevision != null && ifRevision != current) {
-      throw SharedHiveConflict(id, _readLocal(id, authoritative: true));
+      throw SharedHiveConflict(id, _readLocal(id, authoritative: true).value);
     }
     final box = _box(id.box);
     if (value == null) {
@@ -358,8 +435,12 @@ class SharedHiveStore {
 
     switch (type) {
       case requestRead:
-        final snapshot = _readLocal(id, authoritative: true);
-        return {'revision': snapshot.revision, 'value': snapshot.value};
+        final snapshot = _readLocal(id, authoritative: true).value;
+        return {
+          'revision': snapshot.revision,
+          'value': snapshot.value,
+          'authoritative': snapshot.authoritative,
+        };
       case requestWrite:
         try {
           await _writeAsOwner(
