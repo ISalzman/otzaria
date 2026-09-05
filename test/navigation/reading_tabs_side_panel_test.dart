@@ -22,7 +22,6 @@ import 'package:otzaria/settings/engine/settings_state.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/bloc/tabs_event.dart';
 import 'package:otzaria/tabs/bloc/tabs_state.dart';
-import 'package:otzaria/models/books.dart';
 import 'package:otzaria/tabs/models/combined_tab.dart';
 import 'package:otzaria/tabs/models/pdf_tab.dart';
 import 'package:otzaria/tabs/models/tab.dart';
@@ -442,30 +441,43 @@ void main() {
     expect(tabsBloc.addedEvents.whereType<SetCurrentTab>(), isEmpty);
   });
 
-  testWidgets(
-    'בכרטיסיית PDF מוצמדת הנעץ קודם לאייקון הסוג, כמו ברצועה העליונה',
-    (
-      tester,
-    ) async {
-      final pdfTab = PdfBookTab(
-        book: PdfBook(title: 'ספר PDF', path: '/tmp/book.pdf'),
-        pageNumber: 1,
-      )..isPinned = true;
-      addTearDown(pdfTab.dispose);
-      await pumpPanel(tester, withTabs: [pdfTab, _StubTab('ספר ב')]);
+  testWidgets('בכרטיסיה מוצמדת הנעץ בקצה הסיום, אחרי הכותרת ואייקון הסוג', (
+    tester,
+  ) async {
+    final pdfTab = PdfBookTab(
+      book: PdfBook(title: 'ספר PDF', path: '/tmp/book.pdf'),
+      pageNumber: 1,
+    )..isPinned = true;
+    addTearDown(pdfTab.dispose);
+    final textTab = _StubTab('ספר ב')..isPinned = true;
+    // הכרטיסיה הראשונה נבחרת ומציגה X, ולכן המוצמדות מגיעות אחריה.
+    await pumpPanel(tester, withTabs: [_StubTab('ספר א'), pdfTab, textTab]);
 
-      final pin = tester.getCenter(find.byIcon(FluentIcons.pin_24_filled));
-      final pdfIcon = tester.getCenter(
-        find.byIcon(FluentIcons.document_pdf_16_regular),
-      );
-      // RTL: הפריט הראשון בשורה הוא הימני ביותר.
+    final pdfIcon = tester.getCenter(
+      find.byIcon(FluentIcons.document_pdf_16_regular),
+    );
+    final pdfTitle = tester.getCenter(find.text('ספר PDF'));
+    final textTitle = tester.getCenter(find.text('ספר ב'));
+    final pinFinder = find.byIcon(FluentIcons.pin_24_filled);
+    expect(pinFinder, findsNWidgets(2));
+    final pins = [
+      tester.getCenter(pinFinder.at(0)),
+      tester.getCenter(pinFinder.at(1)),
+    ];
+
+    // RTL: הפריט הראשון בשורה הוא הימני ביותר.
+    expect(pdfIcon.dx, greaterThan(pdfTitle.dx));
+    for (final pin in pins) {
       expect(
         pin.dx,
-        greaterThan(pdfIcon.dx),
-        reason: 'הנעץ צריך להופיע לפני אייקון ה-PDF (issue #1134)',
+        lessThan(pdfTitle.dx),
+        reason: 'הנעץ בקצה השמאלי, אחרי הכותרת (issue #1134)',
       );
-    },
-  );
+      expect(pin.dx, lessThan(textTitle.dx));
+    }
+    // הנעצים של כרטיסיית PDF ושל כרטיסיית טקסט מיושרים באותו קו אנכי.
+    expect(pins[0].dx, closeTo(pins[1].dx, 0.5));
+  });
 
   testWidgets('לחיצה ימנית על כרטיסיה פותחת את תפריט ההקשר', (tester) async {
     await pumpPanel(tester);
