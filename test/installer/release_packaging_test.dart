@@ -116,9 +116,8 @@ void main() {
   });
 
   test('ה-workflow מפריד בין המתקין לחלקי הספרייה שמתחת ל-2 GiB', () {
-    final workflow = File(
-      '.github/workflows/build-and-announce.yml',
-    ).readAsStringSync();
+    final workflow = File('.github/workflows/build-and-announce.yml')
+        .readAsStringSync();
 
     expect(workflow, contains('build-release-index'));
     expect(workflow, contains('otzaria-library-full-indexed'));
@@ -136,5 +135,20 @@ void main() {
         '"\$INDEXED_LIBRARY_ROOT/books"',
       ),
     );
+  });
+
+  test('ה-workflow שומר את ה-SHA שנבחר ותומך בתיקון חירום', () {
+    final workflow = File('.github/workflows/build-and-announce.yml')
+        .readAsStringSync();
+
+    expect(workflow, contains('      hotfix:'));
+    expect(workflow, contains('default: "0"'));
+    expect(workflow, contains("inputs.hotfix != '0'"));
+    expect(workflow, contains('HOTFIX: \${{ inputs.hotfix }}'));
+    expect(workflow, contains("grep -Eq '^(0|[1-9][0-9]?)\$'"));
+    expect(workflow, contains('ref: \${{ github.sha }}'));
+    expect(workflow, isNot(contains('ref: \${{ github.ref_name }}')));
+    expect(workflow, contains(r'"hotfix": %s'));
+    expect(workflow, contains(r'"$NEW_VERSION" "$HOTFIX"'));
   });
 }

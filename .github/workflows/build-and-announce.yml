@@ -38,6 +38,10 @@ on:
         description: "העלאת גרסה (X.Y.Z) לפני הבנייה: מריץ את סקריפט הגרסה, מקמט לענף הזה ובונה מהקומיט החדש. ריק = בלי שינוי גרסה"
         type: string
         default: ""
+      hotfix:
+        description: "מספר תיקון חירום לגרסה שהוזנה (0–99)"
+        type: string
+        default: "0"
 
   # טריגר לפרסום בלבד. published נשלח גם על prerelease —
   # הוספת prereleased לרשימה גורמת להרצה כפולה (שני פוסטים בפורום)
@@ -45,40 +49,50 @@ on:
     types: [published]
 
 jobs:
-  # שדה new_version בהרצה ידנית: מריץ את סקריפט הגרסה, דוחף את הקומיט לענף
-  # שממנו הופעל ה-workflow, וכל שאר ה-jobs נבנים מה-sha החדש (ולא מ-github.sha).
+  # שדות new_version ו-hotfix בהרצה ידנית: מריצים את סקריפט הגרסה, דוחפים
+  # לענף שממנו הופעל ה-workflow, וכל שאר ה-jobs נבנים מה-sha החדש.
   bump_version:
     runs-on: ubuntu-latest
     outputs:
       sha: ${{ steps.push.outputs.sha || github.sha }}
     steps:
       - name: Validate requested version
-        if: inputs.new_version != ''
+        if: github.event_name == 'workflow_dispatch' && (inputs.new_version != '' || inputs.hotfix != '0')
         env:
           NEW_VERSION: ${{ inputs.new_version }}
+          HOTFIX: ${{ inputs.hotfix }}
         run: |
+          if [ -z "$NEW_VERSION" ]; then
+            echo "::error::hotfix מחייב הזנת new_version"
+            exit 1
+          fi
           if ! printf '%s' "$NEW_VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
             echo "::error::new_version חייב להיות בפורמט major.minor.patch, התקבל '$NEW_VERSION'"
             exit 1
           fi
+          if ! printf '%s' "$HOTFIX" | grep -Eq '^(0|[1-9][0-9]?)$'; then
+            echo "::error::hotfix חייב להיות מספר שלם בין 0 ל-99, התקבל '$HOTFIX'"
+            exit 1
+          fi
 
       - name: Clone branch
-        if: inputs.new_version != ''
+        if: github.event_name == 'workflow_dispatch' && inputs.new_version != ''
         uses: actions/checkout@v7.0.1
         with:
-          ref: ${{ github.ref_name }}
+          ref: ${{ github.sha }}
 
       - name: Run version script and push
         id: push
-        if: inputs.new_version != ''
+        if: github.event_name == 'workflow_dispatch' && inputs.new_version != ''
         env:
           NEW_VERSION: ${{ inputs.new_version }}
+          HOTFIX: ${{ inputs.hotfix }}
           BRANCH: ${{ github.ref_name }}
         run: |
           set -e
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          printf '{\n  "version": "%s",\n  "hotfix": 0\n}\n' "$NEW_VERSION" > tool/version/version.json
+          printf '{\n  "version": "%s",\n  "hotfix": %s\n}\n' "$NEW_VERSION" "$HOTFIX" > tool/version/version.json
           bash tool/version/update_version.sh
           git push origin "HEAD:$BRANCH"
           echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
