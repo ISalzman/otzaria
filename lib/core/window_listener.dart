@@ -185,7 +185,17 @@ class AppWindowListener extends WindowListener {
   }
 
   @override
-  void onWindowClose() async {
+  void onWindowClose() {
+    unawaited(handleWindowClose());
+  }
+
+  /// גוף הסגירה, כ-`Future` שאפשר להמתין לו.
+  ///
+  /// ⚠️ נפרד מ-[onWindowClose] כי החוזה של `window_manager` הוא `void`,
+  /// ורצף הסגירה — ה-flush, מחיקת הסשן והסגירה עצמה — הוא בדיוק מה שצריך
+  /// להיות ניתן לבדיקה.
+  @visibleForTesting
+  Future<void> handleWindowClose() async {
     if (_isClosing) {
       return;
     }
@@ -226,6 +236,10 @@ class AppWindowListener extends WindowListener {
       // מתוך טיפול בערוץ, והריסת מנוע משם היא ריאנטרנטית ומפילה את
       // התהליך. ה-runner דוחה את ההריסה לאיטרציה הבאה של לולאת ההודעות.
       await const MultiWindowService().closeSelf();
+      // ⚠️ החלון מוסתר ולא נהרס, וה-listener שלו חי. חלון שיוחזר לשימוש
+      // (`ReviveWith` / Ctrl+Shift+T) חייב שסגירה חוזרת שלו תעבוד — עם
+      // דגל שנשאר דלוק לחיצה על X פשוט לא הייתה עושה כלום.
+      _isClosing = false;
     }
   }
 
