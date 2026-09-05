@@ -125,7 +125,8 @@ Win32Window::~Win32Window() {
 
 bool Win32Window::Create(const std::wstring& title,
                          const Point& origin,
-                         const Size& size) {
+                         const Size& size,
+                         DWORD extended_style) {
   const POINT target_point = {static_cast<LONG>(origin.x),
                               static_cast<LONG>(origin.y)};
   HMONITOR monitor = MonitorFromPoint(target_point, MONITOR_DEFAULTTONEAREST);
@@ -137,20 +138,22 @@ bool Win32Window::Create(const std::wstring& title,
   frame.top = Scale(origin.y, scale_factor);
   frame.right = frame.left + Scale(size.width, scale_factor);
   frame.bottom = frame.top + Scale(size.height, scale_factor);
-  return CreatePhysical(title, frame);
+  return CreatePhysical(title, frame, extended_style);
 }
 
 bool Win32Window::CreatePhysical(const std::wstring& title,
-                                 const RECT& frame) {
+                                 const RECT& frame,
+                                 DWORD extended_style) {
   Destroy();
 
   const wchar_t* window_class =
       WindowClassRegistrar::GetInstance()->GetWindowClass();
 
-  HWND window = CreateWindow(
-      window_class, title.c_str(), WS_OVERLAPPEDWINDOW, frame.left, frame.top,
-      frame.right - frame.left, frame.bottom - frame.top, nullptr, nullptr,
-      GetModuleHandle(nullptr), this);
+  HWND window = CreateWindowEx(
+      extended_style, window_class, title.c_str(), WS_OVERLAPPEDWINDOW,
+      frame.left, frame.top, frame.right - frame.left,
+      frame.bottom - frame.top, nullptr, nullptr, GetModuleHandle(nullptr),
+      this);
 
   if (!window) {
     return false;
@@ -163,6 +166,13 @@ bool Win32Window::CreatePhysical(const std::wstring& title,
 
 bool Win32Window::Show() {
   return ShowWindow(window_handle_, SW_SHOW);
+}
+
+void Win32Window::AllowActivation(HWND window) {
+  if (!window) return;
+  const LONG_PTR ex = ::GetWindowLongPtrW(window, GWL_EXSTYLE);
+  if ((ex & WS_EX_NOACTIVATE) == 0) return;
+  ::SetWindowLongPtrW(window, GWL_EXSTYLE, ex & ~WS_EX_NOACTIVATE);
 }
 
 // static
@@ -245,7 +255,23 @@ Win32Window::MessageHandler(HWND hwnd,
       // זה בדיוק מה שהמשתמש דיווח: לחיצה על החלון התחתון משאירה את
       // הפוקוס בעליון, והאזור החופף מרצד בלי סוף כאילו החלונות רבים מי
       // יהיה למעלה. בחלון יחיד אין מי שיתחרה, ולכן זה מעולם לא נראה.
-      if (LOWORD(wparam) != WA_INACTIVE && child_content_ != nullptr) {
+      //
+      // ⚠️ וגם **רק כשהחלון גלוי**. חלון מוסתר שקיבל הפעלה (המנוע קורא
+      // `SetFocus` על ה-view שלו ביצירה) היה מושך את הפוקוס אל התוכן שלו
+      // ובכך מחזק הפעלה מדומה, ומצטרף לתנודה במקום לשבור אותה.
+      //
+      // ⚠️ וגם **רק כשיש מה לשנות**. `SetFocus` יוצר הודעות מיקוד והפעלה
+      // נוספות, ועם כמה חלונות עליונים על אותו thread כל אחד מהם הגיב
+      // עליהן בהצבת מיקוד משלו — נמדדה תנודה **אינסופית** של הפעלות כל
+      // ~16ms בין שלושה חלונות (783 הפעלות בהרצה של 40 שניות; עם הבדיקה
+      // הזו: 77, ובלי לולאה). הגידור ב-`WA_INACTIVE` לבדו שבר רק את
+      // המקרה הפשוט של שני חלונות.
+      //
+      // ⚠️ וגם **רק כשהחלון גלוי**: חלון מוסתר שקיבל הפעלה (המנוע קורא
+      // `SetFocus` על ה-view שלו ביצירה) היה מושך את המיקוד לתוכן שלו
+      // ובכך מחזק הפעלה מדומה.
+      if (LOWORD(wparam) != WA_INACTIVE && child_content_ != nullptr &&
+          ::IsWindowVisible(hwnd) && ::GetFocus() != child_content_) {
         SetFocus(child_content_);
       }
       return 0;

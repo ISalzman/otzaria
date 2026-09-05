@@ -437,7 +437,8 @@ bool CreateSecondaryWindowOnThisThread(const flutter::DartProject& base,
     bounds = nullptr;
   }
   if (bounds != nullptr) {
-    if (!window->CreatePhysical(L"אוצריא", *bounds)) {
+    if (!window->CreatePhysical(L"אוצריא", *bounds,
+                                kNoActivateUntilRevealed)) {
       return false;
     }
   } else if (origin_x != 0 || origin_y != 0) {
@@ -459,7 +460,8 @@ bool CreateSecondaryWindowOnThisThread(const flutter::DartProject& base,
     frame.top = corner.y;
     frame.right = frame.left + physical_width;
     frame.bottom = frame.top + physical_height;
-    if (!window->CreatePhysical(L"אוצריא", frame)) {
+    if (!window->CreatePhysical(L"אוצריא", frame,
+                                kNoActivateUntilRevealed)) {
       return false;
     }
   } else {
@@ -467,7 +469,8 @@ bool CreateSecondaryWindowOnThisThread(const flutter::DartProject& base,
     const int offset = 40 + (spawn_index++ % 6) * 32;
     // כאן הכול לוגי — היסט קטן שנקבע אצלנו, ולא מיקום שהגיע מ-Win32.
     if (!window->Create(L"אוצריא", Win32Window::Point(offset, offset),
-                        Win32Window::Size(logical_width, logical_height))) {
+                        Win32Window::Size(logical_width, logical_height),
+                        kNoActivateUntilRevealed)) {
       return false;
     }
   }
@@ -502,6 +505,7 @@ bool CreateSecondaryWindowOnThisThread(const flutter::DartProject& base,
         // הראשון לא הגיע, ו-`presentMainWindow` כבר אינו מעלה חלון משני
         // (זה היה חטיפת פוקוס שניות אחרי החשיפה). בלי זה חלון שנחשף
         // במסלול הזה היה מופיע מאחורי החלון שפתח אותו.
+        Win32Window::AllowActivation(handle);
         ::ShowWindow(handle, SW_SHOW);
         ::BringWindowToTop(handle);
         ::SetForegroundWindow(handle);
@@ -1389,6 +1393,7 @@ void FlutterWindow::ReviveWith(const std::string& payload, int width,
     ::SetWindowPos(self, nullptr, 0, 0, final_width, final_height,
                    SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
   }
+  AllowActivation(self);
   ::ShowWindow(self, SW_SHOW);
   ::BringWindowToTop(self);
   ::SetForegroundWindow(self);
@@ -1420,6 +1425,9 @@ void FlutterWindow::RevealOnFirstFrame() {
   const DWORD started = ::GetTickCount();
   flutter_controller_->engine()->SetNextFrameCallback([hwnd, started]() {
     if (!::IsWindow(hwnd)) return;
+    // ⚠️ לפני ההצגה. עד כאן החלון לא היה יכול להיות מופעל כלל
+    // ([kNoActivateUntilRevealed]) — זה מה שמנע את תנודת ההפעלות.
+    AllowActivation(hwnd);
     ::ShowWindow(hwnd, SW_SHOW);
     ::BringWindowToTop(hwnd);
     ::SetForegroundWindow(hwnd);

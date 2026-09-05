@@ -30,6 +30,18 @@
 // thread לכל מנוע, והוא חסום ביצירה.
 constexpr UINT kMsgDeferredDestroy = WM_APP + 0x102;
 
+// סגנון שמונע מחלון להיות מופעל, עד שהוא נחשף.
+//
+// ⚠️ **זהו התיקון ל"מריבת הפוקוסים".** חלון אוצריא נוצר מוסתר ונחשף רק
+// בפריים הראשון, אבל מנוע Flutter קורא `SetFocus` על ה-view שלו בזמן
+// היצירה — ו-`SetFocus` על ילד מפעיל את החלון העליון. כלומר חלון בלתי-נראה
+// חטף את ההפעלה, Windows החזיר אותה לחלון הקודם, החשיפה חטפה שוב, וחוזר
+// חלילה: נמדדה תנודה של ארבע החלפות תוך 200ms בין החלון החדש לחלון הראשי.
+//
+// `WS_EX_NOACTIVATE` פשוט מוציא את החלון מהמשחק עד שיש מה להראות. הוא
+// מוסר ב-[Win32Window::AllowActivation] רגע לפני ההצגה.
+constexpr DWORD kNoActivateUntilRevealed = WS_EX_NOACTIVATE;
+
 class Win32Window {
  public:
   struct Point {
@@ -54,7 +66,18 @@ class Win32Window {
   // consistent size this function will scale the inputted width and height as
   // as appropriate for the default monitor. The window is invisible until
   // |Show| is called. Returns true if the window was created successfully.
-  bool Create(const std::wstring& title, const Point& origin, const Size& size);
+  // [extended_style] נוסף לסגנונות המורחבים של החלון. ראו
+  // [kNoActivateUntilRevealed].
+  bool Create(const std::wstring& title, const Point& origin, const Size& size,
+              DWORD extended_style = 0);
+
+  // מסיר את [WS_EX_NOACTIVATE], כדי שהחלון יוכל להיות מופעל.
+  //
+  // ⚠️ חייב לקרות **לפני** שמציגים אותו, אחרת ההצגה לא תפעיל אותו.
+  //
+  // סטטי ומקבל `HWND`, כי מסלול החשיפה רץ בקולבק שמחזיק את ה-handle בלבד
+  // (מצביע לחלון עלול להיות תלוי עד שהפריים הראשון מגיע).
+  static void AllowActivation(HWND window);
 
   // יוצר חלון במסגרת שנתונה ב**פיקסלים פיזיים**, בלי שום המרת DPI.
   //
@@ -64,7 +87,8 @@ class Win32Window {
   // והעברתם ל-[Create] הכפילה אותם שוב: במסך 150% חלון שנגרר ל-x=1000
   // נוצר ב-1500, והצמדה לחצי מסך של 960px נתנה חלון של 1440px. במסך יחיד
   // ב-100% שום דבר מזה אינו נראה.
-  bool CreatePhysical(const std::wstring& title, const RECT& frame);
+  bool CreatePhysical(const std::wstring& title, const RECT& frame,
+                      DWORD extended_style = 0);
 
   // Show the current window. Returns true if the window was successfully shown.
   bool Show();
