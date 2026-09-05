@@ -125,15 +125,15 @@ void main() {
   });
 
   group('transferTargets', () {
-    tearDown(() => MultiWindowService.knownPeers = const []);
+    tearDown(() => MultiWindowService.publishKnownPeers(const []));
 
     test('חלון מוסתר אינו יעד להעברה', () {
       // ⚠️ חלון שהמשתמש סגר מוסתר ולא נהרס וממשיך לענות על האפיק, ולכן
       // הופיע ב"העבר לחלון קיים", אישר קבלה, והמקור מחק את הכרטיסיה.
-      MultiWindowService.knownPeers = const [
+      MultiWindowService.publishKnownPeers(const [
         WindowPeer(slot: 2, title: 'פתוח', tabCount: 1),
         WindowPeer(slot: 3, title: 'סגור', tabCount: 4, isVisible: false),
-      ];
+      ]);
       expect(
         MultiWindowService.transferTargets.map((p) => p.slot),
         [2],

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
+import 'package:otzaria/core/messages/window_messages.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/core/windowing/drag_preview_colors.dart';
 import 'package:otzaria/core/windowing/multi_window_service.dart';
@@ -49,6 +50,16 @@ class CrossWindowTabDrag {
   /// החלון שקיבל את ההודעה האחרונה, כדי לנקות את החיווי כשעוזבים אותו.
   int? _lastDragOverSlot;
 
+  /// האם הכרטיסיה שורדת העברה. נבדק **פעם אחת** בתחילת הגרירה.
+  ///
+  /// ⚠️ [MultiWindowService.canTransfer] בונה כרטיסיה מלאה — BLoC,
+  /// repository ומנויים — ולכן קריאה לה בלולאת הפעימות של 60ms בנתה וזרקה
+  /// BLoC חדש כל 60ms לכל אורך הגרירה, בלי שום חיווי למשתמש.
+  bool _transferable = true;
+
+  /// ההודעה על כרטיסיה שאינה ניתנת להעברה כבר הוצגה.
+  bool _rejectionReported = false;
+
   /// מיקום ההכנסה שהחלון היעד דיווח עליו, לשימוש בשחרור.
   int? _remoteDropIndex;
 
@@ -71,6 +82,12 @@ class CrossWindowTabDrag {
     _sourceBloc = tabsBloc;
     _cancelFlutterDrag = cancelDrag;
     _handedOff = false;
+    _rejectionReported = false;
+    // ⚠️ מיקום הכנסה של גרירה **קודמת** אינו תקף לזו. בלי האיפוס כרטיסיה
+    // נכנסה למקום שאליו כוונה הגרירה שלפניה.
+    _remoteDropIndex = null;
+    // פעם אחת לכל גרירה — ראו [_transferable].
+    _transferable = MultiWindowService.canTransfer(tab);
     final title = tab.title;
     // התצוגה מוצגת רק כשהסמן יוצא מחלון המקור, ולכן אין כפילות מול
     // ה-feedback של `Draggable`.
@@ -82,6 +99,19 @@ class CrossWindowTabDrag {
   /// מחליף את השרטוט במוק של החלון. נקרא **אחרי** [begin], כשהוא מוכן.
   ///
   /// ⚠️ הבעלות על התמונה שב-[preview] עוברת לכאן — היא משוחררת גם בכשל.
+  ///
+  /// ⚠️ **נשלח מיד, ולא נדחה ליציאה מהחלון.** דחייה נראתה כמו חיסכון —
+  /// רוב הגרירות הן סידור פנימי — אבל היא שברה שלושה דברים בבת אחת:
+  ///
+  /// 1. השליחה אסינכרונית, והמסירה ל-Windows מתחילה באותה פעימה. הצילום
+  ///    הגיע **אחרי** שהלולאה המודאלית התחילה, ו-`SetImage` מדלג על
+  ///    `Compose` בזמן גרירת מערכת — כלומר התצוגה נשארה בגודל השרטוט
+  ///    (ראש הכרטיסיה בלבד) לכל אורך הגרירה.
+  /// 2. `PreviewSize` מחזיר את גודל **היעד** שנקבע ב-`SetImage`, ולכן
+  ///    ההשוואה בסוף הגרירה יצאה "המערכת שינתה את הגודל" — `snapped=true`
+  ///    כוזב.
+  /// 3. `snapped` גובר על היעד שתחת הסמן, ולכן שחרור מעל חלון אוצריא אחר
+  ///    פתח חלון **חדש** במסגרת של 176×40 במקום להעביר אליו.
   void applySnapshot(TabWindowPreview preview) {
     if (!MultiWindowService.isSupported) {
       preview.image.dispose();
@@ -159,6 +189,7 @@ class CrossWindowTabDrag {
     if (last != null) _service.notifyDragLeave(last);
     _lastDragOverSlot = null;
     _draggedTitle = null;
+    // צילום שלא נשלח (הגרירה נשארה בתוך החלון) אינו נחוץ יותר.
     unawaited(_service.freezeTabDrag());
   }
 
@@ -167,12 +198,22 @@ class CrossWindowTabDrag {
   void dispose() {
     _timer?.cancel();
     _timer = null;
+    // ⚠️ המחלקה חיה יותר מגרירה בודדת (היא שדה של הרצועה). החזקה של
+    // כרטיסיה שאולי כבר `dispose`-ה היא הפניה תלויה.
+    _draggedTitle = null;
+    _draggedTab = null;
+    _sourceBloc = null;
+    _cancelFlutterDrag = null;
+    _lastDragOverSlot = null;
+    _remoteDropIndex = null;
   }
 
   Future<void> _poll() async {
     final title = _draggedTitle;
     if (title == null || _handedOff) return;
     final target = await _service.windowAtCursor();
+    // ⚠️ כשל בירור אינו "שולחן העבודה" — פשוט מדלגים על הפעימה.
+    if (target == null) return;
     final slot = target.isSelf ? null : target.slot;
 
     if (_lastDragOverSlot != null && _lastDragOverSlot != slot) {
@@ -181,6 +222,20 @@ class CrossWindowTabDrag {
     }
     _lastDragOverSlot = slot;
 
+    if (target.isSelf) return;
+
+    // הסמן בחוץ: מכאן והלאה יש למי להציג את התצוגה הנייטיבית.
+
+    // כרטיסיה שאינה ניתנת להעברה — לעצור **כאן**, עם הודעה.
+    //
+    // ⚠️ קודם לכן הבדיקה יושבת ב-[_handOffToSystem], שחזר בלי לסמן דבר:
+    // הטיימר המשיך, וכל 60ms נבנה BLoC חדש ונזרק כל עוד הסמן בחוץ — בלי
+    // שום חיווי למשתמש.
+    if (!_transferable) {
+      _rejectTransfer();
+      return;
+    }
+
     // ⚠️ ברגע שהסמן יצא מחלון המקור — הגרירה נמסרת ל-Windows.
     //
     // **מיד, ובלי השהיה.** גרסה קודמת השהתה 480ms כי המסירה כללה פתיחת
@@ -188,19 +243,35 @@ class CrossWindowTabDrag {
     // המסירה אינה פותחת דבר — היא רק מעבירה למערכת חלון שכבר קיים —
     // וההחלטה לאן הכרטיסיה הולכת נופלת **בשחרור**, לפי מה שתחת הסמן.
     // כלומר אין יותר מה לשמור עליו בהשהיה.
-    if (!target.isSelf) {
-      await _handOffToSystem();
-      return;
-    }
+    await _handOffToSystem();
+  }
 
-    if (slot == null) return;
+  /// האם [tab] ניתנת להעברה, בלי לבנות אותה מחדש כשכבר נבדקה.
+  ///
+  /// ⚠️ הבדיקה עצמה יקרה (ראו [MultiWindowService.canTransfer]), ולכן
+  /// התוצאה של [begin] נשמרת. הנפילה-לאחור קיימת למסלול שבו [begin] לא רץ
+  /// כלל — רצועה שחיברה `onDroppedOutside` בלי `onDragStarted` — ושם עדיף
+  /// לשלם על בדיקה אחת מלאבד כרטיסיה.
+  bool _canTransfer(OpenedTab tab) => identical(tab, _draggedTab)
+      ? _transferable
+      : MultiWindowService.canTransfer(tab);
 
-    _remoteDropIndex = await _service.notifyDragOver(
-      slot,
-      target.x,
-      target.y,
-      title,
-    );
+  /// עוצר את הגרירה החוצה ומודיע למשתמש. פעם אחת לכל גרירה.
+  void _rejectTransfer() {
+    if (_rejectionReported) return;
+    _rejectionReported = true;
+    // ⚠️ אותו דגל של המסירה למערכת: הוא מה שמונע מ-`handleDroppedOutside`
+    // לטפל בכרטיסיה שוב אחרי הביטול ששלחנו ל-Flutter.
+    _handedOff = true;
+    _timer?.cancel();
+    _timer = null;
+    final last = _lastDragOverSlot;
+    if (last != null) _service.notifyDragLeave(last);
+    _lastDragOverSlot = null;
+    _draggedTitle = null;
+    _hidePreview();
+    _cancelFlutterDrag?.call();
+    UiSnack.showError(WindowMessages.cannotTransferTab);
   }
 
   /// מוסר את הגרירה ל-Windows, ומטפל בתוצאה כשהמשתמש שחרר.
@@ -228,14 +299,19 @@ class CrossWindowTabDrag {
   /// במקומה. הביטול מסתיים ב-`onDraggableCanceled`, כמו כל גרירה
   /// שהתפספסה, ומשם [_handedOff] מונע טיפול כפול.
   Future<void> _handOffToSystem() async {
+    if (_handedOff) return;
     final tab = _draggedTab;
     final bloc = _sourceBloc;
-    if (tab == null || bloc == null || _handedOff) return;
-
-    // ⚠️ נבדק **לפני** המסירה. כרטיסיה שאינה שורדת סריאליזציה תיפול בכל
-    // מקרה, ועדיף שהמסלול הרגיל יציג את השגיאה מאשר שהגרירה תיעלם
-    // ללולאה מודאלית ותחזור בלי כלום.
-    if (!MultiWindowService.canTransfer(tab)) return;
+    // ⚠️ עוצרים את הלולאה ולא רק חוזרים. `begin` בלי `tabsBloc` היא שגיאת
+    // תכנות, אבל חזרה שקטה מכאן השאירה את הטיימר פועל — כלומר פעימת ערוץ
+    // ותצוגה נייטיבית שמתחדשת ב-60Hz לכל אורך הגרירה, בלי שום תוצאה.
+    if (tab == null || bloc == null) {
+      _handedOff = true;
+      _timer?.cancel();
+      _timer = null;
+      _hidePreview();
+      return;
+    }
 
     _handedOff = true;
     final last = _lastDragOverSlot;
@@ -248,7 +324,9 @@ class CrossWindowTabDrag {
     _timer?.cancel();
     _timer = null;
 
-    if (outcome == null) return _hidePreview();
+    // `ran == false` פירושו שהנייטיב לא הריץ לולאת גרירה בכלל (למשל אין
+    // תצוגה חיה). אין תוצאה להסתמך עליה, ולכן אין להעביר את הכרטיסיה.
+    if (outcome == null || !outcome.ran) return _hidePreview();
     // ⚠️ נשאר בקוד. את מסלול הגרירה אי אפשר לבדוק אוטומטית — הוא תלוי
     // בהחלטות ה-shell — ושורה אחת בלוג היא ההבדל בין אבחון לניחוש.
     debugPrint(
@@ -282,23 +360,11 @@ class CrossWindowTabDrag {
       }
     }
 
-    final dropIndex = _remoteDropIndex;
-    _remoteDropIndex = null;
-
     if (!outcome.snapped && outcome.slot != null) {
       // הכרטיסיה נכנסת לחלון קיים — אין מה להחליף את הרוח, והיא מוסתרת
       // מיד כדי שלא תרחף מעל היעד.
       _hidePreview();
-      final moved = await _service.sendTabToWindow(
-        outcome.slot!,
-        tab,
-        index: dropIndex,
-      );
-      if (moved) {
-        bloc.add(RemoveTab(tab));
-      } else {
-        UiSnack.showError('העברת הכרטיסיה נכשלה');
-      }
+      await _transferToPeer(outcome.slot!, tab, bloc, outcome.x, outcome.y);
       return;
     }
 
@@ -331,13 +397,33 @@ class CrossWindowTabDrag {
     }
 
     _hidePreview();
-    final info = await _service.windowCount();
-    if (info.count >= info.max) {
-      UiSnack.show(
-        'אפשר לפתוח עד ${info.max} חלונות. סגור חלון כדי לפתוח חדש.',
-      );
+    await _service.reportOpenWindowFailure();
+  }
+
+  /// מעביר את הכרטיסיה לחלון [slot], למקום המדויק שתחת הסמן.
+  ///
+  /// ⚠️ מיקום ההכנסה נשאל **כאן**, ברגע השחרור, ולא בפעימות הגרירה: מהרגע
+  /// שהמסירה למערכת התחילה ה-Dart של המקור אינו מקבל עדכוני מיקום, ולכן
+  /// המסלול הזה היה תמיד `index: null` — כלומר הכרטיסיה נכנסה בסוף
+  /// הרצועה, גם כשהמשתמש כיוון לנקודה מסוימת בה.
+  Future<void> _transferToPeer(
+    int slot,
+    OpenedTab tab,
+    TabsBloc bloc,
+    int x,
+    int y,
+  ) async {
+    final index =
+        _remoteDropIndex ??
+        await _service.notifyDragOver(slot, x, y, tab.title);
+    _remoteDropIndex = null;
+    final moved = await _service.sendTabToWindow(slot, tab, index: index);
+    if (moved) {
+      bloc.add(RemoveTab(tab));
     } else {
-      UiSnack.showError('פתיחת החלון נכשלה');
+      // החיווי ביעד הודלק על ידי `notifyDragOver` — יש לכבות אותו.
+      _service.notifyDragLeave(slot);
+      UiSnack.showError(WindowMessages.transferFailed);
     }
   }
 
@@ -361,6 +447,11 @@ class CrossWindowTabDrag {
 
     // ⚠️ כל יציאה מוקדמת מכאן חייבת להסתיר את הרוח שהוקפאה ב-[end].
     // רק המסלול שפותח חלון משאיר אותה, כדי שהיא תוחלף במשהו אמיתי.
+    //
+    // ⚠️ `null` הוא "לא ידוע", ולא "שולחן העבודה". שאילתה שנכשלה נראתה
+    // כמו שחרור על שולחן העבודה, ולכן פתחה חלון בפינה (0,0) ומחקה את
+    // הכרטיסיה מהמקור.
+    if (target == null) return _hidePreview();
     if (target.isSelf) return _hidePreview();
 
     // ⚠️ שחרור מעל שורת המשימות אינו מחווה של "פתח חלון כאן". היא נגישה
@@ -371,59 +462,48 @@ class CrossWindowTabDrag {
       return _hidePreview();
     }
 
-    // ⚠️ נבדק לפני כל ניסיון העברה. כרטיסיה שאינה שורדת סריאליזציה הייתה
-    // נעלמת מכאן ולא נפתחת שם.
-    if (!MultiWindowService.canTransfer(tab)) {
+    if (!_canTransfer(tab)) {
       _hidePreview();
-      UiSnack.showError('לא ניתן להעביר את הכרטיסיה הזו לחלון אחר');
+      UiSnack.showError(WindowMessages.cannotTransferTab);
       return;
     }
 
     // כרטיסיה אחרונה בחלון: גרירתה החוצה הייתה משאירה חלון ריק ופותחת
     // חדש — תזוזה בלי תועלת.
     if (target.slot == null && tabsBloc.state.tabs.length <= 1) {
-      return _hidePreview();
+      _hidePreview();
+      UiSnack.show(WindowMessages.cannotTransferLastTab);
+      return;
     }
 
-    // מיקום ההכנסה שהחלון היעד דיווח עליו בזמן הגרירה — כך השחרור על
-    // רצועת הכרטיסיות שלו ממזג למקום מדויק ולא רק מוסיף בסוף.
-    final dropIndex = _remoteDropIndex;
-    _remoteDropIndex = null;
-
-    final bool moved;
     if (target.slot != null) {
       // הכרטיסיה נכנסת לחלון קיים — אין מה להחליף את הרוח, והיא מוסתרת
       // מיד כדי שלא תרחף מעל היעד.
       _hidePreview();
-      moved = await _service.sendTabToWindow(
+      await _transferToPeer(
         target.slot!,
         tab,
-        index: dropIndex,
+        tabsBloc,
+        target.x,
+        target.y,
       );
-    } else {
-      // ⚠️ החלון נפתח **בנקודת השחרור**, והרוח נשארת שם עד שהוא נחשף.
-      // עד כה הוא נפתח בהיסט מדורג מהפינה, בלי קשר למקום שאליו גררו.
-      moved = await _service.openWindow(
-        tab: tab,
-        // מסלול הנפילה, כשהגרירה לא נמסרה למערכת: אין תצוגה שנעצרה
-        // במקום, ולכן הסמן הוא כל מה שיש.
-        origin: (x: target.x, y: target.y),
-      );
-      if (!moved) _hidePreview();
+      return;
     }
 
+    // ⚠️ החלון נפתח **בנקודת השחרור**, והרוח נשארת שם עד שהוא נחשף.
+    // עד כה הוא נפתח בהיסט מדורג מהפינה, בלי קשר למקום שאליו גררו.
+    final moved = await _service.openWindow(
+      tab: tab,
+      // מסלול הנפילה, כשהגרירה לא נמסרה למערכת: אין תצוגה שנעצרה
+      // במקום, ולכן הסמן הוא כל מה שיש.
+      origin: (x: target.x, y: target.y),
+    );
     if (moved) {
       tabsBloc.add(RemoveTab(tab));
       return;
     }
-    final info = await _service.windowCount();
-    if (info.count >= info.max) {
-      UiSnack.show(
-        'אפשר לפתוח עד ${info.max} חלונות. סגור חלון כדי לפתוח חדש.',
-      );
-    } else {
-      UiSnack.showError('העברת הכרטיסיה נכשלה');
-    }
+    _hidePreview();
+    await _service.reportOpenWindowFailure();
   }
 
   void _hidePreview() => unawaited(_service.endTabDrag());

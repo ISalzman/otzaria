@@ -1,19 +1,16 @@
-// ⚠️ Windows בלבד, ובמכוון.
+// ⚠️ רצה בכל פלטפורמה, ובמכוון.
 //
 // כל מסלול הגרירה מגודר ב-`MultiWindowService.isSupported`, שהוא
-// `Platform.isWindows` — הצד הנייטיב מומש ב-`windows/runner`. על Linux
-// (שם רצות שש ה-shards של ה-CI) `windowAtCursor` ו-`openWindow` חוזרים
-// מיד בלי לגעת בערוץ, ולכן ה-runner המדומה כאן לא היה נקרא כלל וההצהרות
-// היו נכשלות מסיבה שאין לה קשר למה שנבדק.
-//
-// גידור הקובץ ולא הצהרות בודדות: בדיקה שמדלגת על החלק המעניין שלה
-// ונשארת ירוקה גרועה מבדיקה שאינה רצה.
-@TestOn('windows')
+// `Platform.isWindows`, ולכן הקובץ היה מסומן `@TestOn('windows')` — וה-CI
+// רץ על ubuntu. כלומר כל הבדיקות כאן היו ירוקות על מכונת המפתח בלבד.
+// ההיגיון שנבדק אינו תלוי פלטפורמה: מה שמעבר לערוץ מדומה ב-[_FakeRunner],
+// ו-`debugSupportedOverride` פותח את השער.
 library;
 
 import 'dart:async';
 import 'dart:isolate';
-import 'dart:ui' as ui show IsolateNameServer;
+import 'dart:typed_data';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -21,6 +18,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/core/windowing/cross_window_tab_drag.dart';
 import 'package:otzaria/core/windowing/drag_preview_colors.dart';
 import 'package:otzaria/core/windowing/multi_window_service.dart';
+import 'package:otzaria/core/windowing/tab_drag_preview.dart';
 import 'package:otzaria/core/windowing/window_bus.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/bloc/tabs_event.dart';
@@ -41,6 +39,7 @@ void main() {
   late CrossWindowTabDrag drag;
 
   setUp(() {
+    MultiWindowService.debugSupportedOverride = true;
     WindowBus.namespace = _namespace;
     runner = _FakeRunner()..install();
     tabsBloc = _RecordingTabsBloc(
@@ -56,6 +55,7 @@ void main() {
   });
 
   tearDown(() async {
+    MultiWindowService.debugSupportedOverride = null;
     drag.dispose();
     runner.uninstall();
     await tabsBloc.close();
@@ -463,19 +463,124 @@ void main() {
     });
   });
 
-  test('כרטיסיה שאינה שורדת סריאליזציה נחסמת לפני כל ניסיון העברה', () async {
-    runner.cursorTarget = (slot: null, isSelf: false, isShellTray: false);
-    tabsBloc.emitState(
-      TabsState(
-        tabs: [_UnserializableTab(), firstTab()],
-        currentTabIndex: 0,
-      ),
+  group('צילום הכרטיסיה', () {
+    const colors = DragPreviewColors(
+      tab: Color(0xFF202020),
+      border: Color(0xFF404040),
+      text: Color(0xFFF0F0F0),
     );
 
-    await drag.handleDroppedOutside(tabsBloc.state.tabs.first, tabsBloc);
+    /// תמונה אטומה קטנה — `_hasVisiblePixels` דורש פיקסל שאינו שקוף.
+    Future<ui.Image> opaqueImage() {
+      final completer = Completer<ui.Image>();
+      ui.decodeImageFromPixels(
+        Uint8List.fromList(List<int>.filled(4 * 4 * 4, 0xFF)),
+        4,
+        4,
+        ui.PixelFormat.rgba8888,
+        completer.complete,
+      );
+      return completer.future;
+    }
 
-    expect(runner.openWindowCalls, 0);
-    expect(tabsBloc.events, isEmpty);
+    test('⚠️ נשלח מיד ולא נדחה ליציאה מהחלון', () async {
+      // ⚠️ זו הגנה על שלושה באגים שדחיית השליחה יצרה בבת אחת:
+      //
+      // 1. `SetImage` שמגיע אחרי שהלולאה המודאלית התחילה מדלג על
+      //    `Compose`, ולכן נגררה רק **כותרת** הכרטיסיה ולא המוק שלה.
+      // 2. `PreviewSize` מחזיר את גודל היעד שנקבע ב-`SetImage`, ולכן
+      //    ההשוואה בסוף הגרירה החזירה `snapped=true` כוזב.
+      // 3. `snapped` גובר על היעד שתחת הסמן — כלומר שחרור מעל חלון
+      //    אוצריא אחר פתח חלון **חדש** במקום להעביר אליו.
+      runner.cursorTarget = (slot: 1, isSelf: true, isShellTray: false);
+      drag.begin(firstTab(), colors, tabsBloc: tabsBloc);
+
+      drag.applySnapshot(
+        TabWindowPreview(
+          image: await opaqueImage(),
+          targetWidth: 1100,
+          targetHeight: 760,
+        ),
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+
+      expect(runner.setImageCalls, 1, reason: 'הצילום נשלח בלי להמתין ליציאה');
+      expect(runner.systemDragCalls, 0, reason: 'הסמן עוד בתוך החלון');
+    });
+
+    test('הצילום מקדים את המסירה למערכת', () async {
+      runner.cursorTarget = (slot: null, isSelf: false, isShellTray: false);
+      final gate = Completer<void>();
+      runner.systemDragGate = gate;
+
+      drag.begin(firstTab(), colors, tabsBloc: tabsBloc, cancelDrag: () {});
+      drag.applySnapshot(
+        TabWindowPreview(
+          image: await opaqueImage(),
+          targetWidth: 1100,
+          targetHeight: 760,
+        ),
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 260));
+      gate.complete();
+      await Future<void>.delayed(const Duration(milliseconds: 120));
+
+      expect(runner.setImageCalls, 1);
+      expect(
+        runner.imageArrivedAfterHandOff,
+        isFalse,
+        reason:
+            'צילום שמגיע אחרי `dragOutToSystem` אינו מורכב, ומזייף '
+            'את חישוב ה-snapped',
+      );
+    });
+  });
+
+  group('כרטיסיה שאינה שורדת סריאליזציה', () {
+    const colors = DragPreviewColors(
+      tab: Color(0xFF202020),
+      border: Color(0xFF404040),
+      text: Color(0xFFF0F0F0),
+    );
+
+    setUp(() {
+      tabsBloc.emitState(
+        TabsState(
+          tabs: [_UnserializableTab(), firstTab()],
+          currentTabIndex: 0,
+        ),
+      );
+      runner.cursorTarget = (slot: null, isSelf: false, isShellTray: false);
+    });
+
+    test('נחסמת לפני כל ניסיון העברה', () async {
+      await drag.handleDroppedOutside(tabsBloc.state.tabs.first, tabsBloc);
+
+      expect(runner.openWindowCalls, 0);
+      expect(tabsBloc.events, isEmpty);
+    });
+
+    test('⚠️ הגרירה נעצרת בפעימה הראשונה בחוץ ואינה חוזרת בלולאה', () async {
+      // ⚠️ הבדיקה הזו היא ההגנה על H4: `canTransfer` בונה כרטיסיה מלאה —
+      // BLoC, repository ומנויים — וקודם לכן היא נקראה מתוך לולאת הפעימות
+      // של 60ms. כשהכרטיסיה נדחתה, `_handOffToSystem` חזר בלי לסמן דבר,
+      // הטיימר המשיך, וכל 60ms נבנה BLoC חדש ונזרק כל עוד הסמן בחוץ.
+      var cancelled = false;
+      drag.begin(
+        tabsBloc.state.tabs.first,
+        colors,
+        tabsBloc: tabsBloc,
+        cancelDrag: () => cancelled = true,
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+
+      expect(cancelled, isTrue, reason: 'הגרירה בוטלה עם הודעה');
+      expect(runner.systemDragCalls, 0, reason: 'לא נמסרה למערכת');
+      expect(runner.openWindowCalls, 0);
+      expect(tabsBloc.events, isEmpty);
+      // הפעימות נמשכו 400ms; בלי העצירה היו כאן שש קריאות ומעלה.
+      expect(runner.cursorQueries, lessThanOrEqualTo(2));
+    });
   });
 }
 
@@ -488,6 +593,13 @@ class _FakeRunner {
   );
   bool openWindowResult = true;
   int openWindowCalls = 0;
+
+  /// כמה פעימות של המעקב יצאו לנייטיב — מודד שהלולאה נעצרה.
+  int cursorQueries = 0;
+
+  /// כמה פעמים נשלח צילום הכרטיסיה, והאם הוא הגיע **אחרי** המסירה למערכת.
+  int setImageCalls = 0;
+  bool imageArrivedAfterHandOff = false;
   Map<Object?, Object?>? lastOpenArgs;
 
   /// היעד שהמערכת מדווחת עליו **בשחרור**, אם הוא שונה מזה שבזמן הגרירה.
@@ -529,6 +641,7 @@ class _FakeRunner {
         .setMockMethodCallHandler(MultiWindowService.channel, (call) async {
           switch (call.method) {
             case 'windowAtCursor':
+              cursorQueries++;
               return {
                 'slot': cursorTarget.slot,
                 'isSelf': cursorTarget.isSelf,
@@ -536,6 +649,10 @@ class _FakeRunner {
                 'x': 100,
                 'y': 200,
               };
+            case 'setTabDragImage':
+              setImageCalls++;
+              if (systemDragCalls > 0) imageArrivedAfterHandOff = true;
+              return null;
             case 'dragOutToSystem':
               systemDragCalls++;
               await systemDragGate?.future;

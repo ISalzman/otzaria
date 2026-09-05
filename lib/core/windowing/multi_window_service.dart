@@ -6,6 +6,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:hive_ce/hive.dart';
+import 'package:otzaria/core/messages/window_messages.dart';
+import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/core/windowing/drag_preview_colors.dart';
 import 'package:otzaria/core/windowing/window_bus.dart';
 import 'package:otzaria/tabs/models/combined_tab.dart';
@@ -61,13 +63,23 @@ class MultiWindowService {
   /// חשוף כי התקשורת דו-כיוונית: `adoptPayload` נשלחת מה-runner אל החלון
   /// כשהוא מחזיר חלון מוסתר לשימוש עם כרטיסיה חדשה.
   static const MethodChannel channel = MethodChannel('otzaria/multiwindow');
-  static const MethodChannel _channel = channel;
 
   /// האם ריבוי חלונות נתמך בפלטפורמה הנוכחית.
   ///
   /// היום Windows בלבד — הצד הנייטיב מומש ב-`windows/runner`. macOS ו-Linux
   /// הם פרק 12 במפת הדרכים.
-  static bool get isSupported => !kIsWeb && Platform.isWindows;
+  static bool get isSupported =>
+      debugSupportedOverride ?? (!kIsWeb && Platform.isWindows);
+
+  /// דורס את [isSupported] **בבדיקות בלבד**.
+  ///
+  /// ⚠️ קיים כדי שסוויטת ההחלטות של הגרירה תרוץ בכל פלטפורמה. היא הייתה
+  /// מגודרת ב-`@TestOn('windows')`, וה-CI רץ על ubuntu — כלומר כל הבדיקות
+  /// של "מה קורה לכרטיסיה" (הסרה רק אחרי אישור, כרטיסיה אחרונה, שורת
+  /// המשימות, הצמדה) היו ירוקות על מכונת המפתח בלבד. ההיגיון עצמו אינו
+  /// תלוי פלטפורמה — רק ה-runner שמעבר לערוץ, והוא מדומה בבדיקה.
+  @visibleForTesting
+  static bool? debugSupportedOverride;
 
   /// פותח חלון חדש, ואם [tab] אינו null — עם אותו טאב פתוח בו.
   ///
@@ -105,7 +117,7 @@ class MultiWindowService {
       } catch (_) {
         // בלי מידות ה-runner ייצור בגודל ברירת מחדל.
       }
-      final opened = await _channel
+      final opened = await channel
           .invokeMethod<bool>('openWindow', {
             'payload': _encodePayload(tab),
             if (inherited != null) 'width': inherited.width.round(),
@@ -147,7 +159,7 @@ class MultiWindowService {
   Future<Set<int>?> visibleSlots() async {
     if (!isSupported) return null;
     try {
-      final slots = await _channel.invokeListMethod<int>('visibleSlots');
+      final slots = await channel.invokeListMethod<int>('visibleSlots');
       return slots?.toSet();
     } catch (e) {
       debugPrint('visibleSlots failed: $e');
@@ -166,7 +178,7 @@ class MultiWindowService {
   Future<({int count, int max, int engines})> windowCount() async {
     if (!isSupported) return _singleWindow;
     try {
-      final info = await _channel.invokeMapMethod<String, dynamic>(
+      final info = await channel.invokeMapMethod<String, dynamic>(
         'windowCount',
       );
       if (info == null) return _singleWindow;
@@ -196,7 +208,7 @@ class MultiWindowService {
   Future<void> raiseSelf() async {
     if (!isSupported) return;
     try {
-      await _channel.invokeMethod<void>('raiseSelf');
+      await channel.invokeMethod<void>('raiseSelf');
     } catch (e) {
       debugPrint('raiseSelf failed: $e');
     }
@@ -219,7 +231,7 @@ class MultiWindowService {
   }) async {
     if (!isSupported) return;
     try {
-      await _channel.invokeMethod<void>('beginTabDrag', {
+      await channel.invokeMethod<void>('beginTabDrag', {
         'title': title,
         ...colors.toArgb(),
       });
@@ -251,12 +263,12 @@ class MultiWindowService {
   }) async {
     if (!isSupported) return;
     try {
-      await _channel.invokeMethod<void>('setTabDragImage', {
+      await channel.invokeMethod<void>('setTabDragImage', {
         'bytes': rgba,
         'width': width,
         'height': height,
-        if (targetWidth != null) 'targetWidth': targetWidth,
-        if (targetHeight != null) 'targetHeight': targetHeight,
+        'targetWidth': ?targetWidth,
+        'targetHeight': ?targetHeight,
       });
     } catch (e) {
       debugPrint('setTabDragImage failed: $e');
@@ -281,7 +293,7 @@ class MultiWindowService {
   Future<SystemDragOutcome?> dragOutToSystem() async {
     if (!isSupported) return null;
     try {
-      final info = await _channel.invokeMapMethod<String, dynamic>(
+      final info = await channel.invokeMapMethod<String, dynamic>(
         'dragOutToSystem',
       );
       if (info == null) return null;
@@ -316,7 +328,7 @@ class MultiWindowService {
   Future<void> freezeTabDrag() async {
     if (!isSupported) return;
     try {
-      await _channel.invokeMethod<void>('freezeTabDrag');
+      await channel.invokeMethod<void>('freezeTabDrag');
     } catch (e) {
       debugPrint('freezeTabDrag failed: $e');
     }
@@ -326,7 +338,7 @@ class MultiWindowService {
   Future<void> endTabDrag() async {
     if (!isSupported) return;
     try {
-      await _channel.invokeMethod<void>('endTabDrag');
+      await channel.invokeMethod<void>('endTabDrag');
     } catch (e) {
       debugPrint('endTabDrag failed: $e');
     }
@@ -339,7 +351,7 @@ class MultiWindowService {
   Future<bool> restoreLastClosedWindow() async {
     if (!isSupported) return false;
     try {
-      return await _channel.invokeMethod<bool>('restoreLastClosedWindow') ??
+      return await channel.invokeMethod<bool>('restoreLastClosedWindow') ??
           false;
     } catch (e) {
       debugPrint('restoreLastClosedWindow failed: $e');
@@ -355,7 +367,7 @@ class MultiWindowService {
   Future<Offset?> screenToClient(int x, int y, double devicePixelRatio) async {
     if (!isSupported) return null;
     try {
-      final p = await _channel.invokeMapMethod<String, dynamic>(
+      final p = await channel.invokeMapMethod<String, dynamic>(
         'screenToClient',
         {'x': x, 'y': y},
       );
@@ -377,7 +389,7 @@ class MultiWindowService {
   Future<void> setBusSlot(int slot) async {
     if (!isSupported) return;
     try {
-      await _channel.invokeMethod<void>('setBusSlot', slot);
+      await channel.invokeMethod<void>('setBusSlot', slot);
     } catch (e) {
       debugPrint('setBusSlot failed: $e');
     }
@@ -392,14 +404,19 @@ class MultiWindowService {
   /// [isShellTray] הוא שורת המשימות של Windows (או חלון קופץ שלה). היא
   /// מדווחת בנפרד כי שחרור מעליה אינו מחווה של "פתח חלון כאן": היא נגישה
   /// גם בחלון ממוקסם, וקודם לכן שחרור עליה פתח חלון שני והכרטיסיה עזבה.
-  Future<({int? slot, bool isSelf, bool isShellTray, int x, int y})>
+  /// ⚠️ מחזיר `null` כשלא ניתן היה לברר, ו**לא** "שולחן העבודה".
+  ///
+  /// הגרסה הקודמת החזירה `(slot: null, isSelf: false)` בכשל — בדיוק הצורה
+  /// של "שוחרר על שולחן העבודה". כלומר כשל ערוץ פתח חלון חדש בפינה (0,0)
+  /// ומחק את הכרטיסיה מהמקור.
+  Future<({int? slot, bool isSelf, bool isShellTray, int x, int y})?>
   windowAtCursor() async {
-    if (!isSupported) return _noTarget;
+    if (!isSupported) return null;
     try {
-      final info = await _channel.invokeMapMethod<String, dynamic>(
+      final info = await channel.invokeMapMethod<String, dynamic>(
         'windowAtCursor',
       );
-      if (info == null) return _noTarget;
+      if (info == null) return null;
       return (
         slot: info['slot'] as int?,
         isSelf: info['isSelf'] == true,
@@ -409,12 +426,9 @@ class MultiWindowService {
       );
     } catch (e) {
       debugPrint('windowAtCursor failed: $e');
-      return _noTarget;
+      return null;
     }
   }
-
-  static const ({int? slot, bool isSelf, bool isShellTray, int x, int y})
-  _noTarget = (slot: null, isSelf: false, isShellTray: false, x: 0, y: 0);
 
   /// סוגר את החלון הנוכחי בלי לסיים את התהליך.
   ///
@@ -424,7 +438,7 @@ class MultiWindowService {
   Future<void> closeSelf() async {
     if (!isSupported) return;
     try {
-      await _channel.invokeMethod<void>('closeSelf');
+      await channel.invokeMethod<void>('closeSelf');
     } catch (e) {
       debugPrint('closeSelf failed: $e');
     }
@@ -543,8 +557,10 @@ class MultiWindowService {
   /// לחלון שנסגר בדיוק אז הייתה נעלמת משני הצדדים.
   /// [index] הוא מיקום ההכנסה ברצועת היעד, כשהשחרור היה מעליה. `null`
   /// מוסיף בסוף — התנהגות "העבר לחלון קיים" מהתפריט.
+  /// ⚠️ **אינו** קורא ל-[canTransfer]. הקורא בדק כבר — בתחילת הגרירה או
+  /// לפני פעולת התפריט — ובדיקה חוזרת כאן פירושה בניית כרטיסיה שלמה שנייה
+  /// לכל העברה.
   Future<bool> sendTabToWindow(int slot, OpenedTab tab, {int? index}) async {
-    if (!canTransfer(tab)) return false;
     final result = await WindowBus.instance.request(slot, {
       'type': requestReceiveTab,
       'tab': tab.toJson(),
@@ -576,7 +592,43 @@ class MultiWindowService {
   /// להיות. `WindowBusHost` מרענן אותה ברקע. רשימה מעט לא-עדכנית אינה
   /// מסוכנת: שליחה לחלון שנסגר בינתיים נכשלת ומדווחת למשתמש, ולא מאבדת
   /// את הכרטיסיה.
-  static List<WindowPeer> knownPeers = const [];
+  static final ValueNotifier<List<WindowPeer>> _knownPeers =
+      ValueNotifier<List<WindowPeer>>(const []);
+
+  static List<WindowPeer> get knownPeers => _knownPeers.value;
+
+  /// עדכון הרשימה. הקורא היחיד הוא `WindowBusHost`.
+  static void publishKnownPeers(List<WindowPeer> peers) {
+    _knownPeers.value = peers;
+  }
+
+  /// אות לשינוי ברשימה, למי שמציג אותה.
+  static ValueListenable<List<WindowPeer>> get knownPeersListenable =>
+      _knownPeers;
+
+  /// כשל בפתיחת חלון — מברר אם הסיבה היא התקרה ומדווח בהתאם.
+  ///
+  /// ⚠️ מקום אחד. הלוגיקה `windowCount → count >= max` והמחרוזות שלה
+  /// שוכפלו בשלושה אתרי קריאה, ובכל אחד מהם נוסחו מחדש.
+  Future<void> reportOpenWindowFailure() async {
+    final info = await windowCount();
+    if (info.count >= info.max) {
+      UiSnack.show(WindowMessages.windowLimitReached(info.max));
+    } else {
+      UiSnack.showError(WindowMessages.openWindowFailed);
+    }
+  }
+
+  /// האם התקרה כבר הושגה — נבדק **לפני** שמציעים למשתמש לפתוח חלון.
+  ///
+  /// ⚠️ בלי הבדיקה המוקדמת המשתמש משלים גרירה שלמה (כולל בחירת אזור
+  /// ב-Snap Layouts) או ממתין ל-`openWindow` עד 20 שניות, ורק אז מקבל
+  /// "אפשר לפתוח עד N חלונות".
+  Future<bool> canOpenAnotherWindow() async {
+    if (!isSupported) return false;
+    final info = await windowCount();
+    return info.count < info.max;
+  }
 
   /// החלונות שאפשר להעביר אליהם כרטיסיה — מוצגים על המסך בלבד.
   ///
@@ -618,9 +670,14 @@ class MultiWindowService {
   /// הבדיקה, להימחק מהמקור, ולהיכשל בפענוח ביעד — והמשתמש רואה חלון חדש
   /// שנפתח **בלי הכרטיסיה**. אם `canTransfer` אמור להיות ההגנה, הוא חייב
   /// לבדוק בדיוק את מה שיקרה.
+  /// ⚠️ **הבדיקה יקרה — אל תקרא לה בלולאה.** הפענוח בונה כרטיסיה מלאה: את
+  /// ה-BLoC שלה, את ה-repository ואת המנויים ואת ה-`ValueNotifier`-ים. לכן
+  /// היא נבדקת פעם אחת בתחילת הגרירה ([CrossWindowTabDrag.begin]) או לפני
+  /// פעולת תפריט, והתוצאה נזכרת.
   static bool canTransfer(OpenedTab tab) {
+    OpenedTab? restored;
     try {
-      final restored = decodePayload(_encodePayload(tab));
+      restored = decodePayload(_encodePayload(tab));
       if (restored == null) {
         debugPrint(
           'canTransfer: ${tab.runtimeType} אינה שורדת את מסלול המטען',
@@ -637,6 +694,14 @@ class MultiWindowService {
     } catch (e) {
       debugPrint('canTransfer failed for ${tab.runtimeType}: $e');
       return false;
+    } finally {
+      // ⚠️ הכרטיסיה שנבנתה כאן נזרקת, אבל בלי השחרור המנויים וה-notifiers
+      // שלה נשארים חיים לכל אורך חיי החלון.
+      try {
+        restored?.dispose();
+      } catch (e) {
+        debugPrint('canTransfer: dispose of probe tab failed: $e');
+      }
     }
   }
 
