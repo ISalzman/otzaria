@@ -197,6 +197,54 @@ export interface BookMeta {
   external?: { provider: 'hebrewbooks' | 'otzar'; id: number | string };
 }
 
+/** ארגומנטים ל-`library.resolveRef`. */
+export interface ResolveRefArgs {
+  /**
+   * ההפניה כפי שהמשתמש כתב אותה, כולל שם הספר — למשל `"פסחים לד"` או
+   * `"שולחן ערוך אורח חיים תרנא"`. מחרוזת קצרה משני תווים מוחזרת ריקה.
+   */
+  ref: string;
+  /** ברירת מחדל 20. */
+  limit?: number;
+}
+
+/**
+ * התאמה יחידה של `library.resolveRef` — מיקום שנפתר, לפני שנפתח.
+ *
+ * התוצאות מדורגות: הראשונה היא ההתאמה הטובה ביותר לפי אותו דירוג שמסך
+ * "איתור מקורות" מציג.
+ */
+export interface ResolvedRefHit {
+  /**
+   * ה-id המספרי של הספר, לבניית קישור עומק `otzaria://open/book/<id>`.
+   *
+   * `null` כאשר אין id חד-משמעי — ספר אישי (`isUserBook`) או PDF ממערכת
+   * הקבצים. במקרה כזה אפשר לנווט עם `reader.openBookAtRef`, אך אין לבנות
+   * קישור עומק: `user_books.db` מקצה מזהים באותו טווח כמו ספריית הבסיס.
+   */
+  id?: number | null;
+  /** כותרת הספר — הזהות המקובלת ב-SDK, כמו `BookMeta.bookId`. */
+  bookId: string;
+  /** מזהה יציב; ראה `BookMeta.bookUid`. חסר כשאין `id`. */
+  bookUid?: string;
+  type?: BookType | null;
+  title: string;
+  /** ההפניה שנפתרה, לתצוגה — למשל `"בראשית פרק א"`. */
+  reference: string;
+  /** מיקום היעד: אינדקס שורה בספר טקסט, מספר עמוד ב-PDF. */
+  index: number;
+  isPdf: boolean;
+  /**
+   * `true` = נפתר לשורת מקור מדויקת (פסוק/סעיף) דרך אינדקס ההפניות;
+   * `false` = נפתר לכותרת בתוכן העניינים, כלומר לרמת פרק/דף בלבד.
+   */
+  isSourceLine: boolean;
+  /** ספר אישי מ-`user_books.db`. ראה האזהרה על `id`. */
+  isUserBook: boolean;
+  /** נתיב הקטגוריה המלא, למשל `"תנ״ך, תורה"`. ריק אם אינו ידוע. */
+  bookPath: string;
+}
+
 export interface SearchResult {
   /** `'text'` for a text book, `'pdf'` for a PDF book. */
   type: 'text' | 'pdf';
@@ -1692,6 +1740,7 @@ export type OtzariaMethod =
   | 'app.unregisterShortcut'
   | 'app.updateShortcut'
   | 'library.findBooks'
+  | 'library.resolveRef'
   | 'library.getBookMetadata'
   | 'library.resolveBooks'
   | 'library.resolveCategoryPaths'

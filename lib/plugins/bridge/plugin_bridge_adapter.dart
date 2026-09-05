@@ -4,6 +4,7 @@ import 'dart:typed_data';
 // dart:io מגדיר Link משלו (קישור בקובץ־מערכת) שמתנגש ב-Link של הקישורים.
 import 'dart:io' hide Link;
 import 'dart:math' as math;
+import 'package:collection/collection.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:otzaria/utils/file/file_picker_dialog_options.dart';
 import 'package:otzaria/widgets/dialogs/input_dialog.dart';
@@ -430,9 +431,25 @@ class PluginBridgeDependencies {
   /// פותר הפניה חופשית (שם ספר + ref, למשל "תלמוד ירושלמי עירובין פ\"ו ה\"ז")
   /// למיקום, דרך מנוע `find_ref` המודע-להקשר. מחזיר התאמות עם מיקום ה-index.
   /// אופציונלי — אם לא סופק, `openBookAtRef` נופל להתאמת TOC מקומית בלבד.
-  final Future<List<({String title, int index, bool isPdf})>> Function(
-    String reference,
-  )?
+  ///
+  /// `bookId` הוא ה-id המספרי ב-DB (‎-1 ל-PDF ממערכת הקבצים), ותקף רק כאשר
+  /// `isUserBook` כבוי: `user_books.db` מקצה מזהים באותו טווח כמו `seforim.db`,
+  /// ולכן id של ספר אישי אינו חד-משמעי מחוץ להקשרו.
+  final Future<
+    List<
+      ({
+        String title,
+        int index,
+        bool isPdf,
+        int bookId,
+        String reference,
+        String bookPath,
+        bool isSourceLine,
+        bool isUserBook,
+      })
+    >
+  >
+  Function(String reference)?
   resolveReference;
 
   /// פותר הפניה לרמת שורה (פסוק/סעיף) דרך ה-heRef הפר-שורתי — מדויק מתחת
@@ -1029,6 +1046,48 @@ class PluginBridgeAdapter {
               },
             )
             .toList();
+      case 'resolveRef':
+        // spec: resolveRef({ ref, limit? }) -> [{ id, bookId, bookUid, type,
+        // title, reference, index, isPdf, isSourceLine, bookPath }]
+        //
+        // מריץ את מנוע `find_ref` המלא — אותו מנוע שמאחורי "איתור מקורות" —
+        // ומחזיר את התוצאה במקום לפתוח אותה. זו הצורה השאילתתית של
+        // `reader.openBookAtRef`, לתוספים שבונים קישור או הצעת השלמה.
+        {
+          final ref = args['ref']?.toString().trim() ?? '';
+          final limit = (args['limit'] as num?)?.toInt() ?? 20;
+          // סף של שני תווים — כמו ב-FindRefBloc; מחרוזת קצרה מזו מתאימה
+          // לחצי הספרייה ורק מבזבזת סריקה.
+          if (ref.length < 2 || limit <= 0) return <dynamic>[];
+          final resolve = _dependencies.resolveReference;
+          if (resolve == null) return <dynamic>[];
+          final hits = await resolve(ref);
+          final books = library.getAllBooks();
+          return hits.take(limit).map((h) {
+            // ה-id המספרי חד-משמעי רק בספרי הספרייה: `user_books.db`
+            // מקצה מזהים באותו טווח, ולכן id של ספר אישי אינו מזהה
+            // ספר יחיד. מוחזר null כדי שצרכן לא יבנה עליו קישור עומק.
+            final identity = (h.isUserBook || h.bookId < 0)
+                ? null
+                : books.firstWhereOrNull(
+                    (b) => b is TextBook && !b.isUserBook && b.id == h.bookId,
+                  );
+            return {
+              'id': identity?.id,
+              'bookId': h.title,
+              if (identity != null)
+                'bookUid': PluginBookIdentity.uidOf(identity),
+              if (identity != null) 'type': PluginBookIdentity.typeOf(identity),
+              'title': h.title,
+              'reference': h.reference,
+              'index': h.index,
+              'isPdf': h.isPdf,
+              'isSourceLine': h.isSourceLine,
+              'isUserBook': h.isUserBook,
+              'bookPath': h.bookPath,
+            };
+          }).toList();
+        }
       case 'getBookMetadata':
         // spec: accepts id, bookId (= title in otzaria), type — all optional,
         // all supplied fields must match the same book.

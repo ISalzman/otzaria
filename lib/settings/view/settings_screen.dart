@@ -1,4 +1,5 @@
 import 'package:flutter/gestures.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
@@ -130,6 +131,22 @@ class _MySettingsScreenState extends State<MySettingsScreen> {
     setState(_clearSearch);
   }
 
+  static bool get _isMobilePlatform =>
+      defaultTargetPlatform == TargetPlatform.android ||
+      defaultTargetPlatform == TargetPlatform.iOS;
+
+  bool _isTabAvailable(int index) =>
+      !_tabsData[index].desktopOnly || !_isMobilePlatform;
+
+  List<int> get _availableTabIndexes => [
+    for (var index = 0; index < _tabsData.length; index++)
+      if (_isTabAvailable(index)) index,
+  ];
+
+  List<SettingsSearchEntry> get _availableSearchResults => _searchResults
+      .where((entry) => _isTabAvailable(_tabToIndex(entry.tab)))
+      .toList();
+
   static int _tabToIndex(SettingsTab tab) => switch (tab) {
     SettingsTab.design => 0,
     SettingsTab.text => 1,
@@ -159,6 +176,7 @@ class _MySettingsScreenState extends State<MySettingsScreen> {
     if (!mounted) return;
 
     final tabIndex = _tabToIndex(request.tab);
+    if (!_isTabAvailable(tabIndex)) return;
 
     setState(() {
       _selectedIndex = tabIndex;
@@ -187,6 +205,7 @@ class _MySettingsScreenState extends State<MySettingsScreen> {
   }
 
   void _changeTab(int index) {
+    if (!_isTabAvailable(index)) return;
     setState(() {
       _selectedIndex = index;
       _clearSearch();
@@ -223,6 +242,7 @@ class _MySettingsScreenState extends State<MySettingsScreen> {
     if (tab == null) return;
 
     final tabIndex = _tabToIndex(tab);
+    if (!_isTabAvailable(tabIndex)) return;
 
     if (!mounted) {
       _selectedIndex = tabIndex;
@@ -247,6 +267,7 @@ class _MySettingsScreenState extends State<MySettingsScreen> {
       IconData icon,
       IconData iconFilled,
       Widget Function() pageBuilder,
+      bool desktopOnly,
     })
   >
   _tabsData = [
@@ -255,18 +276,21 @@ class _MySettingsScreenState extends State<MySettingsScreen> {
       icon: FluentIcons.paint_brush_24_regular,
       iconFilled: FluentIcons.paint_brush_24_filled,
       pageBuilder: () => const DesignSettingsTab(),
+      desktopOnly: false,
     ),
     (
       label: 'כתב',
       icon: OtzariaIcons.book_24_regular,
       iconFilled: OtzariaIcons.book_24_filled,
       pageBuilder: () => const TextSettingsTab(),
+      desktopOnly: false,
     ),
     (
       label: 'ספריה',
       icon: FluentIcons.library_24_regular,
       iconFilled: FluentIcons.library_24_filled,
       pageBuilder: () => const LibrarySettingsTab(),
+      desktopOnly: false,
     ),
     (
       label: 'כלים',
@@ -275,24 +299,28 @@ class _MySettingsScreenState extends State<MySettingsScreen> {
       pageBuilder: () => ToolsSettingsTab(
         calendarCubit: context.read<CalendarCubit>(),
       ),
+      desktopOnly: false,
     ),
     (
       label: 'קיצורי מקשים',
       icon: FluentIcons.keyboard_24_regular,
       iconFilled: FluentIcons.keyboard_24_filled,
       pageBuilder: () => const ShortcutsSettingsTab(),
+      desktopOnly: true,
     ),
     (
       label: 'מערכת',
       icon: FluentIcons.settings_24_regular,
       iconFilled: FluentIcons.settings_24_filled,
       pageBuilder: () => const SystemSettingsTab(),
+      desktopOnly: false,
     ),
     (
       label: 'אודות',
       icon: FluentIcons.people_team_24_regular,
       iconFilled: FluentIcons.people_team_24_filled,
       pageBuilder: () => const AboutSettingsTab(),
+      desktopOnly: false,
     ),
   ];
 
@@ -335,15 +363,19 @@ class _MySettingsScreenState extends State<MySettingsScreen> {
       child: LayoutBuilder(
         builder: (context, constraints) {
           final isMobile = constraints.maxWidth < LayoutBreakpoints.compact;
+          final availableTabIndexes = _availableTabIndexes;
+          final currentTabPosition = availableTabIndexes.indexOf(
+            _selectedIndex,
+          );
 
           // ── מצב מובייל ────────────────────────────────────────────────
           if (isMobile) {
             if (_showMobileMenu) {
               final showResults = _searchQuery.trim().isNotEmpty;
               return KeyboardNavigator(
-                currentTabIndex: _selectedIndex,
-                totalTabs: _tabsData.length,
-                onTabChange: (i) => setState(() => _selectedIndex = i),
+                currentTabIndex: currentTabPosition,
+                totalTabs: availableTabIndexes.length,
+                onTabChange: (i) => _changeTab(availableTabIndexes[i]),
                 onBack: showResults ? _handleMobileBack : null,
                 child: Scaffold(
                   backgroundColor: bgColor,
@@ -381,7 +413,7 @@ class _MySettingsScreenState extends State<MySettingsScreen> {
                         child: showResults
                             ? SettingsSearchResultsView(
                                 query: _searchQuery,
-                                results: _searchResults,
+                                results: _availableSearchResults,
                                 onResultTap: _onSearchResultTap,
                               )
                             : ListView(
@@ -392,29 +424,31 @@ class _MySettingsScreenState extends State<MySettingsScreen> {
                                       title: context.settingsText(group.label),
                                       children: [
                                         for (final idx in group.indices)
-                                          ListTile(
-                                            key: tourSettingsTabTargetKeys[idx],
-                                            leading: RtlIcon(
-                                              _tabsData[idx].icon,
-                                              color: colorScheme.primary,
-                                            ),
-                                            title: Text(
-                                              context.settingsText(
-                                                _tabsData[idx].label,
+                                          if (_isTabAvailable(idx))
+                                            ListTile(
+                                              key:
+                                                  tourSettingsTabTargetKeys[idx],
+                                              leading: RtlIcon(
+                                                _tabsData[idx].icon,
+                                                color: colorScheme.primary,
                                               ),
+                                              title: Text(
+                                                context.settingsText(
+                                                  _tabsData[idx].label,
+                                                ),
+                                              ),
+                                              trailing: const RtlIcon(
+                                                FluentIcons
+                                                    .chevron_left_24_regular,
+                                              ),
+                                              onTap: () {
+                                                setState(() {
+                                                  _selectedIndex = idx;
+                                                  _showMobileMenu = false;
+                                                });
+                                                _recordTabTourInteraction(idx);
+                                              },
                                             ),
-                                            trailing: const RtlIcon(
-                                              FluentIcons
-                                                  .chevron_left_24_regular,
-                                            ),
-                                            onTap: () {
-                                              setState(() {
-                                                _selectedIndex = idx;
-                                                _showMobileMenu = false;
-                                              });
-                                              _recordTabTourInteraction(idx);
-                                            },
-                                          ),
                                       ],
                                     ),
                                     const SizedBox(height: 8),
@@ -429,9 +463,9 @@ class _MySettingsScreenState extends State<MySettingsScreen> {
             } else {
               final showResults = _searchQuery.trim().isNotEmpty;
               return KeyboardNavigator(
-                currentTabIndex: _selectedIndex,
-                totalTabs: _tabsData.length,
-                onTabChange: _changeTab,
+                currentTabIndex: currentTabPosition,
+                totalTabs: availableTabIndexes.length,
+                onTabChange: (i) => _changeTab(availableTabIndexes[i]),
                 onBack: _handleMobileBack,
                 child: Scaffold(
                   backgroundColor: bgColor,
@@ -467,7 +501,7 @@ class _MySettingsScreenState extends State<MySettingsScreen> {
                         child: showResults
                             ? SettingsSearchResultsView(
                                 query: _searchQuery,
-                                results: _searchResults,
+                                results: _availableSearchResults,
                                 onResultTap: _onSearchResultTap,
                               )
                             : _tabsData[_selectedIndex].pageBuilder(),
@@ -481,9 +515,9 @@ class _MySettingsScreenState extends State<MySettingsScreen> {
 
           // ── מצב דסקטופ: KeyboardNavigator + sidebar + תוכן ──────────
           return KeyboardNavigator(
-            currentTabIndex: _selectedIndex,
-            totalTabs: _tabsData.length,
-            onTabChange: _changeTab,
+            currentTabIndex: currentTabPosition,
+            totalTabs: availableTabIndexes.length,
+            onTabChange: (i) => _changeTab(availableTabIndexes[i]),
             onBack: null,
             child: Scaffold(
               backgroundColor: bgColor,
@@ -529,18 +563,22 @@ class _MySettingsScreenState extends State<MySettingsScreen> {
                             ),
                             Expanded(
                               child: ListView.builder(
-                                itemCount: _tabsData.length,
-                                itemBuilder: (context, index) => SidebarNavItem(
-                                  key: tourSettingsTabTargetKeys[index],
-                                  icon: _tabsData[index].icon,
-                                  iconFilled: _tabsData[index].iconFilled,
-                                  label: context.settingsText(
-                                    _tabsData[index].label,
-                                  ),
-                                  isSelected:
-                                      !isSearching && _selectedIndex == index,
-                                  onTap: () => _changeTab(index),
-                                ),
+                                itemCount: availableTabIndexes.length,
+                                itemBuilder: (context, visibleIndex) {
+                                  final index =
+                                      availableTabIndexes[visibleIndex];
+                                  return SidebarNavItem(
+                                    key: tourSettingsTabTargetKeys[index],
+                                    icon: _tabsData[index].icon,
+                                    iconFilled: _tabsData[index].iconFilled,
+                                    label: context.settingsText(
+                                      _tabsData[index].label,
+                                    ),
+                                    isSelected:
+                                        !isSearching && _selectedIndex == index,
+                                    onTap: () => _changeTab(index),
+                                  );
+                                },
                               ),
                             ),
                           ],

@@ -123,9 +123,10 @@ Future<void> scrollToSourceLine({
       ? const Duration(milliseconds: 120)
       : duration;
 
-  // הסגמנט אינו גלוי — גלילה גסה אליו תחילה.
+  // הסגמנט אינו גלוי — קפיצה ולא גלילה מונפשת: המעבר בין שתי הרשימות של
+  // החבילה דורש 2 מסכי גלילה, ונעצר על יעד שגוי כששורות שטרם נטענו בגובה ~0.
   if (_findPosition(positionsListener, segmentIndex) == null) {
-    await scrollToSegment();
+    scrollController.jumpTo(index: segmentIndex, alignment: alignment);
     await WidgetsBinding.instance.endOfFrame;
   }
 
@@ -133,6 +134,7 @@ Future<void> scrollToSourceLine({
   // יחיד מפספס ביחס הסטייה - מודדים ומתקנים עד שהיעד יושב על קו העוגן.
   var stepDuration = fineDuration;
   var previousDistance = double.infinity;
+  var confirming = false;
   for (var attempt = 0; attempt < 5; attempt++) {
     final measured = _findPosition(positionsListener, segmentIndex);
     if (measured == null) {
@@ -147,11 +149,22 @@ Future<void> scrollToSourceLine({
         measured.itemLeadingEdge * viewportExtent +
         fraction * extent -
         alignment * viewportExtent;
-    // יעד קרוב מספיק, או שאין התכנסות (קירוב גובה קיצוני) - עוצרים.
-    if (delta.abs() <= viewportExtent * kAnchorLandingEpsilon ||
-        delta.abs() >= previousDistance) {
+    if (delta.abs() <= viewportExtent * kAnchorLandingEpsilon) {
+      // היעד על קו העוגן - מאמתים במסך הבא, כי רה-פריסה (טעינה הדרגתית או
+      // החלפת הרשימות של החבילה) מסיטה אותו דווקא אחרי המדידה הזו.
+      if (confirming) {
+        return;
+      }
+      confirming = true;
+      previousDistance = double.infinity;
+      await WidgetsBinding.instance.endOfFrame;
+      continue;
+    }
+    // אין התכנסות (קירוב גובה קיצוני) - עוצרים.
+    if (delta.abs() >= previousDistance) {
       return;
     }
+    confirming = false;
     previousDistance = delta.abs();
     await scrollOffsetController.animateScroll(
       offset: delta,

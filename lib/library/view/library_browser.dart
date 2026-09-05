@@ -654,8 +654,8 @@ class _LibraryBrowserState extends State<LibraryBrowser>
             selected: previewSelected,
             // אין ספרייה — אין תצוגה מקדימה, לכן הכפתור מושבת.
             onPressed: isLibraryEmpty
-              ? null
-              : () => _togglePreviewPanel(context.read<SettingsBloc>().state),
+                ? null
+                : () => _togglePreviewPanel(context.read<SettingsBloc>().state),
           ),
         ),
       AppTopBarItem(
@@ -2655,47 +2655,16 @@ class _LibraryBrowserState extends State<LibraryBrowser>
   }
 
   Widget _buildSearchResultsGrid(List<Book> books, int displayLimit) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final crossAxisCount = (constraints.maxWidth ~/ 250)
-            .clamp(1, 5)
-            .toInt();
-
-        return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 45, vertical: 8),
-          child: LibraryGridKeyNavigator(
-            crossAxisCount: crossAxisCount,
-            onExitTop: () => _refocusSearchBar(selectAll: true),
-            child: FocusTraversalGroup(
-              policy: OrderedTraversalPolicy(),
-              child: GridView.builder(
-                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: crossAxisCount,
-                  childAspectRatio: 2,
-                  crossAxisSpacing: kLibraryGridSpacing,
-                  mainAxisSpacing: kLibraryGridSpacing,
-                ),
-                itemCount: displayLimit,
-                itemBuilder: (context, index) {
-                  final orderIndex = index;
-                  final focusNode = index == 0 ? _firstGridItemFocusNode : null;
-
-                  return FocusTraversalOrder(
-                    order: NumericFocusOrder(orderIndex.toDouble()),
-                    child: _buildBookItem(
-                      books[index],
-                      showTopics: true,
-                      focusNode: focusNode,
-                    ),
-                  );
-                },
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-              ),
-            ),
+    return MyGridView(
+      onExitTop: () => _refocusSearchBar(selectAll: true),
+      items: [
+        for (var i = 0; i < displayLimit; i++)
+          _buildBookItem(
+            books[i],
+            showTopics: true,
+            focusNode: i == 0 ? _firstGridItemFocusNode : null,
           ),
-        );
-      },
+      ],
     );
   }
 

@@ -424,10 +424,10 @@ class PdfBookBloc extends Bloc<PdfBookEvent, PdfBookState> {
 
   // ============ Navigation Event Handlers ============
 
-  Future<void> _onUpdatePageNumber(
+  void _onUpdatePageNumber(
     UpdatePageNumber event,
     Emitter<PdfBookState> emit,
-  ) async {
+  ) {
     final current = state;
     if (current is! PdfBookLoaded) return;
 
@@ -439,7 +439,9 @@ class PdfBookBloc extends Bloc<PdfBookEvent, PdfBookState> {
 
     // Calculate title from outline if not provided
     if (event.title == null && current.outline != null) {
-      title = await refFromPageNumber(
+      // סינכרוני בכוונה: `await` כאן היה מאפשר לאירועים אחרים לפלוט מצב
+      // חדש, ואז ה-emit שבהמשך היה דורס אותם עם צילום מיושן.
+      title = referenceFromPageNumber(
         event.pageNumber,
         current.outline!,
         current.book.title,

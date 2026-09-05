@@ -288,7 +288,16 @@ class _PluginTabPageState extends State<PluginTabPage> {
         final results = await findRefRepository.findRefs(reference);
         return results
             .map(
-              (r) => (title: r.title, index: r.segment.toInt(), isPdf: r.isPdf),
+              (r) => (
+                title: r.title,
+                index: r.segment.toInt(),
+                isPdf: r.isPdf,
+                bookId: r.bookId,
+                reference: r.reference,
+                bookPath: r.bookPath,
+                isSourceLine: r.isSourceLine,
+                isUserBook: r.isUserBook,
+              ),
             )
             .toList();
       },

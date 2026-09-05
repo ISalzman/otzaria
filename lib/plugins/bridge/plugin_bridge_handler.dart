@@ -335,6 +335,7 @@ class PluginBridgeHandler {
     'app.unregisterShortcut': 'app.shortcuts',
     'app.updateShortcut': 'app.shortcuts',
     'library.findBooks': 'library.books.read',
+    'library.resolveRef': 'library.books.read',
     'library.getBookMetadata': 'library.books.read',
     'library.resolveBooks': 'library.books.read',
     'library.resolveCategoryPaths': 'library.books.read',
