@@ -636,6 +636,10 @@ class _ToolsLauncherPanelState extends State<ToolsLauncherPanel> {
         : 0;
     final hasPlugins =
         hiddenOfflineCount > 0 || allEntries.any((e) => e.plugin != null);
+    final pluginsFooter = _PluginsFooter(
+      hasPlugins: hasPlugins,
+      hiddenOfflineCount: hiddenOfflineCount,
+    );
 
     return PluginDropZone(
       child: Column(
@@ -650,17 +654,30 @@ class _ToolsLauncherPanelState extends State<ToolsLauncherPanel> {
               children: [
                 Positioned.fill(
                   child: entries.isEmpty
-                      ? _buildEmptyState(
-                          settingsState.isOfflineMode,
-                          allEntries,
+                      ? Column(
+                          children: [
+                            Expanded(
+                              child: _buildEmptyState(
+                                settingsState.isOfflineMode,
+                                allEntries,
+                              ),
+                            ),
+                            Padding(
+                              padding: EdgeInsets.only(
+                                bottom:
+                                    AppInputTokens.height(
+                                      settingsState.compactMenuMode,
+                                    ) +
+                                    AppTokens.spaceMD,
+                              ),
+                              child: pluginsFooter,
+                            ),
+                          ],
                         )
                       : _buildGrid(
                           entries,
                           openToolIds,
-                          footer: _PluginsFooter(
-                            hasPlugins: hasPlugins,
-                            hiddenOfflineCount: hiddenOfflineCount,
-                          ),
+                          footer: pluginsFooter,
                           bottomInset:
                               AppInputTokens.height(
                                 settingsState.compactMenuMode,

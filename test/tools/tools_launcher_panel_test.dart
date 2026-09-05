@@ -2037,6 +2037,20 @@ void main() {
         expect(find.text(storeLink), findsOneWidget);
       });
 
+      testWidgets('קישור החנות נשאר גם כשכל הכלים מוסתרים', (tester) async {
+        await pumpPanel(
+          tester,
+          settings: SettingsState.initial().copyWith(
+            hiddenBuiltInToolIds: {
+              for (final tool in kBuiltInToolsCatalog) tool.toolId,
+            },
+          ),
+          pluginState: PluginSystemLoaded(const []),
+        );
+
+        expect(find.text(storeLink), findsOneWidget);
+      });
+
       testWidgets('עם תוספים — הבהרה וקישור לחנות בתחתית הרשימה', (
         tester,
       ) async {
