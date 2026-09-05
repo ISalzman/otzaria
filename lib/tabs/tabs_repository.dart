@@ -51,6 +51,12 @@ class TabsRepository {
       boxName,
       _currentTabKey,
     );
+    // ⚠️ "לא הצלחנו לשאול" אינו "אין כרטיסיות". בלי הבדיקה גיבוי שנוצר
+    // בחלון משני בזמן שהבעלים עסוק כתב `openTabs: {tabs: []}` בלי שגיאה,
+    // ושחזור ממנו סגר את כל הכרטיסיות של המשתמש.
+    if (!tabs.authoritative || !current.authoritative) {
+      throw SharedHiveUnavailable(SharedHiveKey(boxName, _tabsBoxKey));
+    }
     return {
       'tabs': tabs.value ?? <dynamic>[],
       'currentTab': current.value ?? 0,
@@ -231,13 +237,27 @@ class TabsRepository {
 
   /// מוחק את סשן החלון הזה.
   ///
-  /// ⚠️ נקרא כשהמשתמש **סוגר** חלון משני, אחרי ה-flush. בלי המחיקה הסשן
-  /// היה נשאר על הדיסק, ו-[adoptOrphanWindowSessions] היה מחזיר בהפעלה
-  /// הבאה כרטיסיות שהמשתמש סגר במכוון. מה שכן צריך לשרוד סגירה הוא
+  /// ⚠️ נקרא כשהמשתמש **סוגר** חלון שאינו האחרון, אחרי ה-flush. בלי המחיקה
+  /// הסשן היה נשאר על הדיסק, ו-[adoptOrphanWindowSessions] היה מחזיר
+  /// בהפעלה הבאה כרטיסיות שהמשתמש סגר במכוון. מה שכן צריך לשרוד סגירה הוא
   /// `Ctrl+Shift+T`, והוא נשען על המנוע שנשאר חי בזיכרון ולא על הדיסק.
+  ///
+  /// ⚠️ **חל גם על החלון הראשון**, וההצדקה זהה: הוא נסגר במכוון בעוד
+  /// חלונות אחרים נשארו פתוחים, ולכן הכרטיסיות שלו אינן "פתוחות" יותר.
+  /// מפתח הסשן שלו הוא ההיסטורי, ולכן הוא נכתב כרשימה ריקה ואינו נמחק:
+  /// `loadTabs` ו-`NavigationBloc` קוראים אותו בהפעלה קרה, ומפתח חסר אינו
+  /// מבחין בין "אין כרטיסיות" לבין "טרם נשמר".
   Future<void> discardWindowSession() async {
-    if (_windowSlot == null) return;
     try {
+      if (_windowSlot == null) {
+        await SharedHiveStore.instance.write(
+          boxName,
+          _sessionTabsKey,
+          const [],
+        );
+        await SharedHiveStore.instance.write(boxName, _sessionCurrentKey, 0);
+        return;
+      }
       await SharedHiveStore.instance.delete(boxName, _sessionTabsKey);
       await SharedHiveStore.instance.delete(boxName, _sessionCurrentKey);
     } catch (e) {

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:developer' as developer;
 import 'package:hive_ce/hive.dart';
+import 'package:otzaria/core/windowing/window_role.dart';
 import 'package:otzaria/data/repository/hive_list_repository.dart';
 import 'package:otzaria/utils/file/hive_utils.dart';
 import 'package:otzaria/workspaces/workspace.dart';
@@ -38,33 +39,43 @@ class WorkspaceRepository {
   ///
   /// Handles migration from old index-based storage to new ID-based storage.
   Future<(List<Workspace>, String?)> loadWorkspaces() async {
+    // ⚠️ [SharedHiveUnavailable] מתפשט במכוון ואינו הופך לרשימה ריקה —
+    // ראו [HiveListRepository.load]. גיבוי שכתב `workspaces: []` בגלל
+    // קריאה שלא הצליחה נראה תקין, ושחזור ממנו מוחק את כל השולחנות.
+    // רשומה פגומה בודדת כן מדולגת ואינה מוחקת את השאר.
+    final workspaces = await _list.load();
     try {
-      // רשומה פגומה מדולגת ואינה מוחקת את השאר — [HiveListRepository.load].
-      final workspaces = await _list.load();
-
       // Try new ID-based key first
       String? currentId = _readLocal(_currentWorkspaceIdKey) as String?;
 
-      // If no ID stored, try to migrate from old index-based storage.
-      if (currentId == null && workspaces.isNotEmpty) {
+      // ⚠️ **לא** בחלון משני. ה-box המקומי שלו ריק תמיד (שורש Hive פרטי
+      // חדש בכל פתיחה), ולכן המיגרציה קיבעה אותו על השולחן הראשון — אותו
+      // שולחן שהחלון הראשון עומד עליו. שני חלונות על אותו שולחן דורסים זה
+      // לזה את ה-stash, וכרטיסיה נעלמת. חלון משני מתחיל **בלי** שולחן
+      // פעיל, ומקבל אחד רק אם המשתמש בחר בו במפורש.
+      if (currentId == null &&
+          !WindowRole.isSecondary &&
+          workspaces.isNotEmpty) {
         currentId = _migrateLegacyActiveIndex(workspaces);
       }
 
       // Validate that the ID exists in the list
       if (currentId != null && !workspaces.any((w) => w.id == currentId)) {
-        currentId = workspaces.isNotEmpty ? workspaces.first.id : null;
+        currentId = WindowRole.isSecondary || workspaces.isEmpty
+            ? null
+            : workspaces.first.id;
       }
 
       return (workspaces, currentId);
     } catch (e, stackTrace) {
       developer.log(
-        'Error loading workspaces from disk',
+        'Error resolving active workspace',
         error: e,
         stackTrace: stackTrace,
         name: 'WorkspaceRepository',
       );
-      // Do NOT overwrite persisted data — leave raw data intact
-      return (<Workspace>[], null);
+      // הרשימה כן נטענה — רק זהות השולחן הפעיל אבדה.
+      return (workspaces, null);
     }
   }
 

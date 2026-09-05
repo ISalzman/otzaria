@@ -244,6 +244,12 @@ class BackupService {
     'library_loaded.marker':
         'סימון מקומי שספרייה נטענה במכשיר זה — שחזורו למכשיר אחר מטעה',
     'biographies.tsb': 'נתוני ביוגרפיות ארוזים באפליקציה ומתעדכנים מהרשת',
+    windowRootsDirName:
+        'שורשי Hive פרטיים של חלונות נוספים; נמחקים בהפעלה קרה '
+        '(deleteStaleWindowRoots) ואין בהם נתונים שאינם אצל החלון הראשון',
+    AppPaths.libraryPathRecordFileName:
+        'נתיב הספרייה עבור ה-uninstaller; נגזר מההגדרות ונרשם מחדש בכל '
+        'עלייה, ושחזור נתיב ממכשיר אחר מטעה אותו',
   };
 
   /// מפתחות הגדרות שאינם מועברים בין התקנות.
@@ -996,12 +1002,18 @@ class BackupService {
       await repo.replaceBookmarks(bookmarks);
       return;
     }
-    final result = BackupImportMerge.mergeBookmarks(
-      await repo.loadBookmarks(),
-      bookmarks,
-    );
-    counts.bookmarks += result.added;
-    await repo.replaceBookmarks(result.merged);
+    // ⚠️ `mutate` ולא `load` + `replace`. הייבוא הממזג הוא **תוספת**, ולכן
+    // הוא בדיוק המקרה שבו read-modify-write מוחק: סימנייה שנוספה בחלון אחר
+    // בין הקריאה לכתיבה נעלמה. אותה המרה נעשתה כבר בשולחנות העבודה.
+    var added = 0;
+    await repo.mutateBookmarks((current) {
+      final result = BackupImportMerge.mergeBookmarks(current, bookmarks);
+      // ⚠️ נקבע בכל ניסיון ולא נסכם: `mutate` עשוי להריץ את הפונקציה שוב
+      // על רשימה טרייה, וצבירה הייתה סופרת פעמיים.
+      added = result.added;
+      return result.merged;
+    });
+    counts.bookmarks += added;
   }
 
   /// Restore history. [counts] לא ריק = ייבוא ממזג, והרשומות מתווספות.
@@ -1015,12 +1027,14 @@ class BackupService {
       await repo.replaceHistory(history);
       return;
     }
-    final result = BackupImportMerge.mergeHistory(
-      await repo.loadHistory(),
-      history,
-    );
-    counts.history += result.added;
-    await repo.replaceHistory(result.merged);
+    // ⚠️ `mutate` — ראו ההערה ב-`_restoreBookmarks`.
+    var added = 0;
+    await repo.mutateHistory((current) {
+      final result = BackupImportMerge.mergeHistory(current, history);
+      added = result.added;
+      return result.merged;
+    });
+    counts.history += added;
   }
 
   /// מפתח העיגון שנוכחותו מעידה שהגיבוי יודע לבטא עיגון להערה.

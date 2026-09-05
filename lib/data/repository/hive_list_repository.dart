@@ -15,10 +15,10 @@ import 'package:otzaria/utils/file/hive_utils.dart';
 ///
 /// ## שני נתיבים, ורק אחד מהם כותב
 ///
-/// [load] סובלני ומיועד לתצוגה: רשומה פגומה מדולגת, וכשל מלא מחזיר רשימה
-/// ריקה — **בלי לכתוב דבר**. [mutate] הוא נתיב הכתיבה היחיד למאגר משותף,
-/// והוא מחיל את השינוי על הרשימה **הטרייה** של הבעלים ולא על עותק
-/// שבזיכרון.
+/// [load] סובלני לרשומה פגומה (היא מדולגת) אבל **לא** לקריאה שלא הצליחה:
+/// שם הוא זורק, כי "לא ידוע" אינו "ריק". [mutate] הוא נתיב הכתיבה היחיד
+/// למאגר משותף, והוא מחיל את השינוי על הרשימה **הטרייה** של הבעלים ולא על
+/// עותק שבזיכרון.
 ///
 /// ⚠️ ההבחנה אינה סטייל. קודם לכן ה-bloc החזיק עותק, חישב ממנו רשימה
 /// חדשה, וכתב אותה במלואה — ולכן כל חלון מחק ברציפות את מה שהאחר הוסיף,
@@ -50,17 +50,28 @@ class HiveListRepository<T> {
     (changed) => changed.box == boxName && changed.key == key,
   );
 
-  /// Load the list from Hive
+  /// טוען את הרשימה.
+  ///
+  /// זורק [SharedHiveUnavailable] כשלא הצלחנו לשאול את הבעלים. ⚠️ הבחנה
+  /// הכרחית: החזרת `[]` במקרה הזה הופכת "לא ידוע" ל"ריק", וגיבוי שנוצר
+  /// בחלון משני בזמן שהבעלים עסוק נכתב כגיבוי ריק **תקין** — ושחזור ממנו
+  /// מוחק את הנתונים.
+  ///
+  /// כשל קריאה מקומי (Hive פגום, box שאינו פתוח) כן מחזיר `[]`: הנתונים על
+  /// הדיסק נשארים שלמים, נתיב הכתיבה היחיד ([mutate]) חוסם בעצמו, ותצוגה
+  /// ריקה עדיפה על מסך שבור.
   Future<List<T>> load() async {
+    final SharedHiveValue snapshot;
     try {
-      final snapshot = await SharedHiveStore.instance.read(boxName, key);
-      return _decode(snapshot.asList).items;
-    } catch (e) {
+      snapshot = await SharedHiveStore.instance.read(boxName, key);
+    } on SharedHiveReadFailed catch (e) {
       debugPrint('⚠️ HiveListRepository.load($boxName/$key) failed: $e');
-      // Do NOT overwrite persisted data — return empty so the UI is functional
-      // but the raw data on disk stays intact for the next attempt / fix.
       return [];
     }
+    if (!snapshot.authoritative) {
+      throw SharedHiveUnavailable(SharedHiveKey(boxName, key));
+    }
+    return _decode(snapshot.asList).items;
   }
 
   /// מחיל [apply] על הרשימה הטרייה ושומר את התוצאה. מחזיר את מה שנשמר.
@@ -122,18 +133,9 @@ class HiveListRepository<T> {
     await SharedHiveStore.instance.write(boxName, key, const []);
   }
 
-  /// Add an item at the beginning of the list
-  Future<void> addItem(T item) async => mutate((current) => [item, ...current]);
-
-  /// Remove item at index
-  ///
-  /// ⚠️ האינדקס נמדד מול הרשימה הטרייה, ולכן הוא בטוח רק כשהקורא הרגע
-  /// טען אותה. להסרה של רשומה מזוהה העדף [mutate] עם תנאי על הזהות —
-  /// אינדקס אינו יציב כשחלון אחר מוסיף רשומה בראש הרשימה.
-  Future<void> removeAt(int index) async => mutate((current) {
-    if (index < 0 || index >= current.length) return current;
-    return [...current]..removeAt(index);
-  });
+  // ⚠️ הוסרו `addItem` ו-`removeAt`: אין להם צרכן, והשני היה מלכודת —
+  // אינדקס אינו יציב במאגר משותף שחלון אחר יכול להוסיף לראשו. כל צרכן
+  // עובר דרך [mutate] עם תנאי על **הזהות** של הרשומה.
 
   _Decoded<T> _decode(List<dynamic> raw) {
     final items = <T>[];
