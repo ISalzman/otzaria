@@ -23,8 +23,4 @@ class HistoryRepository extends BaseListRepository<Bookmark> {
       overwrite(history);
 
   Future<void> clearHistory() async => clear();
-
-  Future<void> addHistoryItem(Bookmark bookmark) async => addItem(bookmark);
-
-  Future<void> removeHistoryItem(int index) async => removeAt(index);
 }

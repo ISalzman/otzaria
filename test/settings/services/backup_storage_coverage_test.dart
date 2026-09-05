@@ -35,6 +35,15 @@ void main() {
     r"""p\.join\(\s*(?:await\s+)?[\w.]*(?:[dD]ataRoot|dataRoot)\w*(?:\(\))?\s*,\s*'([^']+)'""",
   );
 
+  /// אותו דבר כששם התיקייה מגיע מקבוע: `p.join(<dataRoot>, kDirName)`.
+  ///
+  /// ⚠️ נדרש בדיוק כמו ב-[boxViaIdentifierPattern]. בלעדיו תיקייה שנוצרת
+  /// תחת שורש הנתונים עם שם מקבוע — כפי ש-`windows/` נוצרה — אינה נסרקת
+  /// כלל, והשומר עובר בשקט על מקום שמירה שלא הוכרע.
+  final dataRootDirViaIdentifierPattern = RegExp(
+    r"""p\.join\(\s*(?:await\s+)?[\w.]*(?:[dD]ataRoot|dataRoot)\w*(?:\(\))?\s*,\s*(?:[A-Za-z_]\w*\s*\.\s*)?([A-Za-z_]\w*)\s*[,)]""",
+  );
+
   /// ה-box של ההגדרות נפתח דרך `HiveCache.keyName` ולא כמילולית.
   const settingsBoxName = 'app_preferences';
 
@@ -69,8 +78,13 @@ void main() {
           names.add(match.group(1)!);
         }
       }
-      for (final match in boxViaIdentifierPattern.allMatches(source)) {
-        names.addAll(constants[match.group(1)!] ?? const <String>{});
+      for (final pattern in [
+        boxViaIdentifierPattern,
+        dataRootDirViaIdentifierPattern,
+      ]) {
+        for (final match in pattern.allMatches(source)) {
+          names.addAll(constants[match.group(1)!] ?? const <String>{});
+        }
       }
     }
     discovered = names;

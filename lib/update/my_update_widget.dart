@@ -654,8 +654,8 @@ class _ManagedUpdatWidgetState extends State<_ManagedUpdatWidget> {
     _settingsSubscription?.cancel();
     _offlineRecheckTimer?.cancel();
     if (_windowCloseHookInstalled) {
-      // TODO(T-1.3): רישום/ביטול של listener אינו במשטח AppWindowController —
-      // הוא שייך ל-AppWindowRegistry, שטרם קיים.
+      // ⚠️ ה-singleton של `window_manager` ולא `AppWindowController`: רשימת
+      // ה-listeners שלו היא פר-isolate, ולכן היא **כבר** של החלון הזה.
       windowManager.removeListener(_windowListener);
       _windowCloseHookInstalled = false;
     }
@@ -672,8 +672,8 @@ class _ManagedUpdatWidgetState extends State<_ManagedUpdatWidget> {
 
   Future<void> _installWindowCloseHook() async {
     try {
-      // TODO(T-1.3): setPreventClose ורישום listener הם מצב פר-חלון שמנוהל
-      // ב-AppWindowRegistry, שטרם קיים. עד אז נשארים על ה-singleton.
+      // ⚠️ `window_manager` הוא סינגלטון פר-isolate, ולכן הקריאה חלה על
+      // החלון של ה-isolate הזה — לא על "החלון של התהליך".
       await windowManager.setPreventClose(true);
       if (!mounted) {
         return;

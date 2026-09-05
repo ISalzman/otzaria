@@ -277,7 +277,9 @@ void main() {
         buildBookmark('בראשית'),
         buildBookmark('שמות', index: 4),
       ]);
-      await HistoryRepository().replaceHistory([buildBookmark('ויקרא', index: 7)]);
+      await HistoryRepository().replaceHistory([
+        buildBookmark('ויקרא', index: 7),
+      ]);
 
       final backup = await createBackup(bookmarks: true, history: true);
 

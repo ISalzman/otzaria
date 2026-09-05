@@ -26,8 +26,6 @@ abstract class BaseListRepository<T> {
   Future<void> overwrite(List<T> items) async => _repo.overwrite(items);
 
   Future<void> clear() async => _repo.clear();
-  Future<void> addItem(T item) async => _repo.addItem(item);
-  Future<void> removeAt(int index) async => _repo.removeAt(index);
 
   /// אות שהרשימה שונתה בחלון אחר.
   Stream<void> get remoteChanges => _repo.remoteChanges;
