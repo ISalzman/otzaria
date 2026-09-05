@@ -8,6 +8,8 @@ import 'package:flutter/services.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:otzaria_icons/otzaria_icons.dart';
 import 'package:otzaria/core/windowing/app_window_scope.dart';
+import 'package:otzaria/core/windowing/multi_window_service.dart';
+import 'package:otzaria/core/windowing/tab_drag_preview.dart';
 import 'package:otzaria/widgets/misc/rtl_icon.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:collection/collection.dart';
@@ -1152,13 +1154,16 @@ class MainWindowScreenState extends State<MainWindowScreen>
       _handleExternalActivationUriString(uriString);
 
   Future<void> _bringWindowToFront() async {
-    if (!kIsWeb &&
-        (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
-      if (!mounted) return;
-      final window = AppWindowScope.controllerOf(context);
-      await window.show();
-      await window.focus();
+    if (kIsWeb) return;
+    if (!Platform.isWindows && !Platform.isLinux && !Platform.isMacOS) return;
+    if (!mounted) return;
+    if (MultiWindowService.isSupported) {
+      await const MultiWindowService().raiseSelf();
+      return;
     }
+    final window = AppWindowScope.controllerOf(context);
+    await window.show();
+    await window.focus();
   }
 
   Future<void> _showPluginInstallDialog(PluginSystemState state) async {
@@ -3139,11 +3144,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
                                   ),
                                 ),
                               Expanded(
-                                // גבול הציור מאפשר לצלם את התוכן בגרירת כרטיסייה
-                                // ומבודד את צביעתו מסרגל הכרטיסיות.
-                                child: RepaintBoundary(
-                                  key: windowContentBoundaryKey,
-                                  child: OrientationBuilder(
+                                child: OrientationBuilder(
                                   builder: (context, orientation) {
                                     _handleOrientationChange(
                                       context,
@@ -3392,7 +3393,12 @@ class MainWindowScreenState extends State<MainWindowScreen>
                                                           .readingTabsOnSide,
                                                     ),
                                               ),
-                                              Expanded(child: pageView),
+                                              Expanded(
+                                                child: RepaintBoundary(
+                                                  key: windowContentBoundaryKey,
+                                                  child: pageView,
+                                                ),
+                                              ),
                                             ],
                                           ),
                                         ),
@@ -3475,8 +3481,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
                                           ),
                                       ],
                                     );
-                                    },
-                                  ),
+                                  },
                                 ),
                               ),
                             ],

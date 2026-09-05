@@ -71,9 +71,12 @@ import 'package:otzaria/utils/navigation/book_open_coordinator.dart';
 
 import 'package:otzaria_search_engine/otzaria_search_engine.dart';
 import 'package:otzaria/core/app_paths.dart';
+import 'package:otzaria/core/data_root_writability_warning.dart';
 import 'package:otzaria/core/cli_command.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/core/error_log_file.dart';
+import 'package:otzaria/core/messages/window_messages.dart';
+import 'package:otzaria/core/update_check_frequency.dart';
 import 'package:otzaria/core/info/app_info_cli.dart';
 import 'package:otzaria/core/info/app_install_timeline.dart';
 import 'package:otzaria/core/external_activation_queue.dart';
@@ -100,8 +103,6 @@ import 'package:otzaria/find_ref/repository/reference_books_cache.dart';
 import 'package:otzaria/tools/dictionary/repository/dictionary_lookup_repository.dart';
 import 'package:pdfrx/pdfrx.dart';
 import 'package:otzaria/tools/calendar/services/notification_service.dart';
-import 'package:timezone/data/latest.dart' as tz;
-import 'package:timezone/timezone.dart' as tz;
 import 'package:otzaria/plugins/database/plugin_database_bootstrap.dart';
 import 'package:logging/logging.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -123,9 +124,11 @@ import 'package:sentry_flutter/sentry_flutter.dart';
 // Updated automatically by version update scripts - do not edit manually
 const int _latestReleasedBuildNumber = 90960;
 
-// Global reference to window listener for cleanup
-/// החלון היחיד של התהליך. מקור אמת אחד לכל מי שצריך אותו כאן: ה-listener,
+/// החלון של ה-isolate הזה. מקור אמת אחד לכל מי שצריך אותו כאן: ה-listener,
 /// [WindowPersistence] ו-[AppWindowScope] מקבלים את אותו מופע.
+///
+/// `windowManager` הוא סינגלטון פר-isolate ולכן הבקר פונה תמיד לחלון של
+/// ה-isolate שבו הוא רץ — גם בחלון משני.
 const _appWindow = WindowManagerAppWindowController();
 
 AppWindowListener? _appWindowListener;
@@ -335,9 +338,9 @@ void main(List<String> args) async {
     }
 
     // Skip HardwareKeyboard assertion error - happens when window loses focus while
-    // a key is held down; fixed by clearState() in onWindowFocus but filter as fallback
+    // a key is held down; onWindowFocus releases stuck keys but filter as fallback
     if (_isIgnorableHardwareKeyboardAssertion(errorString)) {
-      return; // Silently ignore - handled by HardwareKeyboard.instance.clearState() on focus
+      return; // Silently ignore - stuck keys are released on window focus
     }
 
     // Log all other errors normally
@@ -362,7 +365,7 @@ void main(List<String> args) async {
       return true; // Silently ignore these errors
     }
 
-    // Skip HardwareKeyboard assertion error - handled by clearState() on window focus
+    // Skip HardwareKeyboard assertion error - stuck keys are released on window focus
     if (_isIgnorableHardwareKeyboardAssertion(errorString)) {
       return true; // Silently ignore
     }
@@ -489,11 +492,7 @@ Future<void> _runAppBootstrap() async {
       geometry: _appWindow,
     );
 
-    _appWindowListener = AppWindowListener(window: _appWindow);
-    // TODO(T-1.3): רישום listener ו-setPreventClose הם מצב פר-חלון שמנוהל
-    // ב-AppWindowRegistry, שטרם קיים.
-    windowManager.addListener(_appWindowListener!);
-    await windowManager.setPreventClose(true);
+    await _installWindowCloseHandling();
 
     // ה-splash נייטיבי ב-runner והחלון הראשי נשאר מוסתר עד presentMainWindow,
     // שם הוא נחשף ישר בגבולותיו הסופיים — לכן אין כאן waitUntilReadyToShow.
@@ -553,13 +552,18 @@ Future<void> presentMainWindow() async {
         // לא קריטי — בלי cloak נשארת ההתנהגות הקודמת (חשיפה לא-אטומית).
       }
     }
-    await _appWindow.show();
-    await _appWindow.focus();
-    // ⚠️ חלון משני נוצר מוסתר, ו-`show()` על חלון מוסתר אינו מפעיל אותו:
-    // הוא נחשף **מאחורי** החלון שפתח אותו, וזה נראה כאילו החלון הראשון
-    // "תמיד עליון". `focus()` לבדו לא הספיק, ולכן העלאה מפורשת בנייטיב.
-    if (isSecondaryWindow) {
-      await const MultiWindowService().raiseSelf();
+    // ⚠️ **החשיפה של חלון משני שייכת לנייטיב בלבד.**
+    //
+    // `RevealOnFirstFrame` כבר הציג אותו והביא אותו לחזית ברגע הפריים
+    // הראשון — כלומר שניות לפני שהאתחול כאן מסתיים. חזרה על
+    // `show`/`focus`/`raiseSelf` בנקודה הזו חוטפת את הפוקוס מהמשתמש
+    // שבינתיים כבר חזר לעבוד בחלון הראשי, וזו הייתה מחצית "מריבת
+    // הפוקוסים" בין החלונות. המחצית השנייה הייתה ב-`SetChildContent`.
+    if (!WindowRole.isSecondary) {
+      await _appWindow.show();
+      await _appWindow.focus();
+    }
+    if (WindowRole.isSecondary) {
       final startup = _secondaryWindowStartup;
       if (startup != null && startup.isRunning) {
         startup.stop();
@@ -608,7 +612,7 @@ Future<void> _initializeProcessSingletons() async {
     // ⚠️ פר-תהליך, לא פר-חלון. ניקוי יומן השגיאות בשינוי גרסה ורישום
     // ההפעלה מתארים את **התהליך**; חלון נוסף שרושם "הפעלה" מזייף את
     // הנתונים, וניקוי היומן פעם שנייה עלול למחוק שגיאות שנרשמו בינתיים.
-    if (!isSecondaryWindow) {
+    if (!WindowRole.isSecondary) {
       _clearErrorLogOnVersionChange();
       await AppInstallTimelineStore.recordLaunch(ErrorLogFile.appVersion);
     }
@@ -620,7 +624,7 @@ Future<void> _initializeProcessSingletons() async {
       // הגבולות השמורים הם של החלון הראשי, ובדרך כלל ממוקסמים — ולכן כל
       // חלון נוסף נפתח על מסך מלא ובאותו מקום בדיוק, ומכסה את הקודם.
       // ה-runner כבר יצר אותו בגודל ובהיסט סבירים, וזה מה שצריך להישאר.
-      if (!isSecondaryWindow) {
+      if (!WindowRole.isSecondary) {
         await WindowPersistence.restoreIfAny();
       }
       // מחילים את הגבולות הסופיים כאן — מוקדם, בזמן שה-splash הנייטיב מוצג
@@ -630,7 +634,7 @@ Future<void> _initializeProcessSingletons() async {
       // המנוע מספיק לעבד את שינוי ה-DPI ולצייר מחדש ב-devicePixelRatio הנכון
       // הרבה לפני שהחלון נחשף — מונע מצב שבו כל הממשק מופיע "מוגדל" כי הוצג
       // לפני שה-DPR התעדכן.
-      if (!isSecondaryWindow) {
+      if (!WindowRole.isSecondary) {
         await WindowPersistence.applyRestoredBounds();
       }
       // גם מסגרת החלון מוגדרת כאן — מוקדם, בעוד החלון מוסתר — ולא ברגע
@@ -668,9 +672,13 @@ Future<void> _initializeProcessSingletons() async {
   // ⚠️ פר-תהליך. המיגרציה משכתבת נתיבים אבסולוטיים בהגדרות המשותפות;
   // החלון הראשון כבר ביצע אותה, וחלון משני שיריץ אותה שוב יעבוד על
   // ה-Hive הפרטי שלו ולא על המשותף — כלומר בזבוז במקרה הטוב.
-  if (!isSecondaryWindow) {
+  if (!WindowRole.isSecondary) {
     await PortablePaths.migrateIfMoved();
   }
+
+  // נתיב הספרייה נרשם לקובץ טקסט שה-uninstaller קורא; ההגדרות עצמן
+  // ב-Hive בינארי שאינו נגיש לו (issue #1020).
+  unawaited(AppPaths.recordLibraryPathForUninstaller());
 
   // שירות ההתראות (לוח השנה) ושירות דיווחי השגיאות אינם חיוניים להצגת
   // המסך הראשי. tz.initializeTimeZones + plugin init של flutter_local_notifications
@@ -678,7 +686,7 @@ Future<void> _initializeProcessSingletons() async {
   // ⚠️ פר-תהליך, לא פר-חלון. שירות ההתראות רושם התראות מערכת, ושטיפת
   // דיווחי השגיאות שולחת את אותו תור — חלון משני שמריץ אותם שוב מייצר
   // התראות כפולות ודיווחים כפולים.
-  if (!isSecondaryWindow) {
+  if (!WindowRole.isSecondary) {
     unawaited(_runDeferredNotificationService());
     unawaited(_runDeferredErrorReportFlush());
   } else {
@@ -704,6 +712,8 @@ Future<void> _recoverInterruptedLibraryUpdate() {
   ).run(DatabaseConstants.getDatabasePath());
 }
 
+/// seforim.db שהוזז לגיבוי זמני בעדכון ספרייה שנהרג באמצע חוזר לספרייה —
+/// אחרת היא נראית ריקה והמשתמש מוריד הכול מחדש, על גבי הגיבוי שנשאר.
 Future<void> _recoverOrphanedDbBackup() async {
   final libraryPath = Settings.getValue<String>(
     SettingsRepository.keyLibraryPath,
@@ -723,12 +733,15 @@ Future<void> _recoverOrphanedDbBackup() async {
 }
 
 Future<void> _initializeRestartableRuntime() async {
-  // שחזור עדכון ספרייה שנקטע (marker+backup) חייב לרוץ לפני פתיחת ה-DB.
+  // שני השחזורים חייבים לרוץ לפני פתיחת ה-DB ולפני בדיקת "ספרייה ריקה".
+  // שחזור עדכון ספרייה שנקטע (marker+backup) קודם: הוא כותב DB משלו, ולהחזיר
+  // לפניו גיבוי יתום פירושו העתקת ~5.5GB שתידרס מיד.
   //
-  // ⚠️ פר-תהליך. השחזור נוגע בקובצי הספרייה המשותפים, ושני חלונות
-  // שמריצים אותו במקביל היו מתנגשים על אותם קבצים. החלון הראשון כבר
-  // ביצע אותו לפני שהחלון הזה בכלל נוצר.
-  if (!isSecondaryWindow) {
+  // ⚠️ פר-תהליך, **שניהם**. הם נוגעים בקובצי הספרייה המשותפים, ושני
+  // חלונות שמריצים אותם במקביל היו מתנגשים על אותם קבצים — כולל אותה
+  // העתקה של ~5.5GB פעמיים. החלון הראשון כבר ביצע אותם לפני שהחלון הזה
+  // בכלל נוצר.
+  if (!WindowRole.isSecondary) {
     await _recoverInterruptedLibraryUpdate();
     await _recoverOrphanedDbBackup();
   }
@@ -771,6 +784,7 @@ Future<void> _initializeRestartableRuntime() async {
   unawaited(_runDeferredAutoBackup());
   unawaited(_runDeferredProtocolRegistration());
   unawaited(_logJobObjectContainmentFailure());
+  unawaited(_runDeferredDataRootWritabilityWarning());
 
   // מסלול התאימות הישן זקוק ל-WebView מיד; החימום רץ ברקע ואינו מעכב bootstrap.
   unawaited(_preWarmWebViewEnvironment());
@@ -802,8 +816,8 @@ Future<void> _logJobObjectContainmentFailure() async {
 /// התראות — הן היו נשלחות פעמיים.
 Future<void> _initializeTimeZonesOnly() async {
   try {
-    tz.initializeTimeZones();
-    tz.setLocalLocation(tz.getLocation('Asia/Jerusalem'));
+    // מקור אחד עם [NotificationService.init] — כולל אזור הזמן.
+    NotificationService.initializeTimeZones();
   } catch (error, stackTrace) {
     _logNonFatalInitializationError('Timezone database', error, stackTrace);
   }
@@ -855,6 +869,19 @@ Future<void> _runDeferredAutoBackup() async {
   } catch (error, stackTrace) {
     _logNonFatalInitializationError('Automatic backup', error, stackTrace);
   }
+}
+
+/// אזהרה על שורש נתונים חסום-לכתיבה. ממתינה לחשיפת החלון — דיאלוג לפניה
+/// אינו מוצג כי עדיין אין Navigator.
+Future<void> _runDeferredDataRootWritabilityWarning() async {
+  try {
+    await _mainWindowRevealedCompleter.future.timeout(
+      const Duration(seconds: 15),
+    );
+  } on TimeoutException {
+    // ממשיכים בכל זאת — אם ה-Navigator עדיין חסר, ההצגה תדולג בשקט.
+  }
+  await DataRootWritabilityWarning.showIfNeeded();
 }
 
 Future<void> _runDeferredProtocolRegistration() async {
@@ -1249,7 +1276,7 @@ class _AppBootstrapState extends State<AppBootstrap> {
                 debugPrint('⚠️ פענוח הכרטיסיה שהועברה נכשל — החלון ייפתח ריק');
                 WidgetsBinding.instance.addPostFrameCallback((_) {
                   UiSnack.showError(
-                    'הכרטיסיה לא נפתחה בחלון החדש. היא נשמרה בהיסטוריה.',
+                    WindowMessages.transferredTabDecodeFailed,
                   );
                 });
                 try {
@@ -1311,7 +1338,15 @@ class _AppBootstrapState extends State<AppBootstrap> {
                       List<OpenedTab> tabs,
                       int activeIndex,
                       String? activePane,
-                    ) {
+                    ) async {
+                      // ⚠️ ההמתנה נרשמת **לפני** השליחה: `ReplaceAllTabs`
+                      // מטופל סינכרונית, ורישום אחריו היה מפספס את המצב
+                      // שהוא מחפש ומחכה לנצח.
+                      final replaced = tabsBloc.stream.firstWhere(
+                        (state) =>
+                            identical(state.tabs, tabs) &&
+                            state.currentTabIndex == activeIndex,
+                      );
                       tabsBloc.add(
                         ReplaceAllTabs(
                           tabs,
@@ -1319,6 +1354,7 @@ class _AppBootstrapState extends State<AppBootstrap> {
                           activePane: activePane,
                         ),
                       );
+                      await replaced;
                     },
               )..add(LoadWorkspaces());
             },
@@ -1354,7 +1390,7 @@ class _AppBootstrapState extends State<AppBootstrap> {
               // 403, והמשתמש ראה "שגיאה בקבלת רשימת ה-releases" בכל
               // פתיחת חלון.
               areUpdatesEnabled: () =>
-                  !isSecondaryWindow &&
+                  !WindowRole.isSecondary &&
                   (Settings.getValue<bool>(
                         SettingsRepository.keySoftwareAndBookUpdatesEnabled,
                       ) ??
@@ -1362,6 +1398,9 @@ class _AppBootstrapState extends State<AppBootstrap> {
               // עדכוני ספרייה תמיד ליציב בלבד — מנותק מערוץ הפיתוח, שמשפיע רק
               // על עדכוני התוכנה.
               allowPrerelease: () => false,
+              onCheckSucceeded: () => recordSuccessfulUpdateCheck(
+                SettingsRepository.keyLastLibraryUpdateCheck,
+              ),
             ),
           ),
           BlocProvider<PluginUpdatesCubit>(
@@ -1398,11 +1437,13 @@ class _AppBootstrapState extends State<AppBootstrap> {
                 ),
               );
               return PluginSystemBloc(
-                repository: repository,
-                declarativeHost: host,
-                readerStates: tabsBloc.stream,
-                initialReaderState: tabsBloc.state,
-              )..add(LoadPlugins());
+                  repository: repository,
+                  declarativeHost: host,
+                  readerStates: tabsBloc.stream,
+                  initialReaderState: tabsBloc.state,
+                )
+                ..add(const SeedBundledPlugins())
+                ..add(LoadPlugins());
             },
           ),
         ],
@@ -1416,6 +1457,14 @@ class _AppBootstrapState extends State<AppBootstrap> {
 }
 
 Future<void> initHive() async {
+  // ⚠️ החלון הראשון, וכל עוד אין חלון נוסף חי. שורש Hive פרטי שנשאר תחת
+  // `<dataRoot>/windows` הוא שארית מהפעלה קודמת ואף אחד לא ימחק אותו
+  // אחרת — נמדדו 69 תיקיות ו-33MB. תנאי `hasOtherWindows` מגן על המסלול
+  // של `RestartWidget`, שמריץ את האתחול מחדש בזמן שחלון משני חי ופתח שם
+  // קבצים.
+  if (!WindowRole.isSecondary && !WindowBus.instance.hasOtherWindows) {
+    await deleteStaleWindowRoots();
+  }
   // ⚠️ `hiveRootPath` ולא `getDataRootPath`: בחלון משני קובצי ה-Hive
   // יושבים בתיקייה נפרדת, אבל שאר שורש הנתונים — תוספים, WebView2,
   // מסדי נתונים — נשאר משותף. ראו `configureHiveRootForWindow`.
@@ -1458,43 +1507,33 @@ void cleanup() {
 
 // Note: TOC parsing helper moved to lib/utils/toc_parser.dart for reuse
 
-// ═══════════════════════════════════════════════════════════════════════
-// ספייק P-0 שלב 2 — אינו מיועד ל-main.
-//
-// נקודת כניסה לתהליך broker: מנוע Flutter **בלי `FlutterViewController`**.
-// השאלה הנמדדת: האם Dart רץ בכלל במנוע חסר-view — טיימרים, microtasks,
-// I/O ו-`rootBundle` — או שהמנוע מצפה ל-view כדי להתקדם.
-//
-// זו הליבה של מודל C1, וגם של ה-host במודל A (T-G2.0). המדידה כותבת
-// שורות ל-`%TEMP%\otzaria_broker_probe.log` ויוצאת; אין UI ואין ערוצים.
-// ═══════════════════════════════════════════════════════════════════════
-// ═══════════════════════════════════════════════════════════════════════
-// חלון אוצריא נוסף.
-//
-// רץ ב-isolate נפרד משלו, על thread ייעודי, באותו תהליך — מודל A
-// (docs/P-0-stage3-result.md). זו **אינה** `main()`: אין בדיקת מופע יחיד
-// (היא הייתה סוגרת את החלון מיד), אין splash נייטיב, ואין תור הפעלות
-// חיצוניות — כל אלה שייכים לתהליך, וכבר רצו בחלון הראשון.
-//
-// ⚠️ שורש נתונים פרטי. `hive_ce` נועל את קובצי ה-`.lock` בלעדית, ונמדד
-// שהנעילה היא פר-handle ולא פר-תהליך: שני isolates באותו תהליך נכשלים
-// באותו errno 33 כמו שני תהליכים (docs/P-0-stage3-result.md §7). עד
-// שפרק 3 ינתב את Hive ו-Settings ל-host, כל חלון מקבל תיקיית נתונים
-// משלו. הספרייה עצמה — הספרים, SQLite ואינדקס Tantivy — משותפת, כי
-// אלה **כן** נפתחים פעמיים בהצלחה.
-//
-// המשמעות היום: להעדפות ולהיסטוריה של חלון נוסף אין שיתוף עם הראשון.
-// זו הגבלה ידועה של ה-MVP, לא תכנון סופי.
+/// נקודת הכניסה של חלון אוצריא נוסף.
+///
+/// רץ ב-isolate נפרד משלו, באותו תהליך ועל **ה-thread הראשי כמו כל
+/// המנועים** (ראו [MultiWindowService]). זו **אינה** `main()`: אין בדיקת
+/// מופע יחיד (היא הייתה סוגרת את החלון מיד), אין splash נייטיב, ואין תור
+/// הפעלות חיצוניות — כל אלה שייכים לתהליך, וכבר רצו בחלון הראשון.
+///
+/// ⚠️ שורש Hive פרטי. `hive_ce` נועל את קובצי ה-`.lock` בלעדית, והנעילה
+/// היא פר-handle ולא פר-תהליך: שני isolates באותו תהליך נכשלים באותו
+/// errno 33 כמו שני תהליכים. לכן ההיסטוריה, הסימניות, שולחנות העבודה
+/// והכרטיסיות **מנותבים לחלון הראשון** (`SharedHiveStore`), וההגדרות
+/// נזרעות פעם אחת ומסונכרנות חי (`SettingsSync`). הספרייה עצמה —
+/// הספרים, SQLite ואינדקס Tantivy — משותפת, כי אלה **כן** נפתחים פעמיים
+/// בהצלחה. ראו `docs/multi-window.md`.
 @pragma('vm:entry-point')
 void secondaryWindowMain(List<String> args) async {
   if (kReleaseMode) {
     debugPrint = (String? message, {int? wrapWidth}) {};
   }
-  isSecondaryWindow = true;
   WindowRole.isSecondary = true;
   _secondaryWindowStartup = Stopwatch()..start();
   SentryWidgetsFlutterBinding.ensureInitialized();
   EditableText.debugDeterministicCursor = true;
+
+  // ⚠️ **לפני** הקמת שורש ה-Hive: המשבצת היא שם התיקייה. `register` נשען
+  // על [IsolateNameServer] בלבד ואינו תלוי ב-Hive, ולכן אין מניעה להקדים.
+  _claimWindowBusSlot();
 
   try {
     // ⚠️ **רק** הפניית קובצי ה-Hive נעשית כאן.
@@ -1510,16 +1549,24 @@ void secondaryWindowMain(List<String> args) async {
     // הכלל: נקודת הכניסה של חלון משני קובעת רק מה **שונה** בו. כל השאר
     // עובר במסלול היחיד והמשותף.
     final sharedRoot = await AppPaths.getDataRootPath();
+    // ⚠️ שם קבוע פר-משבצת ולא חותמת זמן. חותמת זמן יצרה תיקייה חדשה בכל
+    // פתיחת חלון ואף אחד לא מחק אותן — 69 תיקיות ו-33MB נמדדו במחשב אחד.
+    // התיקיות האלה נמחקות בהפעלה קרה של החלון הראשון ([initHive]), שבה אין
+    // עוד חלונות משניים ולכן כולן שאריות.
     final windowRoot = p.join(
       sharedRoot,
-      'windows',
-      DateTime.now().microsecondsSinceEpoch.toRadixString(36),
+      windowRootsDirName,
+      'slot-${WindowBus.instance.slot ?? 0}',
     );
     await Directory(windowRoot).create(recursive: true);
     // ⚠️ Hive בלבד, ולא `configureDataRootPathForProcess`. הפניית שורש
     // הנתונים כולו רוקנה את `<dataRoot>/plugins` — תפריט הכלים בחלון
     // משני היה ריק, וכרטיסיית תוסף נעלמה מהמקור במקום להיפתח ביעד.
     configureHiveRootForWindow(windowRoot);
+
+    // ⚠️ **חובה לפני כל שימוש ב-PDF בחלון הזה.** ראו
+    // [_isolatePdfiumForThisWindow].
+    await _isolatePdfiumForThisWindow(windowRoot);
 
     // זריעת ההעדפות של החלון שפתח אותנו.
     //
@@ -1540,7 +1587,22 @@ void secondaryWindowMain(List<String> args) async {
       await box.putAll(seed);
     }
   } catch (e, st) {
+    // ⚠️ אין להמשיך. בלי `configureHiveRootForWindow` שורש ה-Hive נופל
+    // לשורש המשותף, `initHive` נכשל בנעילה בלעדית (errno 33), והמשתמש מקבל
+    // חלון ריק או קורס. ב-release `debugPrint` מושתק ולכן אין שום עקבה —
+    // הכתיבה ללוג המקומי היא הראיה היחידה.
     debugPrint('secondaryWindowMain: data root setup failed: $e\n$st');
+    try {
+      ErrorLogFile.append(
+        title: 'Secondary window data root setup failed',
+        error: e,
+        stackTrace: st,
+      );
+    } catch (_) {
+      // כתיבת הלוג היא best-effort ולא תמנע את הסגירה.
+    }
+    await const MultiWindowService().closeSelf();
+    return;
   }
 
   Bloc.observer = AppBlocObserver();
@@ -1566,12 +1628,14 @@ void secondaryWindowMain(List<String> args) async {
   if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
     try {
       await windowManager.ensureInitialized();
+      // ⚠️ בדיוק כמו בחלון הראשון. בלי זה לחיצה על X בחלון משני עוקפת את
+      // Dart לגמרי — ראו [_installWindowCloseHandling].
+      await _installWindowCloseHandling();
     } catch (e) {
       debugPrint('secondaryWindowMain: windowManager init failed: $e');
     }
   }
 
-  _claimWindowBusSlot();
   _maybeMeasureThreadContention();
 
   runApp(
@@ -1593,6 +1657,10 @@ void secondaryWindowMain(List<String> args) async {
 /// יקבל, ולא רק את הצד הנייטיב. מופעל רק כאשר `OTZARIA_DEBUG_OPEN_WINDOW_MS`
 /// מוגדר.
 void _maybeScheduleDebugSecondWindow() {
+  // ⚠️ מגודר ב-`kDebugMode`: פתיחת חלון אוטומטית לפי משתנה סביבה אינה
+  // התנהגות שצריכה להיות נגישה בבנייה שהמשתמש מריץ, וגם קריאת
+  // `Platform.environment` בכל עלייה מתייתרת שם.
+  if (!kDebugMode) return;
   final ms = int.tryParse(
     Platform.environment['OTZARIA_DEBUG_OPEN_WINDOW_MS'] ?? '',
   );
@@ -1601,6 +1669,86 @@ void _maybeScheduleDebugSecondWindow() {
     final opened = await const MultiWindowService().openWindow();
     debugPrint('[debug] openWindow -> $opened');
   });
+}
+
+/// נותן לחלון הזה **עותק פרטי של `pdfium.dll`**, ומכוון אליו את pdfrx.
+///
+/// ## למה זה נדרש: PDFium גלובלי לתהליך, והקולבקים שלו שייכים ל-isolate
+///
+/// `FPDF_InitLibrary` ו-`FPDF_SetSystemFontInfo` הם מצב של **התהליך** (C
+/// globals במודול), בעוד ש-pdfrx מחזיק את כל מצבו במשתנים ברמת הקובץ —
+/// כלומר **פר isolate group**, וכל חלון הוא group משלו. התוצאה:
+///
+/// 1. החלון הראשון מתקין font mapper ו-`FPDF_SetSystemFontInfo(A)`.
+/// 2. החלון השני אינו רואה את `_fontMapper` של הראשון (משתנה פר-group),
+///    מתקין mapper משלו, ו-`FPDF_SetSystemFontInfo(B)` **דורס** את המצביע.
+/// 3. הקולבקים של ה-mapper הם `NativeCallable.isolateLocal`, כלומר קשורים
+///    ל-`PdfrxEngineWorker` של אותו group. ה-`FPDF_LoadPage` הבא בחלון
+///    הראשון קורא ל-`MapFont` של B מתוך worker A, וה-VM נופל בשגיאה
+///    `Cannot invoke native callback from a different isolate` — קריסה
+///    קטלנית שאי אפשר לתפוס.
+///
+/// ה-pre-warm של תוכני העניינים ב-`ReferenceBooksCache` פותח עשרות קובצי
+/// PDF בכל חלון, ולכן די היה בפתיחת חלון שני כדי לחמש את הקריסה.
+///
+/// ## הפתרון: מודול נפרד לכל חלון
+///
+/// `DynamicLibrary.open('pdfium.dll')` בשם בלבד מחזיר את המודול **שכבר
+/// טעון** בתהליך. עותק בנתיב אחר ובשם אחר נטען כמודול נפרד עם סגמנט
+/// נתונים משלו, ולכן לכל חלון יש PDFium משלו — כולל font mapper משלו.
+/// המחיר: עותק DLL בתיקיית החלון (נמחקת בהפעלה קרה) ומודול נוסף בזיכרון.
+///
+/// כשל כאן אינו עוצר את החלון: הוא נרשם ללוג, וה-pre-warm מדולג בחלונות
+/// משניים בכל מקרה — כך שהחשיפה מצטמצמת ל-PDF שהמשתמש פותח בפועל.
+Future<void> _isolatePdfiumForThisWindow(String windowRoot) async {
+  if (kIsWeb || !Platform.isWindows) return;
+  try {
+    final source = File(
+      p.join(p.dirname(Platform.resolvedExecutable), 'pdfium.dll'),
+    );
+    if (!await source.exists()) {
+      throw FileSystemException('pdfium.dll not found', source.path);
+    }
+    // ⚠️ גם **שם** שונה ולא רק נתיב שונה: הלוודר של Windows מזהה מודולים
+    // לפי שם הבסיס במקרים מסוימים, ושם ייחודי מסיר כל ספק.
+    final slot = WindowBus.instance.slot ?? 0;
+    final target = File(p.join(windowRoot, 'pdfium-window-$slot.dll'));
+    if (!await target.exists() ||
+        await target.length() != await source.length()) {
+      await source.copy(target.path);
+    }
+    Pdfrx.pdfiumModulePath = target.path;
+    debugPrint('[pdf] מודול PDFium פרטי לחלון: ${target.path}');
+  } catch (e, st) {
+    debugPrint('⚠️ _isolatePdfiumForThisWindow failed: $e\n$st');
+    try {
+      ErrorLogFile.append(
+        title: 'Private PDFium module for secondary window failed',
+        error: e,
+        stackTrace: st,
+        details: const {
+          'impact':
+              'PDF rendering in this window shares the process-global PDFium '
+              'with the main window and can abort the VM',
+        },
+      );
+    } catch (_) {
+      // רישום ללוג הוא best-effort.
+    }
+  }
+}
+
+/// מעביר את סגירת החלון הזה דרך Dart.
+///
+/// ⚠️ חייב לרוץ **בכל** חלון, לא רק בראשון. בלי `setPreventClose(true)`
+/// הפלאגין מעביר את `WM_CLOSE` הלאה ל-`Win32Window::MessageHandler`, שמסתיר
+/// את החלון — ואף שורת Dart של הסגירה אינה רצה: לא ה-flush של ההיסטוריה
+/// והכרטיסיות ([PreCloseRegistry]), לא השאלה על שינויים שלא נשמרו, ולא
+/// מחיקת סשן החלון. חלון משני נסגר כך בשקט תוך אובדן כתיבות תלויות.
+Future<void> _installWindowCloseHandling() async {
+  _appWindowListener = AppWindowListener(window: _appWindow);
+  windowManager.addListener(_appWindowListener!);
+  await windowManager.setPreventClose(true);
 }
 
 /// תופס את משבצת החלון באפיק ההודעות, **לפני `runApp`**.
@@ -1620,6 +1768,9 @@ void _maybeScheduleDebugSecondWindow() {
 /// הוא אינו משהו שאפשר להישען עליו. `register` אידמפוטנטי, ולכן הקריאה
 /// ב-`WindowBusHost` נשארת כרשת ביטחון.
 void _claimWindowBusSlot() {
+  // ⚠️ מגודר בפלטפורמה: בלי זה גם מובייל פתח `ReceivePort` ורשם כינוי
+  // בעלים בשביל אפיק שאף אחד לא ידבר בו.
+  if (!MultiWindowService.isSupported) return;
   final slot = WindowBus.instance.register(asOwner: !WindowRole.isSecondary);
   if (slot == null) {
     debugPrint('⚠️ כל משבצות האפיק תפוסות — החלון הזה לא יוכל לשתף מצב');
@@ -1635,7 +1786,7 @@ void _claimWindowBusSlot() {
 ///
 /// ראו [ThreadContentionProbe] לנוהל ההרצה.
 void _maybeMeasureThreadContention() {
-  if (!ThreadContentionProbe.isEnabled || !isSecondaryWindow) return;
+  if (!ThreadContentionProbe.isEnabled || !WindowRole.isSecondary) return;
   Timer(const Duration(seconds: 5), () => unawaited(_runContentionProbe()));
 }
 
@@ -1647,14 +1798,6 @@ Future<void> _runContentionProbe() async {
   }
 }
 
-/// האם החלון הזה הוא חלון משני (נפתח מתוך חלון אחר).
-///
-/// ⚠️ משמש לחסימת שירותים שהם **פר-תהליך ולא פר-חלון**: בדיקת עדכוני
-/// ספרייה, שירות ההתראות ושטיפת דיווחי השגיאות. בלי החסימה כל חלון הריץ
-/// אותם בנפרד — שתי בקשות מקבילות ל-GitHub החזירו 403, והמשתמש קיבל
-/// "שגיאה בקבלת רשימת ה-releases" בכל פתיחת חלון.
-bool isSecondaryWindow = false;
-
 /// מודד את זמן העלייה של חלון משני, מנקודת הכניסה ועד החשיפה.
 Stopwatch? _secondaryWindowStartup;
 
@@ -1663,7 +1806,7 @@ Stopwatch? _secondaryWindowStartup;
 /// ⚠️ אין למדוד בחלון הראשון: שם השלבים רצים תחת ה-splash הנייטיב וזמנם
 /// אינו מורגש, וההדפסות היו רק רעש בלוג.
 Future<T> _timedPhase<T>(String name, Future<T> Function() body) async {
-  if (!isSecondaryWindow) return body();
+  if (!WindowRole.isSecondary) return body();
   final sw = Stopwatch()..start();
   try {
     return await body();

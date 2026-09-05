@@ -5,7 +5,6 @@ import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
 import 'package:otzaria/core/windowing/external_tab_drag.dart';
 import 'package:otzaria/core/windowing/tab_drag_preview.dart';
 import 'package:otzaria/tabs/models/tab.dart';
@@ -716,6 +715,9 @@ class _DraggableTabState extends State<_DraggableTab> {
 
     final onSnapshot = widget.onTabSnapshot;
     if (onSnapshot == null) return;
+    // ⚠️ הגרירה כבר הסתיימה — אין למי להציג את המוק. ההרכבה היא צילום
+    // שני, מיזוג ותמונה של ~4.8MB, וגרירה קצרה שילמה את כולם על לא כלום.
+    if (!_dragging) return;
 
     final tabHead = await _captureTab(ratio);
     if (tabHead == null) return;
@@ -840,37 +842,36 @@ class _TabDragFeedback extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Directionality(
-      textDirection: Directionality.of(context),
-      child: Theme(
-        data: theme,
-        // העוגן הוא נקודת המצביע, ולכן התצוגה מוזזת כדי לרחף סביבו.
-        child: ValueListenableBuilder<ui.Image?>(
-          valueListenable: contentImage,
-          builder: (context, content, _) => FractionalTranslation(
-            // ⚠️ המוק יורד **מתחת** לסמן, ורק הוא. ראש הכרטיסיה לבדו
-            // ממורכז על הסמן כמו קודם, אבל מוק בגובה 170 שממורכז עליו
-            // מכסה את הכרטיסיות שמימין ומשמאל — בדיוק אותן כרטיסיות
-            // שהמשתמש צריך לראות זזות כדי לדעת לאן הנגררת נכנסת.
-            translation: content == null
-                ? const Offset(-0.5, -0.5)
-                : const Offset(-0.5, 0),
-            child: Material(
-              color: content == null
-                  ? theme.colorScheme.surfaceContainerHigh
-                  : stripColor,
-              elevation: 8,
-              borderRadius: BorderRadius.circular(8),
-              clipBehavior: Clip.antiAlias,
-              child: content == null
-                  ? SizedBox(width: width, height: height, child: child)
-                  : _MiniWindow(
-                      content: content,
-                      tabWidth: width,
-                      stripColor: stripColor,
-                      tab: child,
-                    ),
-            ),
+    // ⚠️ ה-`feedback` מצויר ב-Overlay ולכן אינו יורש את ה-`Theme` של הרצועה.
+    // הכיווניות **כן** נורשת, ולכן אין צורך לעטוף בה.
+    return Theme(
+      data: theme,
+      // העוגן הוא נקודת המצביע, ולכן התצוגה מוזזת כדי לרחף סביבו.
+      child: ValueListenableBuilder<ui.Image?>(
+        valueListenable: contentImage,
+        builder: (context, content, _) => FractionalTranslation(
+          // ⚠️ המוק יורד **מתחת** לסמן, ורק הוא. ראש הכרטיסיה לבדו
+          // ממורכז על הסמן כמו קודם, אבל מוק בגובה 170 שממורכז עליו
+          // מכסה את הכרטיסיות שמימין ומשמאל — בדיוק אותן כרטיסיות
+          // שהמשתמש צריך לראות זזות כדי לדעת לאן הנגררת נכנסת.
+          translation: content == null
+              ? const Offset(-0.5, -0.5)
+              : const Offset(-0.5, 0),
+          child: Material(
+            color: content == null
+                ? theme.colorScheme.surfaceContainerHigh
+                : stripColor,
+            elevation: 8,
+            borderRadius: BorderRadius.circular(8),
+            clipBehavior: Clip.antiAlias,
+            child: content == null
+                ? SizedBox(width: width, height: height, child: child)
+                : _MiniWindow(
+                    content: content,
+                    tabWidth: width,
+                    stripColor: stripColor,
+                    tab: child,
+                  ),
           ),
         ),
       ),
