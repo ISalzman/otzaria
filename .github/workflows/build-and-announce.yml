@@ -7,33 +7,41 @@ on:
   workflow_dispatch:
     inputs:
       build_windows:
-        description: Build Windows artifacts
+        description: בניית גרסת Windows
         type: boolean
         default: true
       build_windows_arm64:
-        description: Build Windows ARM64 artifacts
+        description: בניית גרסת Windows ARM64
         type: boolean
         default: true
       build_linux:
-        description: Build Linux artifacts
+        description: בניית גרסת Linux
         type: boolean
         default: true
       build_android:
-        description: Build Android artifacts
+        description: בניית גרסת Android
         type: boolean
         default: true
       build_macos:
-        description: Build macOS artifacts
+        description: בניית גרסת macOS
         type: boolean
         default: true
       create_release:
-        description: Create a GitHub release
+        description: יצירת release ב-GitHub
         type: boolean
         default: true
       announce_release:
-        description: Publish the forum post and Yemot notification
+        description: פרסום הודעה בפורום והתראה בימות המשיח
         type: boolean
         default: true
+      new_version:
+        description: "העלאת גרסה (X.Y.Z) לפני הבנייה: מריץ את סקריפט הגרסה, מקמט לענף הזה ובונה מהקומיט החדש. ריק = בלי שינוי גרסה"
+        type: string
+        default: ""
+      hotfix:
+        description: "מספר תיקון חירום לגרסה שהוזנה (0–99)"
+        type: string
+        default: "0"
 
   # טריגר לפרסום בלבד. published נשלח גם על prerelease —
   # הוספת prereleased לרשימה גורמת להרצה כפולה (שני פוסטים בפורום)
@@ -41,13 +49,64 @@ on:
     types: [published]
 
 jobs:
+  # שדות new_version ו-hotfix בהרצה ידנית: מריצים את סקריפט הגרסה, דוחפים
+  # לענף שממנו הופעל ה-workflow, וכל שאר ה-jobs נבנים מה-sha החדש.
+  bump_version:
+    runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.push.outputs.sha || github.sha }}
+    steps:
+      - name: Validate requested version
+        if: github.event_name == 'workflow_dispatch' && (inputs.new_version != '' || inputs.hotfix != '0')
+        env:
+          NEW_VERSION: ${{ inputs.new_version }}
+          HOTFIX: ${{ inputs.hotfix }}
+        run: |
+          if [ -z "$NEW_VERSION" ]; then
+            echo "::error::hotfix מחייב הזנת new_version"
+            exit 1
+          fi
+          if ! printf '%s' "$NEW_VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::new_version חייב להיות בפורמט major.minor.patch, התקבל '$NEW_VERSION'"
+            exit 1
+          fi
+          if ! printf '%s' "$HOTFIX" | grep -Eq '^(0|[1-9][0-9]?)$'; then
+            echo "::error::hotfix חייב להיות מספר שלם בין 0 ל-99, התקבל '$HOTFIX'"
+            exit 1
+          fi
+
+      - name: Clone branch
+        if: github.event_name == 'workflow_dispatch' && inputs.new_version != ''
+        uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Run version script and push
+        id: push
+        if: github.event_name == 'workflow_dispatch' && inputs.new_version != ''
+        env:
+          NEW_VERSION: ${{ inputs.new_version }}
+          HOTFIX: ${{ inputs.hotfix }}
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          set -e
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          printf '{\n  "version": "%s",\n  "hotfix": %s\n}\n' "$NEW_VERSION" "$HOTFIX" > tool/version/version.json
+          bash tool/version/update_version.sh
+          git push origin "HEAD:$BRANCH"
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
   check_version:
     if: github.event_name != 'release' && github.event_name != 'pull_request'
+    needs: [bump_version]
     runs-on: ubuntu-latest
     outputs:
       is_version: ${{ steps.check.outputs.is_version }}
     steps:
       - uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ needs.bump_version.outputs.sha }}
       - name: Check if commit message is a version tag
         id: check
         run: |
@@ -65,6 +124,7 @@ jobs:
 
   build_windows:
     if: github.event_name != 'release' && github.event_name != 'pull_request' && (github.event_name != 'workflow_dispatch' || inputs.build_windows)
+    needs: [bump_version]
     runs-on: windows-2022
     env:
       # VC++ Redistributable מקובע ב-URL ישיר של מיקרוסופט (לא aka.ms שזז),
@@ -83,6 +143,8 @@ jobs:
     steps:
       - name: Clone repository
         uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ needs.bump_version.outputs.sha }}
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
@@ -538,10 +600,13 @@ jobs:
   # נייד בלבד, בלי מתקין FULL (יתווסף בהמשך לפי ביקוש).
   build_windows_arm64:
     if: github.event_name != 'release' && github.event_name != 'pull_request' && (github.event_name != 'workflow_dispatch' || inputs.build_windows_arm64)
+    needs: [bump_version]
     runs-on: windows-11-arm
     steps:
       - name: Clone repository
         uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ needs.bump_version.outputs.sha }}
 
       # אין חבילת SDK רשמית של Flutter ל-Windows-ARM במניפסט של flutter-action —
       # מתקינים מ-git באותו תג, כמו בלינוקס-ARM. ה-bootstrap מוריד Dart SDK
@@ -702,6 +767,7 @@ jobs:
     # לכן מורידים SDK של WPE 2.48.7 שנבנה מהמקור (Otzaria/otzaria-wpe-runtime על
     # bookworm, DEVELOPER_MODE=ON) ל-/opt/wpe-sdk ובונים מולו.
     if: github.event_name != 'release' && (github.event_name != 'workflow_dispatch' || inputs.build_linux)
+    needs: [bump_version]
     runs-on: ${{ matrix.arch == 'aarch64' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
     container:
       image: debian:bookworm-slim
@@ -734,6 +800,8 @@ jobs:
           git config --global --add safe.directory '*'
       - name: Clone repository
         uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ needs.bump_version.outputs.sha }}
 
       - name: Check if commit message is a version tag
         id: check_version
@@ -1470,6 +1538,7 @@ jobs:
 
   build_android:
     if: github.event_name != 'release' && github.event_name != 'pull_request' && (github.event_name != 'workflow_dispatch' || inputs.build_android)
+    needs: [bump_version]
     runs-on: ubuntu-latest
     env:
       RUSTUP_HOME: ${{ github.workspace }}/.rustup
@@ -1477,6 +1546,8 @@ jobs:
     steps:
       - name: Clone repository
         uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ needs.bump_version.outputs.sha }}
 
       - name: Check if commit message is a version tag
         id: check_version
@@ -1746,6 +1817,7 @@ jobs:
 
   build_macos:
     if: github.event_name != 'release' && github.event_name != 'pull_request' && (github.event_name != 'workflow_dispatch' || inputs.build_macos)
+    needs: [bump_version]
     runs-on: macos-latest
     env:
       # אחסון יציב בתוך ה-workspace כדי למנוע תקלות rename של rustup
@@ -1754,6 +1826,8 @@ jobs:
     steps:
       - name: Clone repository
         uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ needs.bump_version.outputs.sha }}
 
       - name: Check if commit message is a version tag
         id: check_version
@@ -2022,12 +2096,14 @@ jobs:
 
   build_windows_indexed_full:
     if: github.event_name != 'release' && github.event_name != 'pull_request'
-    needs: [build_windows, build_linux]
+    needs: [bump_version, build_windows, build_linux]
     runs-on: windows-latest
 
     steps:
       - name: Clone repository
         uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ needs.bump_version.outputs.sha }}
 
       - name: Download Windows app bundle
         uses: actions/download-artifact@v8.0.1
@@ -2122,12 +2198,14 @@ jobs:
       tag: ${{ steps.version.outputs.tag }}
       title: ${{ steps.version.outputs.title }}
       url: https://github.com/${{ github.repository }}/releases/tag/${{ steps.version.outputs.tag }}
-    needs: [build_windows, build_windows_arm64, build_linux, build_android, build_macos, build_windows_indexed_full]
+    needs: [bump_version, build_windows, build_windows_arm64, build_linux, build_android, build_macos, build_windows_indexed_full]
     runs-on: ubuntu-latest
 
     steps:
       - name: Clone repository
         uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ needs.bump_version.outputs.sha }}
       
       - name: Download all artifacts
         uses: actions/download-artifact@v8.0.1
@@ -2278,6 +2356,7 @@ jobs:
       - name: Generate release notes
         env:
           RELEASE_TITLE: ${{ steps.version.outputs.title }}
+          BUILD_SHA: ${{ needs.bump_version.outputs.sha }}
           RELEASE_TAG: ${{ steps.version.outputs.tag }}
           COMMIT_MESSAGE: ${{ steps.commit.outputs.message }}
         run: |
@@ -2497,7 +2576,7 @@ jobs:
           <details>
           <summary>מידע טכני</summary>
 
-          - נבנה מ־commit ${GITHUB_SHA::7}
+          - נבנה מ־commit ${BUILD_SHA::7}
           - תיאור commit: ${safe_commit_message}
           - ענף: ${{ github.ref_name }}
 
@@ -2524,13 +2603,15 @@ jobs:
 
   trigger_google_play_deploy:
     if: "!cancelled() && needs.check_version.outputs.is_version == 'true' && needs.build_android.result == 'success' && github.event_name != 'release' && github.event_name != 'pull_request'"
-    needs: [check_version, build_android]
+    needs: [bump_version, check_version, build_android]
     uses: ./.github/workflows/deploy-google-play.yml
+    with:
+      ref: ${{ needs.bump_version.outputs.sha }}
     secrets: inherit
 
   # --- הכרזה על גרסה שפורסמה ---
   announce_release:
-    needs: [create_release]
+    needs: [bump_version, create_release]
     if: >-
       always() &&
       (github.event_name == 'release' ||
@@ -2540,6 +2621,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ needs.bump_version.outputs.sha }}
 
       - name: Set up Python
         uses: actions/setup-python@v7.0.0

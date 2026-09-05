@@ -13,6 +13,7 @@ import 'package:otzaria_icons/otzaria_icons.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_bloc.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_event.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_state.dart';
+import 'package:otzaria/plugins/services/plugin_update_check_service.dart';
 import 'package:otzaria/plugins/view/plugin_actions.dart';
 import 'package:otzaria/plugins/view/plugin_settings_screen.dart';
 import 'package:otzaria/plugins/utils/plugin_dev_tools_mode.dart';
@@ -37,6 +38,7 @@ import 'package:otzaria/widgets/feedback/otzaria_empty_state.dart';
 import 'package:otzaria/widgets/layout/app_card.dart';
 import 'package:otzaria/widgets/misc/app_popup_menu.dart';
 import 'package:otzaria/widgets/text/otzaria_search_field.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 const String kBuiltInToolsGroupLabel = 'כלים';
 const String kPluginsGroupLabel = 'תוספים';
@@ -629,6 +631,15 @@ class _ToolsLauncherPanelState extends State<ToolsLauncherPanel> {
     if (_highlightedIndex >= entries.length) _highlightedIndex = -1;
     final openToolIds = _openToolIds(context.watch<TabsBloc>().state);
     _keyboardEntries = entries;
+    final hiddenOfflineCount = settingsState.isOfflineMode
+        ? hiddenOfflinePluginCount(pluginState)
+        : 0;
+    final hasPlugins =
+        hiddenOfflineCount > 0 || allEntries.any((e) => e.plugin != null);
+    final pluginsFooter = _PluginsFooter(
+      hasPlugins: hasPlugins,
+      hiddenOfflineCount: hiddenOfflineCount,
+    );
 
     return PluginDropZone(
       child: Column(
@@ -643,13 +654,30 @@ class _ToolsLauncherPanelState extends State<ToolsLauncherPanel> {
               children: [
                 Positioned.fill(
                   child: entries.isEmpty
-                      ? _buildEmptyState(
-                          settingsState.isOfflineMode,
-                          allEntries,
+                      ? Column(
+                          children: [
+                            Expanded(
+                              child: _buildEmptyState(
+                                settingsState.isOfflineMode,
+                                allEntries,
+                              ),
+                            ),
+                            Padding(
+                              padding: EdgeInsets.only(
+                                bottom:
+                                    AppInputTokens.height(
+                                      settingsState.compactMenuMode,
+                                    ) +
+                                    AppTokens.spaceMD,
+                              ),
+                              child: pluginsFooter,
+                            ),
+                          ],
                         )
                       : _buildGrid(
                           entries,
                           openToolIds,
+                          footer: pluginsFooter,
                           bottomInset:
                               AppInputTokens.height(
                                 settingsState.compactMenuMode,
@@ -759,6 +787,7 @@ class _ToolsLauncherPanelState extends State<ToolsLauncherPanel> {
     List<ToolCatalogEntry> entries,
     Set<String> openToolIds, {
     required double bottomInset,
+    Widget? footer,
   }) {
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -789,6 +818,7 @@ class _ToolsLauncherPanelState extends State<ToolsLauncherPanel> {
                   openToolIds: openToolIds,
                   bottomInset: bottomInset,
                   theme: theme,
+                  footer: footer,
                 ),
               ),
             ),
@@ -804,6 +834,7 @@ class _ToolsLauncherPanelState extends State<ToolsLauncherPanel> {
     required Set<String> openToolIds,
     required double bottomInset,
     required ThemeData theme,
+    Widget? footer,
   }) {
     final slivers = <Widget>[];
     var runningIndex = 0;
@@ -878,6 +909,7 @@ class _ToolsLauncherPanelState extends State<ToolsLauncherPanel> {
             children: [
               SizedBox(key: _gridEndKey, height: 0),
               const SizedBox(height: AppTokens.spaceMD),
+              ?footer,
             ],
           ),
         ),
@@ -949,6 +981,88 @@ class _ToolsLauncherPanelState extends State<ToolsLauncherPanel> {
           ),
         ),
         onTap: () => widget.onToolSelected(entry),
+      ),
+    );
+  }
+}
+
+/// כמה תוספים המוצגים בכלים נעלמו מהמשגר בגלל מצב מנותק.
+int hiddenOfflinePluginCount(PluginSystemState pluginState) {
+  if (pluginState is! PluginSystemLoaded) return 0;
+  return pluginState.plugins
+      .where((p) => p.enabled && p.showInTools && p.blockedInOfflineMode)
+      .length;
+}
+
+/// כתובת חנות התוספים המלאה.
+const String kPluginStoreUrl =
+    '${PluginUpdateCheckService.storeBaseUrl}/plugins';
+
+/// שולי הרשימה: קישור לחנות תמיד; כשיש תוספים גם הבהרה שאינם של אוצריא,
+/// ובמצב מנותק — כמה תוספים הוסתרו.
+class _PluginsFooter extends StatelessWidget {
+  final bool hasPlugins;
+  final int hiddenOfflineCount;
+
+  const _PluginsFooter({
+    required this.hasPlugins,
+    required this.hiddenOfflineCount,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final style = theme.textTheme.bodySmall?.copyWith(
+      color: theme.colorScheme.onSurfaceVariant,
+    );
+    return Padding(
+      padding: const EdgeInsets.only(
+        top: AppTokens.spaceMD,
+        right: kToolGridScrollbarGutter,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          if (hiddenOfflineCount > 0)
+            Padding(
+              padding: const EdgeInsets.only(bottom: AppTokens.spaceXS),
+              child: Text(
+                context.settingsText(
+                  '{count} תוספים הדורשים רשת מוסתרים במצב מנותק',
+                  args: {'count': hiddenOfflineCount},
+                ),
+                style: style,
+                textAlign: TextAlign.center,
+              ),
+            ),
+          if (hasPlugins)
+            Text(
+              context.settingsText(
+                'התוספים אינם מפותחים ע"י אוצריא, ואין לפנות אליהם בנושא',
+              ),
+              style: style,
+              textAlign: TextAlign.center,
+            ),
+          InkWell(
+            borderRadius: AppTokens.borderRadiusAll,
+            onTap: () => launchUrl(
+              Uri.parse(kPluginStoreUrl),
+              mode: LaunchMode.externalApplication,
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: AppTokens.spaceXS),
+              child: Text(
+                context.settingsText('לחנות התוספים המלאה'),
+                style: style?.copyWith(
+                  color: theme.colorScheme.primary,
+                  decoration: TextDecoration.underline,
+                  decorationColor: theme.colorScheme.primary,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
