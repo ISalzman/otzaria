@@ -84,6 +84,7 @@ void main() {
     await workspaceBloc.stream.firstWhere((s) => !s.isLoading);
 
     // בדיוק החיווט שב-workspace_switcher_dialog.
+    final emptiedTabs = tabsBloc.stream.firstWhere((s) => s.tabs.isEmpty);
     workspaceBloc.add(
       SwitchToWorkspace(
         targetWorkspaceId: workspaceB.id,
@@ -95,9 +96,10 @@ void main() {
     await workspaceBloc.stream.firstWhere(
       (s) => s.activeWorkspaceId == workspaceB.id,
     );
-    await tabsBloc.stream.firstWhere((s) => s.tabs.isEmpty);
+    await emptiedTabs;
 
     // חזרה לשולחן א' — כאן הצד השמור אמור לחזור לחיים.
+    final restoredTabs = tabsBloc.stream.firstWhere((s) => s.tabs.isNotEmpty);
     workspaceBloc.add(
       SwitchToWorkspace(
         targetWorkspaceId: workspaceA.id,
@@ -109,7 +111,7 @@ void main() {
     await workspaceBloc.stream.firstWhere(
       (s) => s.activeWorkspaceId == workspaceA.id,
     );
-    await tabsBloc.stream.firstWhere((s) => s.tabs.isNotEmpty);
+    await restoredTabs;
 
     return (
       tabs: tabsBloc,
