@@ -1457,12 +1457,19 @@ jobs:
           Start the app using ./run-otzaria.sh so the app can detect the bundled library folder.
           EOF
 
+          # gzip הביא את החבילה ל-2.5GB, מעל מגבלת 2 GiB לקובץ ב-GitHub Releases.
+          # ‏--long=27 הוא חלון שכל zstd מחלץ בלי דגלים נוספים.
+          pack_full_bundle() {
+            tar -C full_installer -cf - otzaria-linux-full | zstd -19 -T0 --long=27 -o "$1"
+            [ "$(stat -c '%s' "$1")" -lt 2147483648 ] \
+              || { echo "::error::$1 exceeds GitHub's 2 GiB release-asset limit"; exit 1; }
+          }
           if [ "${{ matrix.arch }}" = "aarch64" ]; then
-            tar -czf otzaria-linux-full-arm64.tar.gz -C full_installer otzaria-linux-full
+            pack_full_bundle otzaria-linux-full-arm64.tar.zst
             # הספרייה המאונדקסת חוצת-פלטפורמות — עותק אחד נבנה ב-x86_64 בלבד.
             exit 0
           fi
-          tar -czf otzaria-linux-full.tar.gz -C full_installer otzaria-linux-full
+          pack_full_bundle otzaria-linux-full.tar.zst
 
           # חבילת ספרייה נוספת עם אינדקס טקסט מוכן מאותו מנוע של האפליקציה.
           # כולל ספרי PDF: מפתח האינדקס שלהם הוא מזהה יציב ולא נתיב ההתקנה.
@@ -1517,7 +1524,7 @@ jobs:
         uses: actions/upload-artifact@v7.0.1
         with:
           name: otzaria-linux-full${{ matrix.arch == 'aarch64' && '-arm64' || '' }}
-          path: otzaria-linux-full${{ matrix.arch == 'aarch64' && '-arm64' || '' }}.tar.gz
+          path: otzaria-linux-full${{ matrix.arch == 'aarch64' && '-arm64' || '' }}.tar.zst
 
       - name: Upload indexed FULL library parts
         if: matrix.target == 'full' && matrix.arch == 'x86_64'
@@ -2071,7 +2078,10 @@ jobs:
           Start the app using Run Otzaria.command so the app can detect the bundled library folder.
           EOF
 
-          ditto -c -k --sequesterRsrc --keepParent "$BUNDLE_ROOT" otzaria-macos-full.zip
+          # zip הביא את החבילה ל-2.5GB, מעל מגבלת 2 GiB לקובץ ב-GitHub Releases.
+          tar -C full_installer -cf - otzaria-macos-full | zstd -19 -T0 --long=27 -o otzaria-macos-full.tar.zst
+          [ "$(stat -f '%z' otzaria-macos-full.tar.zst)" -lt 2147483648 ] \
+            || { echo "::error::otzaria-macos-full.tar.zst exceeds GitHub's 2 GiB release-asset limit"; exit 1; }
 
       - name: Upload macOS DMG
         if: always()
@@ -2092,7 +2102,7 @@ jobs:
         uses: actions/upload-artifact@v7.0.1
         with:
           name: otzaria-macos-full
-          path: otzaria-macos-full.zip
+          path: otzaria-macos-full.tar.zst
 
   build_windows_indexed_full:
     if: github.event_name != 'release' && github.event_name != 'pull_request'
@@ -2311,12 +2321,12 @@ jobs:
 
           # Linux FULL bundle (arm64)
           if [ -d "artifacts/otzaria-linux-full-arm64" ]; then
-            cp artifacts/otzaria-linux-full-arm64/*.tar.gz release-files/ || true
+            cp artifacts/otzaria-linux-full-arm64/*.tar.zst release-files/ || true
           fi
 
           # Linux FULL bundle
           if [ -d "artifacts/otzaria-linux-full" ]; then
-            cp artifacts/otzaria-linux-full/*.tar.gz release-files/ || true
+            cp artifacts/otzaria-linux-full/*.tar.zst release-files/ || true
           fi
 
           # Cross-platform indexed FULL library (multipart; every part is below 2 GiB)
@@ -2346,7 +2356,7 @@ jobs:
 
           # macOS FULL bundle
           if [ -d "artifacts/otzaria-macos-full" ]; then
-            cp artifacts/otzaria-macos-full/*.zip release-files/ || true
+            cp artifacts/otzaria-macos-full/*.tar.zst release-files/ || true
           fi
           
           # List files for debugging
@@ -2428,7 +2438,7 @@ jobs:
               *.apk)
                 android_apk+=("$file")
                 ;;
-              *linux-full*.tar.gz|*linux-full*.tar.*)
+              *linux-full*.tar.*)
                 linux_full+=("$file")
                 ;;
               *.deb)
@@ -2443,7 +2453,7 @@ jobs:
               *.dmg)
                 mac_dmg+=("$file")
                 ;;
-              *macos-full*.zip)
+              *macos-full*.tar.*)
                 mac_full+=("$file")
                 ;;
               *)
@@ -2551,7 +2561,7 @@ jobs:
             if [ ${#linux_full[@]} -gt 0 ]; then
               printf "### גרסת ספרייה מלאה\n\n" >> release-body.md
               emit_link_group "חבילה מלאה ללינוקס" "${linux_full[@]}"
-              printf "\n" >> release-body.md
+              printf "\nחילוץ: %star --zstd -xf <הקובץ>%s ואז %s./run-otzaria.sh%s.\n\n" '`' '`' '`' '`' >> release-body.md
             fi
 
           fi
@@ -2568,7 +2578,7 @@ jobs:
             if [ ${#mac_full[@]} -gt 0 ]; then
               printf "### גרסת ספרייה מלאה\n\n" >> release-body.md
               emit_link_group "חבילה מלאה למק" "${mac_full[@]}"
-              printf "\n" >> release-body.md
+              printf "\nחילוץ בטרמינל: %star --zstd -xf <הקובץ>%s (אם חסר zstd: %sbrew install zstd%s) ואז %sRun Otzaria.command%s.\n\n" '`' '`' '`' '`' '`' '`' >> release-body.md
             fi
           fi
 

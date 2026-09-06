@@ -414,7 +414,7 @@ void main() {
       asset('otzaria-windows.zip'),
       asset('otzaria-macos.dmg'),
       asset('otzaria-macos.zip'),
-      asset('otzaria-macos-full.zip'),
+      asset('otzaria-macos-full.tar.zst'),
       asset('otzaria-0.9.94-linux.deb'),
     ];
 
@@ -435,7 +435,7 @@ void main() {
     test('falls back to dmg on old releases without an update zip', () {
       final oldRelease = [
         asset('otzaria-macos.dmg'),
-        asset('otzaria-macos-full.zip'),
+        asset('otzaria-macos-full.tar.zst'),
       ];
       expect(
         pickMacAssetUrl(oldRelease, selfUpdateCapable: true),
@@ -444,7 +444,7 @@ void main() {
     });
 
     test('never selects full bundles', () {
-      final assets = [asset('otzaria-macos-full.zip')];
+      final assets = [asset('otzaria-macos-full.tar.zst')];
       expect(pickMacAssetUrl(assets, selfUpdateCapable: true), isNull);
       expect(pickMacAssetUrl(assets, selfUpdateCapable: false), isNull);
     });
