@@ -342,6 +342,8 @@ const Map<String, Map<String, String>> kSettingsCatalogs = {
     'הסתר תצוגה מקדימה': 'Hide preview',
     'הסתרה': 'Hide',
     'העבר': 'Move',
+    'העבר לחלון חדש': 'Move to new window',
+    'העבר לחלון קיים': 'Move to existing window',
     'העבר לכאן': 'Move Here',
     'העבר לשולחן עבודה': 'Move to workspace',
     'העבר תוכן תיקייה': 'Move the Folder\'s Contents',
