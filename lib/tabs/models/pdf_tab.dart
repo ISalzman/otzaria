@@ -143,6 +143,16 @@ class PdfBookTab extends OpenedTab {
     pinLeftPane.value = Settings.getValue<bool>('key-pin-sidebar') ?? false;
   }
 
+  /// `OpenedTab.from` מטפל ב-[PdfBookTab] בענף ייעודי ואינו מגיע לכאן;
+  /// המימוש קיים כדי שהחוזה המופשט של [OpenedTab.clone] יתקיים.
+  ///
+  /// הענף שם מעתיק גם [activeCommentators], [savedZoom] ו-[savedLayoutMode]
+  /// — שדות שנקבעים אחרי הבנייה. [pdfHeadings], [currentTextLineNumber]
+  /// ו-[currentTextLineNumberEnd] הם מצב נגזר שנטען מחדש, ומי שצריך אותם
+  /// משכפל אותם בעצמו (ראו `PdfCommentatorsTab.clone`).
+  @override
+  OpenedTab clone() => OpenedTab.from(this);
+
   /// מחיל תצורת חיפוש חיצונית בלי לחשוף שאילתה לתצורה הישנה.
   void applyIncomingSearchConfiguration(ReadingTabSearchState configuration) {
     searchText = configuration.searchText;
@@ -214,6 +224,14 @@ class PdfBookTab extends OpenedTab {
     );
 
     tab.savedLayoutMode = savedLayoutMode;
+    // ⚠️ אחרי הבנייה, כי אינם פרמטרי קונסטרוקטור. `PdfCommentatorsTab`
+    // שומר את `activeCommentators` במפורש — כלומר זהו מצב משתמש אמיתי —
+    // וב-`PdfBookTab` הוא נפל בין הכיסאות: הוא לא נשמר, ולכן העברת
+    // כרטיסיה לחלון אחר (וגם סגירת התוכנה) איפסה את בחירת המפרשים ואת
+    // מפלס התקריב.
+    final active = (json['activeCommentators'] as List?)?.cast<String>();
+    if (active != null) tab.activeCommentators = active.toSet();
+    tab.savedZoom = (json['savedZoom'] as num?)?.toDouble();
 
     return tab;
   }
@@ -264,6 +282,10 @@ class PdfBookTab extends OpenedTab {
       if (externalMatches.value case final matches?)
         'externalMatches': matches.toJson(),
       if (savedLayoutMode != null) 'savedLayoutMode': savedLayoutMode!.name,
+      // בחירת המפרשים ומפלס התקריב הם מצב משתמש, ולא נגזרת של הספר.
+      if (activeCommentators.isNotEmpty)
+        'activeCommentators': activeCommentators.toList(),
+      'savedZoom': ?savedZoom,
       // שדה החיפוש עצמו הוא המצב המעודכן (הבנאי מאתחל אותו מ-searchText):
       // נפילה חזרה ל-searchText הייתה מחזירה חיפוש שהמשתמש כבר ניקה.
       ...ReadingTabSearchState(

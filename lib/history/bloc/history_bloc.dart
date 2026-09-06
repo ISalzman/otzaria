@@ -148,8 +148,14 @@ class HistoryBloc extends Bloc<HistoryEvent, HistoryState> {
 
     _preCloseCallback = _flushPendingSnapshots;
     PreCloseRegistry.register(_preCloseCallback);
+    // חלון אחר פתח ספר — ההיסטוריה שבזיכרון התיישנה.
+    _remoteChanges = _repository.remoteChanges.listen(
+      (_) => add(LoadHistory()),
+    );
     add(LoadHistory());
   }
+
+  StreamSubscription<void>? _remoteChanges;
 
   /// שומר את כל ה-snapshots הממתינים לפני סגירת האפליקציה.
   Future<void> _flushPendingSnapshots() async {
@@ -164,6 +170,7 @@ class HistoryBloc extends Bloc<HistoryEvent, HistoryState> {
   @override
   Future<void> close() async {
     PreCloseRegistry.unregister(_preCloseCallback);
+    await _remoteChanges?.cancel();
     _debounce?.cancel();
     try {
       await _flushPendingSnapshots();
@@ -173,27 +180,33 @@ class HistoryBloc extends Bloc<HistoryEvent, HistoryState> {
     return super.close();
   }
 
-  Future<List<Bookmark>> _updateAndSaveHistory(List<Bookmark> snapshots) async {
-    final updatedHistory = List<Bookmark>.from(state.history);
+  static const int _maxHistorySize = 200;
 
+  /// מכניס את [snapshots] לראש ההיסטוריה, מדיח רשומה קודמת עם אותו
+  /// `historyKey`, וגוזם לתקרה.
+  ///
+  /// ⚠️ פונקציה **טהורה**, ובמכוון: היא מוחלת על ההיסטוריה הטרייה של
+  /// הבעלים ועשויה לרוץ שוב אם חלון אחר כתב בינתיים. חישוב מ-`state`
+  /// כאן היה מחזיר את הבאג שהיא באה לתקן.
+  static List<Bookmark> _withSnapshots(
+    List<Bookmark> current,
+    List<Bookmark> snapshots,
+  ) {
+    final updated = List<Bookmark>.from(current);
     for (final bookmark in snapshots) {
-      final existingIndex = updatedHistory.indexWhere(
-        (b) => b.historyKey == bookmark.historyKey,
-      );
-      if (existingIndex >= 0) {
-        updatedHistory.removeAt(existingIndex);
-      }
-      updatedHistory.insert(0, bookmark);
+      updated.removeWhere((b) => b.historyKey == bookmark.historyKey);
+      updated.insert(0, bookmark);
     }
-
-    const maxHistorySize = 200;
-    if (updatedHistory.length > maxHistorySize) {
-      updatedHistory.removeRange(maxHistorySize, updatedHistory.length);
+    if (updated.length > _maxHistorySize) {
+      updated.removeRange(_maxHistorySize, updated.length);
     }
-
-    await _repository.saveHistory(updatedHistory);
-    return updatedHistory;
+    return updated;
   }
+
+  Future<List<Bookmark>> _updateAndSaveHistory(List<Bookmark> snapshots) =>
+      _repository.mutateHistory(
+        (current) => _withSnapshots(current, snapshots),
+      );
 
   /// רשומות ההיסטוריה של טאב: אחת לכל חלונית בטאב מפוצל, בסדר התצוגה.
   ///
@@ -387,9 +400,14 @@ class HistoryBloc extends Bloc<HistoryEvent, HistoryState> {
     Emitter<HistoryState> emit,
   ) async {
     try {
-      final updatedHistory = List<Bookmark>.from(state.history)
-        ..removeAt(event.index);
-      await _repository.saveHistory(updatedHistory);
+      if (event.index < 0 || event.index >= state.history.length) return;
+      // ⚠️ האינדקס מתורגם לזהות כאן, מול הרשימה שממנה ה-UI חישב אותו.
+      // מחיקה לפי אינדקס אצל הבעלים הייתה מוחקת רשומה אחרת אם חלון אחר
+      // פתח ספר בינתיים — כל פתיחת ספר נכנסת בראש הרשימה ומזיזה את כולה.
+      final key = state.history[event.index].historyKey;
+      final updatedHistory = await _repository.mutateHistory(
+        (current) => current.where((b) => b.historyKey != key).toList(),
+      );
       emit(HistoryLoaded(updatedHistory));
     } catch (e) {
       emit(HistoryError(state.history, e.toString()));

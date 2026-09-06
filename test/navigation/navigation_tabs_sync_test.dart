@@ -26,6 +26,10 @@ import '../helpers/memory_settings_cache.dart';
 class _DummyTab extends OpenedTab {
   _DummyTab() : super('ספר');
 
+  /// stub חסר state — אין מה לשכפל.
+  @override
+  OpenedTab clone() => this;
+
   @override
   Map<String, dynamic> toJson() => {'title': title};
 }

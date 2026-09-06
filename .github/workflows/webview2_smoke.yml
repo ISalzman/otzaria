@@ -9,7 +9,13 @@ on:
       - ".github/workflows/webview2_smoke.yml"
       - "integration_test/webview_render_check_test.dart"
       - "lib/core/window_listener.dart"
+      # תשתית החלון: כל מה שנוגע בבקר, ב-scope או במחזור החיים של החלון
+      # משפיע ישירות על מחזור החיים של ה-WebView שמתארח בו.
+      - "lib/core/windowing/**"
       - "lib/main.dart"
+      # רצועת הטאבים ומודל הטאבים מארחים את חלוניות ה-WebView של התוספים.
+      - "lib/navigation/**"
+      - "lib/tabs/**"
       - "lib/plugins/**"
       - "lib/settings/dialogs/change_location_dialog.dart"
       - "lib/settings/tabs/system_settings_tab.dart"

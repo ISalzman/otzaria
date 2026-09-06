@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:otzaria/core/windowing/app_window_scope.dart';
+import 'package:otzaria/core/windowing/window_manager_app_window_controller.dart';
 import 'package:otzaria/settings/engine/settings_bloc.dart';
 import 'package:otzaria/settings/engine/settings_state.dart';
 import 'package:otzaria/utils/ui/fullscreen_helper.dart';
@@ -61,7 +63,8 @@ void main() {
       late BuildContext readingScreenContext;
       late BuildContext settingsScreenContext;
 
-      await tester.pumpWidget(
+      await pumpWithAppWindow(
+        tester,
         BlocProvider<SettingsBloc>.value(
           value: settingsBloc,
           child: MaterialApp(
@@ -110,7 +113,8 @@ void main() {
       final settingsBloc = await buildSettingsBloc();
       late BuildContext context;
 
-      await tester.pumpWidget(
+      await pumpWithAppWindow(
+        tester,
         BlocProvider<SettingsBloc>.value(
           value: settingsBloc,
           child: MaterialApp(
@@ -152,7 +156,8 @@ void main() {
       final settingsBloc = await buildSettingsBloc();
       late BuildContext context;
 
-      await tester.pumpWidget(
+      await pumpWithAppWindow(
+        tester,
         BlocProvider<SettingsBloc>.value(
           value: settingsBloc,
           child: MaterialApp(
@@ -188,7 +193,8 @@ void main() {
     final settingsBloc = await buildSettingsBloc();
     late BuildContext context;
 
-    await tester.pumpWidget(
+    await pumpWithAppWindow(
+      tester,
       BlocProvider<SettingsBloc>.value(
         value: settingsBloc,
         child: MaterialApp(
@@ -216,3 +222,16 @@ void main() {
     }
   });
 }
+
+/// `FullscreenHelper.toggleFullscreen` שולף את החלון מ-[AppWindowScope],
+/// ולכן כל עץ שנבדק חייב אותו מעליו. הבקר האמיתי מנתב לאותו
+/// MethodChannel שכבר ממוקם כאן, ולכן ההנחות על `windowManagerCalls`
+/// נשארות בתוקף.
+Future<void> pumpWithAppWindow(WidgetTester tester, Widget child) =>
+    tester.pumpWidget(
+      AppWindowScope(
+        controller: const WindowManagerAppWindowController(),
+        geometry: const WindowManagerAppWindowController(),
+        child: child,
+      ),
+    );

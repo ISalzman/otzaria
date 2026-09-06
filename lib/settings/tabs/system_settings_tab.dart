@@ -18,6 +18,8 @@ import 'package:otzaria/core/messages/report_messages.dart';
 import 'package:otzaria/core/messages/settings_messages.dart';
 import 'package:otzaria/core/app_runtime_reset.dart';
 import 'package:otzaria/core/update_check_frequency.dart';
+import 'package:otzaria/core/windowing/shared_hive_store.dart';
+import 'package:otzaria/core/windowing/window_role.dart';
 import 'package:otzaria/data/data_providers/hive_data_provider.dart';
 import 'package:otzaria/settings/engine/settings_engine_exports.dart';
 import 'package:otzaria/settings/l10n/settings_l10n_exports.dart';
@@ -2077,6 +2079,10 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
           icon: FluentIcons.checkmark_circle_24_regular,
         );
       }
+    } on SharedHiveUnavailable {
+      // ⚠️ עדיף להיכשל מלכתוב סעיף ריק שנראה כמו גיבוי תקין.
+      if (!mounted) return;
+      UiSnack.showError(SettingsMessages.backupSharedDataUnavailable);
     } catch (e) {
       if (!mounted) return;
       UiSnack.showError(SettingsMessages.backupCreateError(e));
@@ -2275,6 +2281,14 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
     String filePath, {
     BackupImportMode mode = BackupImportMode.replace,
   }) async {
+    // ⚠️ שחזור בחלון משני שבור משני קצותיו: הכרטיסיות המשוחזרות נכתבות
+    // למפתח של החלון הראשי (`TabsRepository.importRaw`) ונדרסות ב-save הבא
+    // שלו, ו-`RestartWidget.restartApp` מרסטרט את החלון הזה בלבד — כך
+    // ששאר החלונות ממשיכים עם המצב הקודם וכותבים אותו בחזרה.
+    if (WindowRole.isSecondary) {
+      UiSnack.showError(SettingsMessages.restoreOnlyInMainWindow);
+      return;
+    }
     try {
       final result = await BackupService.restoreFromBackup(
         filePath,

@@ -1,6 +1,9 @@
 import 'package:bloc_concurrency/bloc_concurrency.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:otzaria/core/messages/window_messages.dart';
+import 'package:otzaria/core/ui_snack.dart';
+import 'package:otzaria/core/windowing/window_role.dart';
 import 'package:otzaria/indexing/bloc/indexing_event.dart';
 import 'package:otzaria/indexing/bloc/indexing_state.dart';
 import 'package:otzaria/indexing/models/indexing_run_result.dart';
@@ -69,6 +72,8 @@ class IndexingBloc extends Bloc<IndexingEvent, IndexingState> {
     IndexingWorkEvent event,
     Emitter<IndexingState> emit,
   ) async {
+    if (_rejectIndexMutationInSecondaryWindow(emit)) return;
+
     _isFinalizing = false;
     _finalizingProgress = null;
     // ריצה חדשה מתחילה ללא השהיה; המצב החסכוני נשמר בין ריצות.
@@ -464,9 +469,17 @@ class IndexingBloc extends Bloc<IndexingEvent, IndexingState> {
     ClearIndex event,
     Emitter<IndexingState> emit,
   ) async {
+    if (_rejectIndexMutationInSecondaryWindow(emit)) return;
     _activeWorkId = null;
-    await _repository.clearIndex();
+    if (!await _repository.clearIndex()) return;
     emit(IndexingInitial());
+  }
+
+  bool _rejectIndexMutationInSecondaryWindow(Emitter<IndexingState> emit) {
+    if (!WindowRole.isSecondary) return false;
+    UiSnack.show(WindowMessages.indexingOnlyInMainWindow);
+    emit(IndexingInitial());
+    return true;
   }
 
   /// Handles the UpdateIndexingProgress event

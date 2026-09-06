@@ -35,9 +35,29 @@ class PdfCommentatorsTab extends OpenedTab {
     )..isPinned = json['isPinned'] ?? false;
   }
 
+  /// המקור והשכפול חייבים לקבל [sourceTab] נפרד: קודם שניהם הצביעו על אותו
+  /// [PdfBookTab], ו-[dispose] של האחד שחרר את הבקרים של השני.
   @override
-  OpenedTab clone() =>
-      PdfCommentatorsTab(sourceTab: sourceTab)..isPinned = isPinned;
+  OpenedTab clone() {
+    // `OpenedTab.from` מעביר פרמטרי קונסטרוקטור בלבד. ארבעת השדות הבאים
+    // נקבעים אחרי הבנייה, ובלעדיהם הכרטיסייה המשוכפלת נפתחת בלי בחירת
+    // המפרשים — רגרסיה שהמשתמש רואה. [fromJson] למעלה עושה בדיוק את אותו
+    // דבר עבור activeCommentators.
+    final copiedSource = OpenedTab.from(sourceTab) as PdfBookTab;
+    copiedSource.activeCommentators = Set<String>.of(
+      sourceTab.activeCommentators,
+    );
+    copiedSource.pdfHeadings = sourceTab.pdfHeadings;
+    copiedSource.currentTextLineNumber = sourceTab.currentTextLineNumber;
+    copiedSource.currentTextLineNumberEnd = sourceTab.currentTextLineNumberEnd;
+
+    return PdfCommentatorsTab(
+      sourceTab: copiedSource,
+      // השכפול הוא הבעלים של ה-sourceTab שנוצר כאן; בלי זה הבקרים
+      // וה-ValueNotifier-ים שלו לא משוחררים לעולם.
+      disposeSourceTabOnDispose: true,
+    )..isPinned = isPinned;
+  }
 
   @override
   void dispose() {

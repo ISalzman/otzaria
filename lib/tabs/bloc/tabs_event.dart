@@ -75,10 +75,14 @@ class ReplaceAllTabs extends TabsEvent {
   final List<OpenedTab> tabs;
   final int currentTabIndex;
 
-  const ReplaceAllTabs(this.tabs, this.currentTabIndex);
+  /// צד החלונית הפעילה בטאב שב-[currentTabIndex] (`'right'`/`'left'`),
+  /// או `null` כשאין — ואז החלונית הפעילה נופלת ל-`panes.first`.
+  final String? activePane;
+
+  const ReplaceAllTabs(this.tabs, this.currentTabIndex, {this.activePane});
 
   @override
-  List<Object?> get props => [tabs, currentTabIndex];
+  List<Object?> get props => [tabs, currentTabIndex, activePane];
 }
 
 class SaveTabs extends TabsEvent {
@@ -166,6 +170,26 @@ class SetCurrentTab extends TabsEvent {
 }
 
 class CloseAllTabs extends TabsEvent {}
+
+/// חלון שהוחזר לשימוש מאמץ כרטיסיה שנגררה אליו, במקום כל מה שהיה בו.
+///
+/// ⚠️ **אירוע אחד, ולא [CloseAllTabs] ואחריו [AddTab].** הצמד יצר מצב
+/// ביניים של אפס כרטיסיות, ו-`ReadingScreen` מאזין בדיוק למעבר הזה
+/// (`previous.hasOpenTabs && !current.hasOpenTabs`) כדי לנווט למסך
+/// הספרייה — כלומר החלון נחת בספרייה ולא על הכרטיסיה שנגררה אליו.
+///
+/// זה קרה **רק** בחלון שכבר היה פתוח ונסגר: פתיחה ראשונה עוברת בנקודת
+/// הכניסה של החלון המשני ואין בה כרטיסיות קודמות, ולכן אין מעבר.
+///
+/// הכרטיסיות המוצמדות נשמרות, בדיוק כמו ב-[CloseAllTabs].
+class AdoptTab extends TabsEvent {
+  const AdoptTab(this.tab);
+
+  final OpenedTab tab;
+
+  @override
+  List<Object?> get props => [tab];
+}
 
 class CloseOtherTabs extends TabsEvent {
   final OpenedTab keepTab;

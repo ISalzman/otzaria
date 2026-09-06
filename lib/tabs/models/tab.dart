@@ -6,6 +6,8 @@ import 'package:otzaria/tabs/models/pdf_tab.dart';
 import 'package:otzaria/tabs/models/searching_tab.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/tabs/models/combined_tab.dart';
+import 'package:otzaria/tabs/models/commentators_tab.dart';
+import 'package:otzaria/tabs/models/pdf_commentators_tab.dart';
 import 'package:otzaria/tabs/models/tool_tab.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
@@ -21,10 +23,12 @@ abstract class OpenedTab {
   void dispose() {}
 
   /// Returns a fresh independent copy of this tab.
-  /// Subclasses that manage their own state (e.g. BLoC, controllers) must
-  /// override this so that [OpenedTab.from] produces a real clone and not
-  /// a shared-object alias.
-  OpenedTab clone() => this;
+  ///
+  /// מופשטת בכוונה: ברירת מחדל `=> this` החזירה alias במקום עותק, ותת-מחלקה
+  /// חדשה קיבלה אותה בשקט. כך שיכפול טאב או מעבר בין שולחנות עבודה יצרו שני
+  /// ערכים ברשימה שמצביעים על אותו אובייקט — ו-`dispose` של האחד סגר את
+  /// ה-BLoC והבקרים של השני.
+  OpenedTab clone();
 
   factory OpenedTab.from(OpenedTab tab) {
     if (tab is TextBookTab) {
@@ -45,6 +49,13 @@ abstract class OpenedTab {
       var searchMode = tab.searchMode;
       var searchDistance = tab.searchDistance;
       var matchPolicy = tab.matchPolicy;
+      // שלושת שדות ההדגשה קשורי-המקור: `?mark` deep link (highlightText,
+      // permanentHighlightLine) ושורות התוצאה שהחיפוש הגלובלי מצא. בלעדיהם
+      // שכפול טאב ומעבר בין שולחנות עבודה מחזירים ספר בלי ההדגשה שהמשתמש
+      // רואה — ובלי סימון שורות התוצאה שהמנוע החזיר.
+      String highlightText = tab.highlightText;
+      int? permanentHighlightLine = tab.permanentHighlightLine;
+      Set<int>? searchResultLines = tab.initialSearchResultLines;
       final state = tab.bloc.state;
       if (state is TextBookLoaded) {
         splitedView = state.showSplitView;
@@ -59,6 +70,15 @@ abstract class OpenedTab {
         searchMode = state.searchMode;
         searchDistance = state.searchDistance;
         matchPolicy = state.matchPolicy;
+        // `_onLoadContent` זורע את שלושת השדות ל-Loaded מכל מסלול (מ-Initial
+        // או משימור Loaded קודם), ולכן ה-state סמכותי — קריאה ללא נפילה חזרה
+        // לשדות הטאב. נפילה כזו הייתה מחזירה שורות תוצאה שנוקו במפורש
+        // (`clearSearchResultLines`) עם חיפוש ידני חדש בתוך הספר.
+        highlightText = state.highlightText;
+        permanentHighlightLine = state.permanentHighlightLine;
+        // ב-Loaded השדה נקרא searchResultLines; ב-Initial אותו נתון עצמו
+        // נקרא initialSearchResultLines.
+        searchResultLines = state.searchResultLines;
       } else if (state is TextBookInitial) {
         // טאב ששמור בשולחן עבודה לא-פעיל מעולם לא נטען — בלי הענף הזה
         // צורת הדף והתצוגה המפוצלת מתאפסות בכל החלפת שולחן עבודה.
@@ -82,6 +102,13 @@ abstract class OpenedTab {
         searchMode: searchMode,
         searchDistance: searchDistance,
         matchPolicy: matchPolicy,
+        highlightText: highlightText,
+        permanentHighlightLine: permanentHighlightLine,
+        // עותק של ה-Set: בלעדיו המקור והשכפול מצביעים על אותו אוסף,
+        // ושינוי באחד היה משנה את השני.
+        initialSearchResultLines: searchResultLines == null
+            ? null
+            : Set<int>.of(searchResultLines),
         commentators: commentators,
         openLeftPane: state.showLeftPane,
         splitedView: splitedView,
@@ -92,7 +119,7 @@ abstract class OpenedTab {
         pinpointHighlightSectionIndex: pinpointSectionIndex,
       );
     } else if (tab is PdfBookTab) {
-      return PdfBookTab(
+      final copy = PdfBookTab(
         book: tab.book,
         pageNumber: tab.pageNumber,
         openLeftPane: tab.showLeftPane.value,
@@ -108,6 +135,15 @@ abstract class OpenedTab {
         dedupeKey: tab.dedupeKey,
         requiresStableLayout: tab.requiresStableLayout,
       );
+      // ⚠️ שדות שנקבעים **אחרי** הבנייה, ולכן אינם עוברים בפרמטרים.
+      // בלעדיהם שיכפול כרטיסיה, מעבר שולחן עבודה ופיצול לשתי חלוניות
+      // איפסו את המפרשים הפעילים ואת התקריב — אף שאותם שדות שורדים
+      // `toJson`/`fromJson`. `PdfCommentatorsTab.clone` העתיק אותם ידנית
+      // כדי לעקוף בדיוק את הפער הזה.
+      copy.activeCommentators = Set<String>.of(tab.activeCommentators);
+      copy.savedZoom = tab.savedZoom;
+      copy.savedLayoutMode = tab.savedLayoutMode;
+      return copy;
     } else if (tab is CombinedTab) {
       return CombinedTab(
         rightTab: OpenedTab.from(tab.rightTab),
@@ -184,9 +220,18 @@ abstract class OpenedTab {
     throw UnsupportedError("Unsupported book type: ${book.runtimeType}");
   }
 
+  /// המפענח **היחיד** של טאב שמור.
+  ///
+  /// ⚠️ קודם לכן הוא הכיר חמישה טיפוסים בלבד, ושלושה קוראים עקפו אותו עם
+  /// מפענחים מקבילים משלהם (`TabsRepository`, `Workspace.fromJson`,
+  /// `decodeCombinedTab`). התוצאה: כרטיסיית מפרשים לא הייתה ניתנת להעברה
+  /// בין חלונות — `canTransfer` חסם אותה — בעוד אותה כרטיסיה בדיוק כן
+  /// נטענה מהדיסק, כי המסלול הזה עבר במפענח אחר. שכפול של טבלת טיפוסים
+  /// מתיישן בכיוונים שונים, וזו בדיוק הדרך שבה זה קרה.
+  ///
   /// טיפוס לא מוכר זורק ולא נופל בשקט ל-[SearchingTab]: נפילה כזו יצרה טאב
   /// רפאים בשם הכלי/הספר בכל ירידת גרסה, וההצפה נשמרה חזרה לדיסק. הקוראים
-  /// (`TabsRepository.loadTabs`, `Workspace.decodeTab`) מדלגים על טאב שנכשל.
+  /// (`TabsRepository.loadTabs`, `Workspace.fromJson`) מדלגים על טאב שנכשל.
   factory OpenedTab.fromJson(Map<String, dynamic> json) {
     String type = json['type'];
     if (type == 'TextBookTab') {
@@ -199,6 +244,10 @@ abstract class OpenedTab {
       return ToolTab.fromJson(json);
     } else if (type == 'SearchingTabWindow' || type == 'SearchingTab') {
       return SearchingTab.fromJson(json);
+    } else if (type == 'CommentatorsTab') {
+      return CommentatorsTab.fromJson(json);
+    } else if (type == 'PdfCommentatorsTab') {
+      return PdfCommentatorsTab.fromJson(json);
     }
     throw FormatException('Unknown tab type: $type');
   }

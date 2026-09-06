@@ -12,11 +12,15 @@ class HistoryRepository extends BaseListRepository<Bookmark> {
 
   Future<List<Bookmark>> loadHistory() async => load();
 
-  Future<void> saveHistory(List<Bookmark> history) async => save(history);
+  /// נתיב הכתיבה. [apply] מקבל את ההיסטוריה **הטרייה** — של כל החלונות —
+  /// ולא את העותק שבזיכרון ה-bloc.
+  Future<List<Bookmark>> mutateHistory(
+    List<Bookmark> Function(List<Bookmark> current) apply,
+  ) async => mutate(apply);
+
+  /// שחזור מגיבוי: דריסה מוחלטת.
+  Future<void> replaceHistory(List<Bookmark> history) async =>
+      overwrite(history);
 
   Future<void> clearHistory() async => clear();
-
-  Future<void> addHistoryItem(Bookmark bookmark) async => addItem(bookmark);
-
-  Future<void> removeHistoryItem(int index) async => removeAt(index);
 }

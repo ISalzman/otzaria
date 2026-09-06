@@ -11,6 +11,10 @@ import 'package:otzaria/tabs/models/tab.dart' show OpenedTab;
 class _DummyTab extends OpenedTab {
   _DummyTab() : super('dummy');
 
+  /// stub חסר state — אין מה לשכפל.
+  @override
+  OpenedTab clone() => this;
+
   @override
   Map<String, dynamic> toJson() => {'title': title};
 }

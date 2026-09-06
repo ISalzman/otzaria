@@ -3,3 +3,10 @@
 
 # Shell scripts must stay LF - bash on Linux/macOS breaks on CRLF
 *.sh text eol=lf
+
+# Generated plugin SDK spec - the generator emits LF and the freshness test
+# compares its output to the file on disk byte-for-byte. With autocrlf the
+# working copy got CRLF, so the test reported "stale" for every Windows
+# developer (and would do the same on a windows CI runner) while git itself
+# showed no diff at all.
+docs/plugin-sdk/spec.json text eol=lf

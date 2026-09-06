@@ -35,8 +35,13 @@ class CommentatorsTab extends OpenedTab {
   CommentatorsTab({
     required this.sourceTab,
     this._disposeSourceTabOnDispose = false,
+    // שכפול בונה sourceTab חדש, שה-bloc שלו עדיין ב-TextBookInitial; בלי
+    // העברה מפורשת _resolveSelectedLine היה מחזיר null והשורה הנבחרת
+    // הייתה נעלמת בשכפול. null = "גזור מה-sourceTab", כמו קודם.
+    int? initialSelectedLine,
     @visibleForTesting TextBookBloc? blocOverride,
-  }) : initialSelectedLine = _resolveSelectedLine(sourceTab),
+  }) : initialSelectedLine =
+           initialSelectedLine ?? _resolveSelectedLine(sourceTab),
        super('מפרשים | ${sourceTab.title}') {
     // קורא מיקום התחלתי מה-state הנוכחי של sourceTab
     final sourceState = sourceTab.bloc.state;
@@ -105,12 +110,23 @@ class CommentatorsTab extends OpenedTab {
     return tab;
   }
 
+  /// המקור והשכפול חייבים לקבל [sourceTab] נפרד: קודם שניהם הצביעו על אותו
+  /// [TextBookTab], ו-[dispose] של האחד סגר את ה-BLoC ואת הבקרים של השני.
   @override
-  OpenedTab clone() => CommentatorsTab(sourceTab: sourceTab)
-    ..isPinned = isPinned
-    ..selectedCommentators = selectedCommentators == null
-        ? null
-        : List<String>.from(selectedCommentators!);
+  OpenedTab clone() =>
+      CommentatorsTab(
+          // `OpenedTab.from` מוצהר כמחזיר OpenedTab; הענף של TextBookTab מחזיר
+          // תמיד את אותו טיפוס, ובדיקת השכפול מוודאת שזה נשאר נכון.
+          sourceTab: OpenedTab.from(sourceTab) as TextBookTab,
+          // השכפול הוא הבעלים של ה-sourceTab שנוצר כאן; בלי זה ה-BLoC והבקרים
+          // שלו לא משוחררים לעולם.
+          disposeSourceTabOnDispose: true,
+          initialSelectedLine: initialSelectedLine,
+        )
+        ..isPinned = isPinned
+        ..selectedCommentators = selectedCommentators == null
+            ? null
+            : List<String>.from(selectedCommentators!);
 
   @override
   void dispose() {

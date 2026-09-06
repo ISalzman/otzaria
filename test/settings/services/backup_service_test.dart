@@ -209,7 +209,7 @@ void main() {
 
     await BackupService.restoreFromBackup(backupFile.path);
 
-    final (workspaces, currentWorkspaceId) = WorkspaceRepository()
+    final (workspaces, currentWorkspaceId) = await WorkspaceRepository()
         .loadWorkspaces();
     expect(workspaces, hasLength(2));
     expect(currentWorkspaceId, secondWorkspaceId);
@@ -260,7 +260,7 @@ void main() {
 
     await BackupService.restoreFromBackup(backupFile.path);
 
-    final (workspaces, currentWorkspaceId) = WorkspaceRepository()
+    final (workspaces, currentWorkspaceId) = await WorkspaceRepository()
         .loadWorkspaces();
     expect(workspaces.map((workspace) => workspace.id), [
       firstWorkspaceId,

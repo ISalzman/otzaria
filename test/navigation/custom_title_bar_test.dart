@@ -6,6 +6,8 @@ import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:otzaria_icons/otzaria_icons.dart';
+import 'package:otzaria/core/windowing/app_window_scope.dart';
+import 'package:otzaria/core/windowing/window_manager_app_window_controller.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/tabs/models/combined_tab.dart';
 import 'package:otzaria/tabs/models/commentators_tab.dart';
@@ -869,9 +871,15 @@ void main() {
         tester.getCenter(find.text('ספר ב')),
       );
       await tester.pump();
-      tester
-          .widget<ReadingTabStrip>(find.byType(ReadingTabStrip))
-          .onDragStarted!();
+      // ⚠️ `onDragStarted` מקבל את הכרטיסיה הנגררת מאז שהיא נדרשת לתצוגת
+      // הגרירה הנייטיבית; הבדיקה מזמנת אותו ידנית עם הכרטיסיה שנלחצה.
+      final strip = tester.widget<ReadingTabStrip>(
+        find.byType(ReadingTabStrip),
+      );
+      strip.onDragStarted!(
+        strip.tabs.firstWhere((tab) => tab.title == 'ספר ב'),
+        () {},
+      );
       await gesture.up();
       await tester.pumpAndSettle();
 
@@ -1539,6 +1547,148 @@ void main() {
     });
   });
 
+  group('הפס שבין הכרטיסיה לתוכן', () {
+    /// ⚠️ הפס הזה הופיע גם כשלא היה שום גבול, צל או מפריד: גוף הכרטיסיה
+    /// הוא 32 והסרגל 40, והכרטיסיה ממורכזת בו — כלומר נשארו ארבעה
+    /// פיקסלים של **צבע הרצועה** בין הכרטיסיה לתוכן שמתחתיה.
+    ///
+    /// ⚠️ הבדיקה מודדת את **הערך שהקוד מצייר בו**
+    /// ([kTabBackgroundBottomOffset]) מול הפריסה שנמדדה, ולא היסט שהיא
+    /// מחשבת בעצמה. הגרסה הראשונה כאן חישבה בעצמה, ולכן עברה גם כשהקוד
+    /// צייר בהיסט 0 — כלומר אימתה את החשבון שלה מול עצמו.
+    testWidgets('הכרטיסיה הפעילה מגיעה בציור עד תחתית הסרגל', (tester) async {
+      final tabs = [_makeTextTab('ספר א'), _makeTextTab('ספר ב')];
+      final tabsBloc = _TestTabsBloc(
+        TabsState(tabs: tabs, currentTabIndex: 0),
+      );
+      final navigationBloc = _TestNavigationBloc(
+        const NavigationState(currentScreen: Screen.reading),
+      );
+      final settingsBloc = _TestSettingsBloc(SettingsState.initial());
+
+      addTearDown(() async {
+        for (final tab in tabs) {
+          tab.dispose();
+        }
+        await tabsBloc.close();
+        await navigationBloc.close();
+        await settingsBloc.close();
+      });
+
+      await _setSurfaceSize(tester, const Size(1200, 800));
+      await _pumpTitleBar(
+        tester,
+        tabsBloc: tabsBloc,
+        navigationBloc: navigationBloc,
+        settingsBloc: settingsBloc,
+      );
+
+      // הצייר של הכרטיסיה הפעילה — היחיד מסוגו כשאין בחירה מרובה וריחוף.
+      final painted = tester
+          .widgetList<CustomPaint>(find.byType(CustomPaint))
+          .where(
+            (w) => w.painter.runtimeType.toString() == '_TabBackgroundPainter',
+          )
+          .toList();
+      expect(painted, hasLength(1), reason: 'רק הכרטיסיה הפעילה נצבעת');
+
+      final tabRect = tester.getRect(find.byWidget(painted.first));
+      final barRect = tester.getRect(find.byType(CustomTitleBar));
+
+      // ⚠️ ההצהרה: שטח הציור **הוא** גובה הסרגל, מלמעלה עד למטה.
+      //
+      // זו הצהרה חזקה יותר מ"הציור מגיע עד התחתית", והיא זו שנדרשת: כל
+      // עוד הצייר חרג מגבולות ה-widget שלו, הרצועה
+      // (`SingleChildScrollView`) חתכה את החריגה ברגע שהתוכן גלש —
+      // כלומר עם הרבה כרטיסיות או בחלון צר הקו הבהיר חזר. ציור שכולו
+      // בתוך הגבולות אינו יכול להיחתך.
+      expect(
+        tabRect.top,
+        moreOrLessEquals(barRect.top, epsilon: 0.01),
+        reason: 'שטח הציור מתחיל ב-${tabRect.top} והסרגל ב-${barRect.top}',
+      );
+      expect(
+        tabRect.bottom,
+        moreOrLessEquals(barRect.bottom, epsilon: 0.01),
+        reason:
+            'שטח הציור מסתיים ב-${tabRect.bottom} והסרגל ב-'
+            '${barRect.bottom} — ההפרש הוא הפס שנראה בין הכרטיסיה לתוכן',
+      );
+    });
+
+    testWidgets('הגבהת שטח הציור אינה מזיזה את כותרת הכרטיסיה', (
+      tester,
+    ) async {
+      // ⚠️ ה-widget קיבל את כל גובה הסרגל כדי שהציור לא ייחתך, והתוכן
+      // ממורכז בנפרד. בלי המירכוז הכותרת הייתה יורדת ארבעה פיקסלים.
+      final tabs = [_makeTextTab('ספר א'), _makeTextTab('ספר ב')];
+      final tabsBloc = _TestTabsBloc(
+        TabsState(tabs: tabs, currentTabIndex: 0),
+      );
+      final navigationBloc = _TestNavigationBloc(
+        const NavigationState(currentScreen: Screen.reading),
+      );
+      final settingsBloc = _TestSettingsBloc(SettingsState.initial());
+
+      addTearDown(() async {
+        for (final tab in tabs) {
+          tab.dispose();
+        }
+        await tabsBloc.close();
+        await navigationBloc.close();
+        await settingsBloc.close();
+      });
+
+      await _setSurfaceSize(tester, const Size(1200, 800));
+      await _pumpTitleBar(
+        tester,
+        tabsBloc: tabsBloc,
+        navigationBloc: navigationBloc,
+        settingsBloc: settingsBloc,
+      );
+
+      final titleRect = tester.getRect(find.text('ספר א').first);
+      final barRect = tester.getRect(find.byType(CustomTitleBar));
+      expect(
+        titleRect.center.dy,
+        moreOrLessEquals(barRect.center.dy, epsilon: 1.0),
+        reason:
+            'הכותרת ממורכזת ב-${titleRect.center.dy} והסרגל ב-'
+            '${barRect.center.dy}',
+      );
+    });
+
+    testWidgets('הסרגל אינו מתארך כדי לפנות מקום לציור', (tester) async {
+      // ⚠️ זה הכיוון שנכשל קודם: הרחבת הסרגל דחפה את התוכן למטה והגדילה
+      // את הפער במקום לסגור אותו.
+      final tab = _makeTextTab('ספר א');
+      final tabsBloc = _TestTabsBloc(
+        TabsState(tabs: [tab], currentTabIndex: 0),
+      );
+      final navigationBloc = _TestNavigationBloc(
+        const NavigationState(currentScreen: Screen.reading),
+      );
+      final settingsBloc = _TestSettingsBloc(SettingsState.initial());
+
+      addTearDown(() async {
+        tab.dispose();
+        await tabsBloc.close();
+        await navigationBloc.close();
+        await settingsBloc.close();
+      });
+
+      await _setSurfaceSize(tester, const Size(1200, 800));
+      await _pumpTitleBar(
+        tester,
+        tabsBloc: tabsBloc,
+        navigationBloc: navigationBloc,
+        settingsBloc: settingsBloc,
+      );
+
+      expect(tester.getSize(find.byType(CustomTitleBar)).height, 40);
+    });
+  });
+
   group('סגירת טאב בלחיצה על כפתור ה-X', () {
     testWidgets('לחיצה על ה-X סוגרת מיד — בלי המתנה ל-timeout של לחיצה כפולה', (
       tester,
@@ -2146,20 +2296,27 @@ Future<void> _pumpTitleBar(
   HistoryBloc? historyBloc,
 }) async {
   await tester.pumpWidget(
-    MultiBlocProvider(
-      providers: [
-        BlocProvider<TabsBloc>.value(value: tabsBloc),
-        BlocProvider<NavigationBloc>.value(value: navigationBloc),
-        BlocProvider<SettingsBloc>.value(value: settingsBloc),
-        if (historyBloc != null)
-          BlocProvider<HistoryBloc>.value(value: historyBloc),
-      ],
-      child: MaterialApp(
-        home: Scaffold(
-          body: SizedBox(
-            width: 900,
-            child: CustomTitleBar(
-              onReadingSettingsPressed: () {},
+    // CustomTitleBar שולף את החלון מ-[AppWindowScope] (maximize בלחיצה
+    // כפולה, מזעור, סגירה, גרירת החלון). הבקר האמיתי מנתב לאותו
+    // MethodChannel שממוקם בבדיקה, ולכן ההנחות הקיימות נשארות בתוקף.
+    AppWindowScope(
+      controller: const WindowManagerAppWindowController(),
+      geometry: const WindowManagerAppWindowController(),
+      child: MultiBlocProvider(
+        providers: [
+          BlocProvider<TabsBloc>.value(value: tabsBloc),
+          BlocProvider<NavigationBloc>.value(value: navigationBloc),
+          BlocProvider<SettingsBloc>.value(value: settingsBloc),
+          if (historyBloc != null)
+            BlocProvider<HistoryBloc>.value(value: historyBloc),
+        ],
+        child: MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 900,
+              child: CustomTitleBar(
+                onReadingSettingsPressed: () {},
+              ),
             ),
           ),
         ),

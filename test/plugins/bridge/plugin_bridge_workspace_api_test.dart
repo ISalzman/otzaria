@@ -57,16 +57,17 @@ class _InMemoryWorkspaceRepository extends WorkspaceRepository {
   String? activeWorkspaceId;
 
   @override
-  (List<Workspace>, String?) loadWorkspaces() =>
+  Future<(List<Workspace>, String?)> loadWorkspaces() async =>
       (List<Workspace>.from(workspaces), activeWorkspaceId);
 
   @override
-  Future<void> saveWorkspaces(
-    List<Workspace> workspaces,
-    String? currentWorkspaceId,
-  ) async {
-    this.workspaces = List<Workspace>.from(workspaces);
-    activeWorkspaceId = currentWorkspaceId;
+  Future<List<Workspace>> mutateWorkspaces(
+    List<Workspace> Function(List<Workspace> current) apply,
+  ) async => workspaces = List<Workspace>.from(apply(workspaces));
+
+  @override
+  Future<void> saveActiveWorkspaceId(String? id) async {
+    activeWorkspaceId = id;
   }
 }
 
@@ -153,7 +154,7 @@ void main() {
     );
     workspaceBloc = WorkspaceBloc(
       repository: workspaceRepository,
-      onWorkspaceTabsChanged: (tabs, index) {
+      onWorkspaceTabsChanged: (tabs, index, _) {
         loadedTabs = tabs;
         trackedTabs.addAll(tabs);
         tabsBloc.currentState = TabsState(tabs: tabs, currentTabIndex: index);

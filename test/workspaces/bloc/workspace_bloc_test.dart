@@ -29,7 +29,7 @@ void main() {
       List<OpenedTab>? callbackTabs;
       final bloc = WorkspaceBloc(
         repository: repository,
-        onWorkspaceTabsChanged: (tabs, _) {
+        onWorkspaceTabsChanged: (tabs, _, _) {
           callbackTabs = tabs;
         },
       )..add(LoadWorkspaces());
@@ -75,7 +75,7 @@ void main() {
       List<OpenedTab>? callbackTabs;
       final bloc = WorkspaceBloc(
         repository: repository,
-        onWorkspaceTabsChanged: (tabs, _) {
+        onWorkspaceTabsChanged: (tabs, _, _) {
           callbackTabs = tabs;
         },
       )..add(LoadWorkspaces());
@@ -113,7 +113,7 @@ void main() {
       final allowTabReplacement = Completer<void>();
       final bloc = WorkspaceBloc(
         repository: repository,
-        onWorkspaceTabsChanged: (_, _) {
+        onWorkspaceTabsChanged: (_, _, _) {
           callbackStarted.complete();
           return allowTabReplacement.future;
         },
@@ -158,16 +158,22 @@ class _FakeWorkspaceRepository extends WorkspaceRepository {
   String? _activeWorkspaceId;
 
   @override
-  (List<Workspace>, String?) loadWorkspaces() =>
+  Future<(List<Workspace>, String?)> loadWorkspaces() async =>
       (List<Workspace>.from(_workspaces), _activeWorkspaceId);
 
   @override
-  Future<void> saveWorkspaces(
-    List<Workspace> workspaces,
-    String? currentWorkspaceId,
+  Future<List<Workspace>> mutateWorkspaces(
+    List<Workspace> Function(List<Workspace> current) apply,
   ) async {
-    _workspaces = List<Workspace>.from(workspaces);
-    _activeWorkspaceId = currentWorkspaceId;
+    _workspaces = List<Workspace>.from(
+      apply(List<Workspace>.from(_workspaces)),
+    );
+    return List<Workspace>.from(_workspaces);
+  }
+
+  @override
+  Future<void> saveActiveWorkspaceId(String? id) async {
+    _activeWorkspaceId = id;
   }
 }
 

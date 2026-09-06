@@ -1,5 +1,6 @@
 #include "win32_window.h"
 
+#include <atomic>
 #include <dwmapi.h>
 #include <flutter_windows.h>
 
@@ -27,7 +28,11 @@ constexpr const wchar_t kGetPreferredBrightnessRegKey[] =
 constexpr const wchar_t kGetPreferredBrightnessRegValue[] = L"AppsUseLightTheme";
 
 // The number of Win32Window objects that currently exist.
-static int g_active_window_count = 0;
+// ⚠️ חלונות נוספים נוצרים על אותו thread (ראו docs/multi-window.md), ולכן
+// המונה הזה נקרא ונכתב משני threads. כ-`int` רגיל זה מרוץ נתונים: שני
+// חלונות שנסגרים במקביל עלולים שניהם לראות 0 ולבטל את רישום המחלקה
+// פעמיים, או לפספס את האפס ולא לבטל כלל. בחלון יחיד זה לא הופיע.
+static std::atomic<int> g_active_window_count{0};
 
 using EnableNonClientDpiScaling = BOOL __stdcall(HWND hwnd);
 
@@ -61,11 +66,13 @@ class WindowClassRegistrar {
   ~WindowClassRegistrar() = default;
 
   // Returns the singleton registrar instance.
+  //
+  // ⚠️ אתחול עצל ב-`if (!instance_)` אינו בטוח כששני threads יוצרים
+  // חלונות במקביל — שניהם עלולים לראות null ולהקצות. סינגלטון מקומי-סטטי
+  // מובטח על ידי התקן כבטוח ל-threads מאז C++11.
   static WindowClassRegistrar* GetInstance() {
-    if (!instance_) {
-      instance_ = new WindowClassRegistrar();
-    }
-    return instance_;
+    static WindowClassRegistrar instance;
+    return &instance;
   }
 
   // Returns the name of the window class, registering the class if it hasn't
@@ -79,12 +86,8 @@ class WindowClassRegistrar {
  private:
   WindowClassRegistrar() = default;
 
-  static WindowClassRegistrar* instance_;
-
   bool class_registered_ = false;
 };
-
-WindowClassRegistrar* WindowClassRegistrar::instance_ = nullptr;
 
 const wchar_t* WindowClassRegistrar::GetWindowClass() {
   if (!class_registered_) {
@@ -111,6 +114,47 @@ void WindowClassRegistrar::UnregisterWindowClass() {
   class_registered_ = false;
 }
 
+namespace {
+
+// החלון שהמשתמש בחר לאחרונה בלחיצה, והרגע שבו.
+//
+// ⚠️ הבסיס ל-[Win32Window::ShouldVetoActivation] — ראו שם.
+HWND g_user_activated = nullptr;
+ULONGLONG g_user_activated_at = 0;
+
+// כמה זמן בחירת המשתמש "מוגנת" מפני הפעלה תוכניתית של חלון אחר שלנו.
+//
+// חלון בסדר גודל של חצי שנייה: ארוך מספיק כדי לכסות את ההפעלה החוזרת
+// שהמנוע מייצר (נמדדה תוך ~30ms), וקצר מספיק שלא יחסום העלאה לגיטימית
+// (כרטיסיה שהועברה, `otzaria://`) שמגיעה אחרי אינטראקציה אמיתית.
+constexpr ULONGLONG kUserChoiceGraceMs = 500;
+
+bool IsOtzariaWindow(HWND window) {
+  if (!window) return false;
+  wchar_t name[64] = {0};
+  ::GetClassNameW(window, name, sizeof(name) / sizeof(name[0]));
+  return ::wcscmp(name, kWindowClassName) == 0;
+}
+
+}  // namespace
+
+void Win32Window::NoteUserActivation(HWND window) {
+  g_user_activated = window;
+  g_user_activated_at = ::GetTickCount64();
+}
+
+bool Win32Window::ShouldVetoActivation(HWND window) {
+  if (g_user_activated == nullptr) return false;
+  if (window == g_user_activated) return false;
+  if (!IsOtzariaWindow(window) || !IsOtzariaWindow(g_user_activated)) {
+    return false;
+  }
+  if (!::IsWindow(g_user_activated) || !::IsWindowVisible(g_user_activated)) {
+    return false;
+  }
+  return ::GetTickCount64() - g_user_activated_at < kUserChoiceGraceMs;
+}
+
 Win32Window::Win32Window() {
   ++g_active_window_count;
 }
@@ -122,23 +166,35 @@ Win32Window::~Win32Window() {
 
 bool Win32Window::Create(const std::wstring& title,
                          const Point& origin,
-                         const Size& size) {
-  Destroy();
-
-  const wchar_t* window_class =
-      WindowClassRegistrar::GetInstance()->GetWindowClass();
-
+                         const Size& size,
+                         DWORD extended_style) {
   const POINT target_point = {static_cast<LONG>(origin.x),
                               static_cast<LONG>(origin.y)};
   HMONITOR monitor = MonitorFromPoint(target_point, MONITOR_DEFAULTTONEAREST);
   UINT dpi = FlutterDesktopGetDpiForMonitor(monitor);
   double scale_factor = dpi / 96.0;
 
-  HWND window = CreateWindow(
-      window_class, title.c_str(), WS_OVERLAPPEDWINDOW,
-      Scale(origin.x, scale_factor), Scale(origin.y, scale_factor),
-      Scale(size.width, scale_factor), Scale(size.height, scale_factor),
-      nullptr, nullptr, GetModuleHandle(nullptr), this);
+  RECT frame{};
+  frame.left = Scale(origin.x, scale_factor);
+  frame.top = Scale(origin.y, scale_factor);
+  frame.right = frame.left + Scale(size.width, scale_factor);
+  frame.bottom = frame.top + Scale(size.height, scale_factor);
+  return CreatePhysical(title, frame, extended_style);
+}
+
+bool Win32Window::CreatePhysical(const std::wstring& title,
+                                 const RECT& frame,
+                                 DWORD extended_style) {
+  Destroy();
+
+  const wchar_t* window_class =
+      WindowClassRegistrar::GetInstance()->GetWindowClass();
+
+  HWND window = CreateWindowEx(
+      extended_style, window_class, title.c_str(), WS_OVERLAPPEDWINDOW,
+      frame.left, frame.top, frame.right - frame.left,
+      frame.bottom - frame.top, nullptr, nullptr, GetModuleHandle(nullptr),
+      this);
 
   if (!window) {
     return false;
@@ -151,6 +207,13 @@ bool Win32Window::Create(const std::wstring& title,
 
 bool Win32Window::Show() {
   return ShowWindow(window_handle_, SW_SHOW);
+}
+
+void Win32Window::AllowActivation(HWND window) {
+  if (!window) return;
+  const LONG_PTR ex = ::GetWindowLongPtrW(window, GWL_EXSTYLE);
+  if ((ex & WS_EX_NOACTIVATE) == 0) return;
+  ::SetWindowLongPtrW(window, GWL_EXSTYLE, ex & ~WS_EX_NOACTIVATE);
 }
 
 // static
@@ -180,12 +243,18 @@ Win32Window::MessageHandler(HWND hwnd,
                             LPARAM const lparam) noexcept {
   switch (message) {
     case WM_CLOSE:
-      // Handle window close request properly
-      if (quit_on_close_) {
-        DestroyWindow(hwnd);
-      }
+      // ⚠️ ההריסה אינה מותנית ב-`quit_on_close_` — הדגל אומר "סגירת החלון
+      // הזה מסיימת את התהליך", ולא "מותר לסגור אותו" — ואינה מיידית.
+      // ראו `kMsgDeferredDestroy`.
+      ::PostMessageW(hwnd, kMsgDeferredDestroy, 0, 0);
       return 0;
-      
+
+    case kMsgDeferredDestroy:
+      // מוסתר ולא נהרס — ראו ההערה ליד `kMsgDeferredDestroy`.
+      ShowWindow(hwnd, SW_HIDE);
+      OnWindowHidden();
+      return 0;
+
     case WM_DESTROY:
       window_handle_ = nullptr;
       Destroy();
@@ -214,8 +283,37 @@ Win32Window::MessageHandler(HWND hwnd,
       return 0;
     }
 
+    case WM_MOUSEACTIVATE:
+      // בחירה מפורשת של המשתמש — ראו [ShouldVetoActivation].
+      NoteUserActivation(hwnd);
+      break;
+
     case WM_ACTIVATE:
-      if (child_content_ != nullptr) {
+      // ⚠️ **רק בהפעלה, לא בביטול הפעלה.** זו שורה מקוד ה-runner
+      // הסטנדרטי של Flutter, והיא תקינה בחלון יחיד בלבד.
+      //
+      // `WM_ACTIVATE` נשלח גם עם `WA_INACTIVE`, כשהחלון **מאבד** הפעלה.
+      // בלי הבדיקה, חלון שהמשתמש עזב קרא ל-`SetFocus` על התוכן של עצמו —
+      // ו-`SetFocus` על חלון באותו thread מפעיל גם את החלון העליון שלו.
+      // כלומר: המשתמש לוחץ על חלון ב', א' מקבל `WA_INACTIVE`, גונב את
+      // הפוקוס בחזרה, ב' מקבל `WA_INACTIVE` וגונב אותו שוב — לולאה.
+      //
+      // זה בדיוק מה שהמשתמש דיווח: לחיצה על החלון התחתון משאירה את
+      // הפוקוס בעליון, והאזור החופף מרצד בלי סוף כאילו החלונות רבים מי
+      // יהיה למעלה. בחלון יחיד אין מי שיתחרה, ולכן זה מעולם לא נראה.
+      //
+      // ⚠️ וגם **רק כשהחלון גלוי**. חלון מוסתר שקיבל הפעלה (המנוע קורא
+      // `SetFocus` על ה-view שלו ביצירה) היה מושך את הפוקוס אל התוכן שלו
+      // ובכך מחזק הפעלה מדומה, ומצטרף לתנודה במקום לשבור אותה.
+      //
+      // ⚠️ וגם **רק כשיש מה לשנות**. `SetFocus` יוצר הודעות מיקוד והפעלה
+      // נוספות, ועם כמה חלונות עליונים על אותו thread כל אחד מהם הגיב
+      // עליהן בהצבת מיקוד משלו — נמדדה תנודה **אינסופית** של הפעלות כל
+      // ~16ms בין שלושה חלונות (783 הפעלות בהרצה של 40 שניות; עם הבדיקה
+      // הזו: 77, ובלי לולאה). הגידור ב-`WA_INACTIVE` לבדו שבר רק את
+      // המקרה הפשוט של שני חלונות.
+      if (LOWORD(wparam) != WA_INACTIVE && child_content_ != nullptr &&
+          ::IsWindowVisible(hwnd) && ::GetFocus() != child_content_) {
         SetFocus(child_content_);
       }
       return 0;
@@ -253,7 +351,17 @@ void Win32Window::SetChildContent(HWND content) {
   MoveWindow(content, frame.left, frame.top, frame.right - frame.left,
              frame.bottom - frame.top, true);
 
-  SetFocus(child_content_);
+  // ⚠️ **רק כשהחלון כבר גלוי.** `SetFocus` על ילד מפעיל גם את החלון העליון
+  // שלו, וחלון אוצריא נוצר **מוסתר** ונחשף רק בפריים הראשון — כשנייה
+  // שלמה אחר כך. השורה הזו (מקוד ה-runner הסטנדרטי, שנכתב לחלון יחיד)
+  // גנבה אפוא את הפוקוס מהחלון הראשי לפני שהיה בכלל מה לראות: המשתמש
+  // המשיך להקליד, וההקלדה הלכה לחלון בלתי-נראה.
+  //
+  // אין כאן אובדן: `WM_ACTIVATE` שמעל מעביר את הפוקוס לתוכן בכל הפעלה,
+  // כולל זו שהחשיפה (`RevealOnFirstFrame`) מייצרת.
+  if (::IsWindowVisible(window_handle_)) {
+    SetFocus(child_content_);
+  }
 }
 
 RECT Win32Window::GetClientArea() {
@@ -293,3 +401,5 @@ void Win32Window::UpdateTheme(HWND const window) {
                           &enable_dark_mode, sizeof(enable_dark_mode));
   }
 }
+
+void Win32Window::OnWindowHidden() {}

@@ -24,12 +24,27 @@ class BookmarkRepository extends BaseListRepository<Bookmark> {
 
   Future<List<Bookmark>> loadBookmarks() async => load();
 
-  Future<void> saveBookmarks(List<Bookmark> bookmarks) async => save(bookmarks);
+  /// נתיב הכתיבה. [apply] מקבל את הסימניות **הטריות** — של כל החלונות.
+  Future<List<Bookmark>> mutateBookmarks(
+    List<Bookmark> Function(List<Bookmark> current) apply,
+  ) async => mutate(apply);
+
+  /// שחזור מגיבוי: דריסה מוחלטת.
+  Future<void> replaceBookmarks(List<Bookmark> bookmarks) async =>
+      overwrite(bookmarks);
 
   Future<void> clearBookmarks() async => clear();
 
   Future<List<BookmarkGroup>> loadGroups() async => _groupsRepository.load();
 
-  Future<void> saveGroups(List<BookmarkGroup> groups) async =>
-      _groupsRepository.save(groups);
+  Future<List<BookmarkGroup>> mutateGroups(
+    List<BookmarkGroup> Function(List<BookmarkGroup> current) apply,
+  ) async => _groupsRepository.mutate(apply);
+
+  /// שחזור מגיבוי: דריסה מוחלטת.
+  Future<void> replaceGroups(List<BookmarkGroup> groups) async =>
+      _groupsRepository.overwrite(groups);
+
+  /// אות ששכבת הסימניות המרוכזות שונתה בחלון אחר.
+  Stream<void> get groupsRemoteChanges => _groupsRepository.remoteChanges;
 }

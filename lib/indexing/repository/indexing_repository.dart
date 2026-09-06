@@ -3,7 +3,9 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart' hide Category;
 import 'package:otzaria/core/messages/library_messages.dart';
+import 'package:otzaria/core/messages/window_messages.dart';
 import 'package:otzaria/core/ui_snack.dart';
+import 'package:otzaria/core/windowing/window_role.dart';
 import 'package:otzaria/data/cache/generation_cache.dart';
 import 'package:otzaria/data/data_providers/tantivy_data_provider.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
@@ -264,6 +266,13 @@ class IndexingRepository {
     void Function(double fraction)? onFinalizingProgress,
     bool includePdfBooks = true,
   }) async {
+    if (WindowRole.isSecondary) {
+      return const IndexingRunResult.cancelled(
+        processedBooks: 0,
+        totalBooks: 0,
+        indexedBooks: 0,
+      );
+    }
     if (await _blockIndexingOnTempFallback()) {
       return const IndexingRunResult.cancelled(
         processedBooks: 0,
@@ -1412,6 +1421,13 @@ class IndexingRepository {
     void Function()? onActualIndexingStarted,
     required void Function(int processed, int total) onProgress,
   }) async {
+    if (WindowRole.isSecondary) {
+      return IndexingRunResult.cancelled(
+        processedBooks: 0,
+        totalBooks: books.length,
+        indexedBooks: 0,
+      );
+    }
     if (books.isEmpty) {
       return const IndexingRunResult.completed(
         processedBooks: 0,
@@ -1603,14 +1619,20 @@ class IndexingRepository {
   }
 
   /// Clears the index and resets the list of indexed books.
-  Future<void> clearIndex() async {
+  Future<bool> clearIndex() async {
+    if (WindowRole.isSecondary) {
+      UiSnack.show(WindowMessages.indexingOnlyInMainWindow);
+      return false;
+    }
     await _tantivyDataProvider.clear();
+    return true;
   }
 
   /// מסיר מהאינדקס את רשומות הספרים הנתונים — מחיקה מדויקת לפי מפתח
   /// ה-filePath שהמסמכים נכתבו איתו ([buildIndexedBookFilePath]), כך שספר
   /// אחר החולק את אותה כותרת אינו נפגע. מחזיר האם המחיקה נקלטה.
   Future<bool> dropBookIndexEntries(Iterable<Book> books) async {
+    if (WindowRole.isSecondary) return false;
     final keys = <String>{
       for (final book in books) buildIndexedBookFilePath(book),
     }..remove('');
@@ -1651,6 +1673,7 @@ class IndexingRepository {
   ///
   /// מחזיר את מספר הספרים שהוסרו.
   Future<int> dropOrphanedIndexEntries(Library library) async {
+    if (WindowRole.isSecondary) return 0;
     final books = library.getAllBooks();
     if (books.isEmpty) return 0;
 
@@ -1700,6 +1723,13 @@ class IndexingRepository {
     void Function()? onActualIndexingStarted,
     required void Function(int processed, int total) onProgress,
   }) async {
+    if (WindowRole.isSecondary) {
+      return IndexingRunResult.cancelled(
+        processedBooks: 0,
+        totalBooks: changedBooks.length,
+        indexedBooks: 0,
+      );
+    }
     if (changedBooks.isEmpty) {
       return const IndexingRunResult.completed(
         processedBooks: 0,
@@ -1771,6 +1801,13 @@ class IndexingRepository {
     @visibleForTesting
     Future<BigInt> Function(TextBook book, String text)? fingerprintOf,
   }) async {
+    if (WindowRole.isSecondary) {
+      return const IndexingRunResult.cancelled(
+        processedBooks: 0,
+        totalBooks: 0,
+        indexedBooks: 0,
+      );
+    }
     if (await _blockIndexingOnTempFallback() ||
         await requiresManualReindex(library)) {
       return const IndexingRunResult.cancelled(

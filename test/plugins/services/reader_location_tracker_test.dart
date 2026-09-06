@@ -330,7 +330,9 @@ void main() {
         final tracker = buildTracker(initialState: baseState);
         await settle();
 
-        final switched = baseState.copyWith(rawActivePane: second);
+        final switched = baseState.copyWith(
+          activePane: ActivePaneUpdate.set(second),
+        );
         setCurrentState(switched);
         tabsStateController.add(switched);
         await settle();

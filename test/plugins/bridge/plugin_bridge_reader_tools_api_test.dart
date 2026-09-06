@@ -56,8 +56,11 @@ class _InMemoryBookmarkRepository extends BookmarkRepository {
   Future<List<Bookmark>> loadBookmarks() async => stored;
 
   @override
-  Future<void> saveBookmarks(List<Bookmark> bookmarks) async {
-    stored = bookmarks;
+  Future<List<Bookmark>> mutateBookmarks(
+    List<Bookmark> Function(List<Bookmark> current) apply,
+  ) async {
+    stored = apply(List<Bookmark>.from(stored));
+    return List<Bookmark>.from(stored);
   }
 
   @override
@@ -456,10 +459,18 @@ void main() {
       index: index,
     );
 
+    /// ⚠️ זורע גם את המחסן וגם את ה-state.
+    ///
+    /// `BookmarkBloc` מיישר את התצוגה לתוצאה **המוסמכת** של המחסן אחרי כל
+    /// שינוי — זה בדיוק התיקון לכך שחלון אחד מחק את מה שהשני כתב. זריעת
+    /// state בלי מחסן מתארת מצב שאינו קיים ביצור, ובו הסימניות "נמחקות".
+    void seedBookmarks(List<Bookmark> bookmarks) {
+      bookmarkRepository.stored = List<Bookmark>.from(bookmarks);
+      bookmarkBloc.emit(BookmarkState(bookmarks: bookmarks));
+    }
+
     test('list מחזיר את הסימניות של ה-bloc', () async {
-      bookmarkBloc.emit(
-        BookmarkState(bookmarks: [bookmark('בראשית', 3), bookmark('שמות', 1)]),
-      );
+      seedBookmarks([bookmark('בראשית', 3), bookmark('שמות', 1)]);
 
       final data =
           await buildAdapter().execute('bookmarks', 'list', {'limit': 10})
@@ -471,11 +482,7 @@ void main() {
     });
 
     test('remove מוחק לפי זהות ו-index', () async {
-      bookmarkBloc.emit(
-        BookmarkState(
-          bookmarks: [bookmark('בראשית', 3), bookmark('בראשית', 7)],
-        ),
-      );
+      seedBookmarks([bookmark('בראשית', 3), bookmark('בראשית', 7)]);
 
       final removed = await buildAdapter().execute('bookmarks', 'remove', {
         'bookId': 'בראשית',
@@ -487,7 +494,7 @@ void main() {
     });
 
     test('remove ללא התאמה מחזיר false', () async {
-      bookmarkBloc.emit(BookmarkState(bookmarks: [bookmark('בראשית', 3)]));
+      seedBookmarks([bookmark('בראשית', 3)]);
       expect(
         await buildAdapter().execute('bookmarks', 'remove', {
           'bookId': 'שמות',
@@ -510,7 +517,7 @@ void main() {
     });
 
     test('remove — התאמה עם שמירה מוצלחת מחזיר true ומתמיד לדיסק', () async {
-      bookmarkBloc.emit(BookmarkState(bookmarks: [bookmark('בראשית', 3)]));
+      seedBookmarks([bookmark('בראשית', 3)]);
 
       final removed = await buildAdapter().execute('bookmarks', 'remove', {
         'bookId': 'בראשית',

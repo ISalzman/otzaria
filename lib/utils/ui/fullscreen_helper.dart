@@ -2,7 +2,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:window_manager/window_manager.dart';
+import 'package:window_manager/window_manager.dart' show TitleBarStyle;
+import 'package:otzaria/core/windowing/app_window_scope.dart';
 import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
 import 'package:otzaria/navigation/bloc/navigation_state.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
@@ -61,6 +62,10 @@ class FullscreenHelper {
     BuildContext context,
     bool isFullscreen,
   ) async {
+    // נקרא לפני כל await: אחרי נקודת השהיה ה-context עלול כבר לא להיות
+    // מותקן, ו-`geometryOf` מבצע חיפוש בעץ ה-widgets.
+    final geometry = AppWindowScope.geometryOf(context);
+
     // עדכון ה-state ב-Bloc
     final settingsBloc = context.read<SettingsBloc>();
     if (settingsBloc.state.isFullscreen != isFullscreen) {
@@ -82,15 +87,15 @@ class FullscreenHelper {
     // פעולות על מנהל החלונות
     // חשוב: להסתיר את ה-title bar לפני המעבר למסך מלא כדי למנוע הבהוב
     if (isFullscreen) {
-      await windowManager.setTitleBarStyle(
+      await geometry.setTitleBarStyle(
         TitleBarStyle.hidden,
         windowButtonVisibility: false,
       );
-      await windowManager.setFullScreen(true);
+      await geometry.setFullScreen(true);
     } else {
-      await windowManager.setFullScreen(false);
+      await geometry.setFullScreen(false);
       // אנחנו משתמשים ב-CustomTitleBar ולכן תמיד רוצים להסתיר את הכותרת המקורית
-      await windowManager.setTitleBarStyle(
+      await geometry.setTitleBarStyle(
         TitleBarStyle.hidden,
         windowButtonVisibility: false,
       );

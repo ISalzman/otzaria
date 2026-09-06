@@ -1,7 +1,6 @@
 import 'package:equatable/equatable.dart';
 import 'package:flutter/foundation.dart';
 import 'package:otzaria/tabs/models/tab.dart';
-import 'package:otzaria/tabs/models/commentators_tab.dart';
 import 'package:otzaria/tabs/models/combined_tab.dart';
 import 'package:otzaria/tabs/models/pdf_commentators_tab.dart';
 import 'package:otzaria/utils/file/hive_utils.dart';
@@ -18,11 +17,21 @@ class Workspace extends Equatable {
   final List<OpenedTab> tabs;
   final int activeTabIndex;
 
+  /// צד החלונית הפעילה בטאב שב-[activeTabIndex] — [kRightPaneSide] או
+  /// [kLeftPaneSide]. `null` כשהטאב הפעיל אינו מפוצל, וזה גם המצב היחיד
+  /// שבו המפתח נעדר מה-JSON.
+  ///
+  /// הערך יושב ברמת שולחן העבודה ולא בתוך [CombinedTab.toJson], כי
+  /// משמעותו "איזו חלונית פעילה **בטאב הנוכחי**" — נתון אחד לשולחן עבודה,
+  /// בדיוק כמו [activeTabIndex].
+  final String? activePane;
+
   Workspace({
     String? id,
     required this.name,
     required this.tabs,
     this.activeTabIndex = 0,
+    this.activePane,
   }) : id = id ?? _generateId();
 
   static int _idCounter = 0;
@@ -35,6 +44,9 @@ class Workspace extends Equatable {
   }
 
   /// Creates a copy of this workspace with the given fields replaced.
+  ///
+  /// [activePane] אינו פרמטר כאן בכוונה: `String?` לא היה מבחין בין
+  /// "אל תיגע" לבין "נקה". להחלפת תוכן השתמשו ב-[withTabs].
   Workspace copyWith({
     String? name,
     List<OpenedTab>? tabs,
@@ -45,6 +57,24 @@ class Workspace extends Equatable {
       name: name ?? this.name,
       tabs: tabs ?? this.tabs,
       activeTabIndex: activeTabIndex ?? this.activeTabIndex,
+      activePane: activePane,
+    );
+  }
+
+  /// מחליף את תוכן שולחן העבודה. שלושת השדות נקבעים **יחד**: צד החלונית
+  /// הפעילה חסר משמעות בלי הטאבים שאליהם הוא מתייחס, ו-`null` כאן פירושו
+  /// תמיד "אין חלונית פעילה" ולא "אל תיגע".
+  Workspace withTabs({
+    required List<OpenedTab> tabs,
+    required int activeTabIndex,
+    required String? activePane,
+  }) {
+    return Workspace(
+      id: id,
+      name: name,
+      tabs: tabs,
+      activeTabIndex: activeTabIndex,
+      activePane: activePane,
     );
   }
 
@@ -56,12 +86,12 @@ class Workspace extends Equatable {
 
   factory Workspace.fromJson(Map<String, dynamic> json) {
     OpenedTab? decodeTab(Map<String, dynamic> map) {
-      // הסינון לפני הפענוח, כי `OpenedTab.fromJson` אינו מכיר את הטיפוס.
+      // ⚠️ סינון מדיניות ולא מגבלת מפענח: `OpenedTab.fromJson` **כן** מכיר
+      // את הטיפוס, אבל שחזור טאב מפרשי PDF בשולחן עבודה בונה `sourceTab`
+      // חדש במקום להתחבר לספר החי (ראו [_withoutPdfCommentators]).
       if (map['type'] == 'PdfCommentatorsTab') return null;
       try {
-        return map['type'] == 'CommentatorsTab'
-            ? CommentatorsTab.fromJson(map)
-            : OpenedTab.fromJson(map);
+        return OpenedTab.fromJson(map);
       } catch (e) {
         // טאב בודד פגום (למשל טיפוס מגרסה חדשה יותר) לא יפיל את פענוח
         // שולחן העבודה כולו.
@@ -88,6 +118,13 @@ class Workspace extends Equatable {
         .whereType<OpenedTab>()
         .toList();
 
+    // ערך פגום, או מפתח מגרסה עתידית, נקרא כ-null ואינו מפיל את השחזור:
+    // `paneForSide` יחזיר null והחלונית הפעילה תיפול ל-`panes.first`.
+    final rawSide = json['activePane'];
+    final side = rawSide == kRightPaneSide || rawSide == kLeftPaneSide
+        ? rawSide as String
+        : null;
+
     return Workspace(
       id: json['id'] as String?,
       name: json['name'] as String,
@@ -95,6 +132,7 @@ class Workspace extends Equatable {
       activeTabIndex: tabs.isEmpty
           ? 0
           : restored.currentIndex.clamp(0, tabs.length - 1),
+      activePane: side,
     );
   }
 
@@ -110,14 +148,22 @@ class Workspace extends Equatable {
     final safeIndex = persistedTabs.isEmpty
         ? 0
         : remappedIndex.clamp(0, persistedTabs.length - 1);
+    // ⚠️ הצד נקבע מהטאב **שאחרי** הגיזום והמיפוי מחדש. `prunePanes` יכול
+    // להחליף טאב מפוצל בחלונית הבודדת ששרדה, ואז "right"/"left" חסר
+    // משמעות — ולכן המפתח פשוט לא נכתב.
+    final persistedActiveTab = persistedTabs.isEmpty
+        ? null
+        : persistedTabs[safeIndex];
+    final persistedSide = persistedActiveTab is CombinedTab ? activePane : null;
     return {
       'id': id,
       'name': name,
       'tabs': persistedTabs.map((tab) => tab.toJson()).toList(),
       'currentTab': safeIndex,
+      'activePane': ?persistedSide,
     };
   }
 
   @override
-  List<Object?> get props => [id, name, tabs, activeTabIndex];
+  List<Object?> get props => [id, name, tabs, activeTabIndex, activePane];
 }

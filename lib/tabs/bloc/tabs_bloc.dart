@@ -43,6 +43,12 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
     _recentlyClosedTabs.reversed.map((entry) => entry.tab),
   );
 
+  /// האם יש כרטיסיה לשחזור.
+  ///
+  /// ⚠️ נדרש כדי ש-Ctrl+Shift+T יידע מתי ליפול לשחזור **חלון** שנסגר,
+  /// כמו בדפדפן. בלי הבדיקה הקיצור היה בולע את המקרה ולא עושה כלום.
+  bool get hasRecentlyClosedTabs => _recentlyClosedTabs.isNotEmpty;
+
   List<OpenedTab>? _pendingSaveTabs;
   int _pendingSaveIndex = 0;
   Future<void>? _saveDrain;
@@ -121,7 +127,7 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
   TabsBloc({
     required this._repository,
   }) : super(TabsState.initial()) {
-    on<LoadTabs>(_onLoadTabs);
+    on<LoadTabs>(_onLoadTabs, transformer: sequential());
     on<RemapBookPaths>(_onRemapBookPaths, transformer: sequential());
     on<ReplaceAllTabs>(_onReplaceAllTabs, transformer: sequential());
     on<AddTab>(_onAddTab, transformer: sequential());
@@ -134,15 +140,16 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
     on<ClearTabSelection>(_onClearTabSelection, transformer: sequential());
     on<SetCurrentTab>(_onSetCurrentTab, transformer: sequential());
     on<CloseAllTabs>(_onCloseAllTabs, transformer: sequential());
+    on<AdoptTab>(_onAdoptTab, transformer: sequential());
     on<CloseOtherTabs>(_onCloseOtherTabs, transformer: sequential());
-    on<CloneTab>(_onCloneTab);
+    on<CloneTab>(_onCloneTab, transformer: sequential());
     on<MoveTab>(_onMoveTab, transformer: sequential());
     on<NavigateToNextTab>(_onNavigateToNextTab, transformer: sequential());
     on<NavigateToPreviousTab>(
       _onNavigateToPreviousTab,
       transformer: sequential(),
     );
-    on<CloseCurrentTab>(_onCloseCurrentTab);
+    on<CloseCurrentTab>(_onCloseCurrentTab, transformer: sequential());
     on<RestoreLastClosedTab>(
       _onRestoreLastClosedTab,
       transformer: sequential(),
@@ -166,7 +173,7 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
     on<SwapSideBySideTabs>(_onSwapSideBySideTabs, transformer: sequential());
     on<ClosePane>(_onClosePane, transformer: sequential());
     on<DetachPane>(_onDetachPane, transformer: sequential());
-    on<SetActivePane>(_onSetActivePane);
+    on<SetActivePane>(_onSetActivePane, transformer: sequential());
 
     _preCloseCallback = _flushPendingSaves;
     PreCloseRegistry.register(_preCloseCallback);
@@ -255,11 +262,23 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
 
     final tabsToDispose = List<OpenedTab>.from(state.tabs);
 
+    // החלונית הפעילה מגיעה כצד ולא כאובייקט: הטאבים שוכפלו בדרך לכאן,
+    // וזהות האובייקט של החלונית הישנה חסרת משמעות ברשימה החדשה.
+    final restoredPane =
+        event.currentTabIndex >= 0 && event.currentTabIndex < event.tabs.length
+        ? paneForSide(event.tabs[event.currentTabIndex], event.activePane)
+        : null;
+
     emit(
       state.copyWith(
         tabs: event.tabs,
         currentTabIndex: event.currentTabIndex,
         selectedTabs: const <OpenedTab>[],
+        // clear ולא unchanged: הרשימה הישנה מפונה, וחלונית פעילה ששייכת
+        // לטאב שנסגר אינה יכולה להישאר.
+        activePane: restoredPane == null
+            ? const ActivePaneUpdate.clear()
+            : ActivePaneUpdate.set(restoredPane),
       ),
     );
     _scheduleSave(event.tabs, event.currentTabIndex);
@@ -356,7 +375,12 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
       emit(
         state.copyWith(
           currentTabIndex: matchingIndex,
-          rawActivePane: matchingPane,
+          // `_matchingPaneIn` מחזיר null במשמעות "הטאב עצמו הוא ההתאמה",
+          // ולא "אל תיגע". שמירת הערך הקודם הותירה כאן חלונית פעילה
+          // ששייכת לטאב אחר; `clear` נופל נכון ל-`panes.first`.
+          activePane: matchingPane == null
+              ? const ActivePaneUpdate.clear()
+              : ActivePaneUpdate.set(matchingPane),
         ),
       );
       _scheduleSave(tabsToSave, matchingIndex);
@@ -1148,6 +1172,36 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
     }
   }
 
+  /// מחליף את תוכן החלון בכרטיסיה שאומצה, **בעדכון מצב יחיד**.
+  ///
+  /// התוצאה זהה ל-[CloseAllTabs] ואחריו [AddTab] — המוצמדות נשארות,
+  /// השאר נזכרות לשחזור ומשוחררות — אבל בלי מצב הביניים של אפס
+  /// כרטיסיות, שהוא באג ולא מצב אמיתי. ראו [AdoptTab].
+  Future<void> _onAdoptTab(AdoptTab event, Emitter<TabsState> emit) async {
+    final pinned = state.tabs.where((tab) => tab.isPinned).toList();
+    final toDispose = state.tabs.where((tab) => !tab.isPinned).toList();
+    for (var i = 0; i < state.tabs.length; i++) {
+      if (!state.tabs[i].isPinned) {
+        _rememberClosedTab(state.tabs[i], i);
+      }
+    }
+
+    final newTabs = [...pinned, event.tab];
+    final newIndex = newTabs.length - 1;
+    emit(
+      state.copyWith(
+        tabs: newTabs,
+        currentTabIndex: newIndex,
+        selectedTabs: const <OpenedTab>[],
+      ),
+    );
+    _scheduleSave(newTabs, newIndex);
+
+    for (final tab in toDispose) {
+      _disposeTabLater(tab);
+    }
+  }
+
   Future<void> _onCloseOtherTabs(
     CloseOtherTabs event,
     Emitter<TabsState> emit,
@@ -1337,7 +1391,7 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
         forceUpdate: true,
         selectedTabs: _normalizedSelection(newTabs),
         // החלונית החדשה היא זו שהמשתמש ביקש לקרוא בה.
-        rawActivePane: event.tab,
+        activePane: ActivePaneUpdate.set(event.tab),
       ),
     );
     _scheduleSave(newTabs, index);
@@ -1439,7 +1493,7 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
     // החלונית הפעילה חייבת להיות בטאב המוצג.
     if (!leafPanes(current).any((pane) => identical(pane, event.pane))) return;
     if (identical(state.activePane, event.pane)) return;
-    emit(state.copyWith(rawActivePane: event.pane));
+    emit(state.copyWith(activePane: ActivePaneUpdate.set(event.pane)));
   }
 
   Future<void> _onClosePane(ClosePane event, Emitter<TabsState> emit) async {

@@ -1,7 +1,57 @@
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:hive_ce/hive.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
+import 'package:path/path.dart' as p;
 import 'package:otzaria/core/app_paths.dart';
+import 'package:otzaria/core/windowing/settings_sync.dart';
+
+String? _hiveRootOverride;
+
+/// התיקייה שתחתיה יושבים שורשי ה-Hive הפרטיים של חלונות משניים.
+///
+/// `<dataRoot>/windows/slot-N`. אינה מגובה ואינה נטענת בהפעלה קרה — ראו
+/// [deleteStaleWindowRoots].
+const String windowRootsDirName = 'windows';
+
+/// מפנה את קובצי ה-Hive של החלון הזה לתיקייה נפרדת.
+///
+/// ⚠️ **רק Hive.** `hive_ce` נועל את קובצי ה-`.lock` בלעדית, והנעילה היא
+/// פר-handle: שני חלונות באותו תהליך נכשלים בדיוק כמו שני תהליכים. לכן
+/// לחלון משני יש קובצי Hive משלו.
+///
+/// אסור להפנות בשבילו את **שורש הנתונים כולו** — שם יושבים גם התוספים
+/// (`<dataRoot>/plugins`), תיקיית WebView2 ומסדי הנתונים של המשתמש.
+/// הפניה גורפת רוקנה את תפריט הכלים בחלונות משניים וגרמה לכרטיסיות תוסף
+/// להיעלם במקום לעבור.
+void configureHiveRootForWindow(String path) {
+  _hiveRootOverride = path;
+}
+
+/// שורש קובצי ה-Hive. זהה לשורש הנתונים, למעט חלונות משניים.
+Future<String> hiveRootPath() async =>
+    _hiveRootOverride ?? await AppPaths.getDataRootPath();
+
+/// מוחק את שורשי ה-Hive הפרטיים שנשארו מהפעלה קודמת.
+///
+/// ⚠️ נקרא **רק** מהחלון הראשון ובהפעלה קרה, לפני שנפתח חלון משני. באותו
+/// רגע אין אף חלון משני חי ולכן כל התיקיות שם הן שאריות; קריאה בכל עת אחרת
+/// תמחוק קובצי Hive שחלון חי פתח.
+///
+/// כשל מדולג בשקט: אי אפשר למחוק תיקייה שקובץ בה נעול, וזה לא מצדיק לעצור
+/// את העלייה.
+Future<void> deleteStaleWindowRoots() async {
+  try {
+    final root = Directory(
+      p.join(await AppPaths.getDataRootPath(), windowRootsDirName),
+    );
+    if (!await root.exists()) return;
+    await root.delete(recursive: true);
+  } catch (e) {
+    debugPrint('⚠️ deleteStaleWindowRoots failed: $e');
+  }
+}
 
 /// A cache access provider class for shared preferences using Hive library
 class HiveCache extends CacheProvider {
@@ -11,12 +61,24 @@ class HiveCache extends CacheProvider {
   @override
   Future<void> init() async {
     if (!kIsWeb) {
-      final defaultDirectory = await AppPaths.getDataRootPath();
+      final defaultDirectory = await hiveRootPath();
       _preferences = await Hive.openBox<dynamic>(
         keyName,
         path: defaultDirectory,
       );
     }
+    // ⚠️ החלת שינוי מרוחק כותבת ל-box **ישירות** ולא דרך ה-setters, כדי
+    // שהיא לא תשודר בחזרה לחלון שממנו באה. ראו [SettingsSync].
+    SettingsSync.instance.applyLocally = (key, value) async {
+      if (value == null) {
+        await _preferences?.delete(key);
+      } else {
+        await _preferences?.put(key, value);
+      }
+    };
+    SettingsSync.instance.clearLocally = () async {
+      await _preferences?.clear();
+    };
   }
 
   Set get keys => getKeys();
@@ -44,26 +106,31 @@ class HiveCache extends CacheProvider {
   @override
   Future<void> setBool(String key, bool? value) async {
     await _preferences?.put(key, value);
+    SettingsSync.instance.broadcastChange(key, value);
   }
 
   @override
   Future<void> setDouble(String key, double? value) async {
     await _preferences?.put(key, value);
+    SettingsSync.instance.broadcastChange(key, value);
   }
 
   @override
   Future<void> setInt(String key, int? value) async {
     await _preferences?.put(key, value);
+    SettingsSync.instance.broadcastChange(key, value);
   }
 
   @override
   Future<void> setString(String key, String? value) async {
     await _preferences?.put(key, value);
+    SettingsSync.instance.broadcastChange(key, value);
   }
 
   @override
   Future<void> setObject<T>(String key, T? value) async {
     await _preferences?.put(key, value);
+    SettingsSync.instance.broadcastChange(key, value);
   }
 
   @override
@@ -80,13 +147,16 @@ class HiveCache extends CacheProvider {
   Future<void> remove(String key) async {
     if (containsKey(key)) {
       await _preferences?.delete(key);
+      SettingsSync.instance.broadcastChange(key, null);
     }
   }
 
   @override
   Future<void> removeAll() async {
-    final keys = getKeys();
-    await _preferences?.deleteAll(keys.cast<String>());
+    await _preferences?.deleteAll(getKeys().cast<String>());
+    // ⚠️ גם מחיקה היא שינוי. בלי השידור החלון השני ממשיך עם הערכים הישנים
+    // בזיכרון, וכל שמירה שלו כותבת אותם בחזרה — כלומר האיפוס מתבטל.
+    SettingsSync.instance.broadcastReset();
   }
 
   /// מחיקת כל ההגדרות, בהמתנה לסיומה.
@@ -97,6 +167,7 @@ class HiveCache extends CacheProvider {
   static Future<void> clearAllPreferences() async {
     if (!Hive.isBoxOpen(keyName)) return;
     await Hive.box<dynamic>(keyName).clear();
+    SettingsSync.instance.broadcastReset();
   }
 
   @override

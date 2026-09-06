@@ -41,6 +41,13 @@ windows/runner/*
 !windows/runner/splash_window.h
 !windows/runner/jump_list_manager.cpp
 !windows/runner/jump_list_manager.h
+!windows/runner/drag_preview_window.cpp
+!windows/runner/drag_preview_window.h
+# ⚠️ `windows/runner/*` מעל מסנן **הכול**, וכל קובץ מקור חדש חייב חריגה
+# מפורשת כאן. קבצים שכבר tracked ממשיכים להיות tracked ולכן הבעיה אינה
+# נראית — אבל קובץ **חדש** נבלע בשקט: `git add -A` מדלג עליו בלי מילה,
+# ה-CMakeLists כן מזכיר אותו, וכל מי שיעשה clone יקבל כשל בנייה
+# ("Cannot find source file"). זה קרה ל-`drag_preview_window` בענף הזה.
 macos/*
 !macos/Runner/
 macos/Runner/*
@@ -96,7 +103,6 @@ installer/otzaria-0.9.96-windows.exe
 installer/otzaria-0.9.96-windows-full.exe
 # End generated Windows installers
 
-pubspec.lock
 flutter/
 
 seforim.db
@@ -125,6 +131,7 @@ seforim.db-shm
 .gitignore
 seforim.db-wal
 .gstack/
+pubspec.lock
 
 # נתוני הביוגרפיות מוזרקים בזמן בנייה מה-release של ta-shma-to-otzaria
 assets/bio/biographies.tsb
@@ -137,3 +144,7 @@ installer/bundled_plugins/
 # ארכיוני התוספים המצורפים למובייל — יורדים בזמן build (ראה docs/bundled_plugins.md)
 assets/bundled_plugins/*
 !assets/bundled_plugins/.gitkeep
+
+# פלט verbose של `flutter build -v` בשורש הפרויקט — נוצר בניפוי באגי בנייה
+# ומגיע לעשרות אלפי שורות. אינו אמור להיכנס לגיט.
+build_log.txt

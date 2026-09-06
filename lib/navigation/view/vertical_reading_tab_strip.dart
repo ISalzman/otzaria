@@ -3,10 +3,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:otzaria/core/windowing/cross_window_tab_drag.dart';
+import 'package:otzaria/core/windowing/drag_preview_colors.dart';
+import 'package:otzaria/core/windowing/multi_window_service.dart';
 import 'package:otzaria/navigation/view/reading_tab_strip.dart';
 import 'package:otzaria/navigation/view/tab_context_menu.dart';
 import 'package:otzaria/navigation/view/tab_visuals.dart';
 import 'package:otzaria/settings/l10n/settings_l10n_exports.dart';
+import 'package:otzaria/theme/app_surfaces.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/bloc/tabs_event.dart';
 import 'package:otzaria/tabs/bloc/tabs_state.dart';
@@ -48,6 +52,18 @@ class _VerticalReadingTabStripState extends State<VerticalReadingTabStrip> {
   /// מוחקת את ה-X מתחת לסמן לפני שהלחיצה עליו נורית.
   OpenedTab? _hoveredTab;
 
+  /// ⚠️ אותו מנגנון בדיוק כמו ברצועה האופקית. קודם לכן הוא היה כתוב בתוך
+  /// `custom_title_bar` בלבד, והעמודה האנכית לא חוברה אליו — היא **כן**
+  /// קלטה כרטיסיות מחלונות אחרים, ולכן הפיצ'ר היה חד-כיווני בשקט: משתמש
+  /// שעבד עם כרטיסיות בצד יכול היה לקבל כרטיסיה ולא להוציא אחת.
+  final CrossWindowTabDrag _crossWindowDrag = CrossWindowTabDrag();
+
+  @override
+  void dispose() {
+    _crossWindowDrag.dispose();
+    super.dispose();
+  }
+
   bool get _isMultiSelectModifierPressed {
     final keyboard = HardwareKeyboard.instance;
     return defaultTargetPlatform == TargetPlatform.macOS
@@ -84,6 +100,7 @@ class _VerticalReadingTabStripState extends State<VerticalReadingTabStrip> {
             platform == TargetPlatform.macOS;
 
         return ReadingTabStrip(
+          stripColor: AppSurfaces.readerBackground(context),
           axis: Axis.vertical,
           scrollable: true,
           crossExtent: widget.width,
@@ -99,6 +116,21 @@ class _VerticalReadingTabStripState extends State<VerticalReadingTabStrip> {
           onExternalDrop: (tab, insertIndex) => context.read<TabsBloc>().add(
             DetachPane(tab, insertIndex: insertIndex),
           ),
+          onDragStarted: (draggedTab, cancelDrag) => _crossWindowDrag.begin(
+            draggedTab,
+            DragPreviewColors.of(context),
+            tabsBloc: context.read<TabsBloc>(),
+            cancelDrag: cancelDrag,
+          ),
+          onTabSnapshot: (_, snapshot) =>
+              _crossWindowDrag.applySnapshot(snapshot),
+          onDragFinishedAnywhere: _crossWindowDrag.end,
+          onDroppedOutside: MultiWindowService.isSupported
+              ? (tab) => _crossWindowDrag.handleDroppedOutside(
+                  tab,
+                  context.read<TabsBloc>(),
+                )
+              : null,
           onSpringOpen: (tab) {
             // ה-state שנתפס ב-build עלול להיות מיושן באמצע גרירה.
             final bloc = context.read<TabsBloc>();

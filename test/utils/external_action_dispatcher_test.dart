@@ -48,7 +48,9 @@ class _FakeHistoryRepository extends HistoryRepository {
   @override
   Future<List<Bookmark>> load() async => [];
   @override
-  Future<void> save(List<Bookmark> items) async {}
+  Future<List<Bookmark>> mutate(
+    List<Bookmark> Function(List<Bookmark> current) apply,
+  ) async => apply(const []);
 }
 
 class _FakeNavigationBloc extends NavigationBloc {

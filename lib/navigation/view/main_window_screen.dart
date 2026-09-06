@@ -7,6 +7,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:otzaria_icons/otzaria_icons.dart';
+import 'package:otzaria/core/windowing/app_window_scope.dart';
+import 'package:otzaria/core/windowing/multi_window_service.dart';
+import 'package:otzaria/core/windowing/tab_drag_preview.dart';
 import 'package:otzaria/widgets/misc/rtl_icon.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:collection/collection.dart';
@@ -22,6 +25,8 @@ import 'package:otzaria/indexing/bloc/indexing_event.dart';
 import 'package:otzaria/indexing/bloc/indexing_state.dart';
 import 'package:otzaria/indexing/indexing_work_status.dart';
 import 'package:otzaria/indexing/repository/indexing_repository.dart';
+import 'package:otzaria/core/windowing/window_title_sync.dart';
+import 'package:otzaria/core/windowing/window_role.dart';
 import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
 import 'package:otzaria/navigation/bloc/navigation_event.dart';
 import 'package:otzaria/navigation/bloc/navigation_state.dart';
@@ -57,7 +62,6 @@ import 'package:otzaria/update/my_update_widget.dart';
 import 'package:otzaria/tools/calendar/utils/calendar_cubit.dart';
 import 'package:otzaria/widgets/dialogs/ad_popup_dialog.dart';
 import 'package:otzaria/settings/services/safer_mode_guard.dart';
-import 'package:window_manager/window_manager.dart';
 import 'package:otzaria/main.dart' show appWindowListener, presentMainWindow;
 import 'package:otzaria/core/splash_screen.dart' show SplashIcon;
 import 'package:otzaria/navigation/view/custom_title_bar.dart';
@@ -563,6 +567,14 @@ class MainWindowScreenState extends State<MainWindowScreen>
     builtInToolsOrder: builtInToolsOrder,
   ).map((item) => item.toolId).toList();
 
+  /// האם לדלג על בניית קטלוג הספרייה בעלייה.
+  ///
+  /// ⚠️ רק בחלון משני שנפתח עם כרטיסיה: המשתמש רואה ספר, לא את הספרייה,
+  /// ובניית הקטלוג מעכבת את החשיפה בכ-700ms. `LibraryBrowser` טוען אותו
+  /// ב-`initState` שלו כשנכנסים אליו, ולכן שום דבר לא אובד.
+  bool get _skipsEagerLibraryLoad =>
+      WindowRole.isSecondary && WindowRole.openedWithTab;
+
   @override
   void initState() {
     super.initState();
@@ -583,7 +595,11 @@ class MainWindowScreenState extends State<MainWindowScreen>
     if (_lastScreen != Screen.reading) {
       _initialContentReady = true;
       _splashOverlayVisible = false;
-      context.read<LibraryBloc>().add(LoadLibrary());
+      // ⚠️ חלון שנפתח עם כרטיסיה מדלג: המסך עוד לא התחלף לקריאה, אבל
+      // הוא בדרך לשם, ובניית הקטלוג כאן רק מעכבת את החשיפה בכ-700ms.
+      if (!_skipsEagerLibraryLoad) {
+        context.read<LibraryBloc>().add(LoadLibrary());
+      }
     }
 
     PluginPageLauncher.instance.navigator = (pluginId) {
@@ -774,7 +790,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
         _splashOverlayVisible = false;
         await presentMainWindow();
         await WidgetsBinding.instance.endOfFrame;
-        libraryBloc.add(LoadLibrary());
+        if (!_skipsEagerLibraryLoad) libraryBloc.add(LoadLibrary());
         return;
       }
       // במסך שאינו קריאה התוכן כבר נצבע מהפריים הראשון (ראה initState) ואין
@@ -788,7 +804,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
       await WidgetsBinding.instance.endOfFrame;
       await presentMainWindow();
       await WidgetsBinding.instance.endOfFrame;
-      libraryBloc.add(LoadLibrary());
+      if (!_skipsEagerLibraryLoad) libraryBloc.add(LoadLibrary());
     }());
   }
 
@@ -965,6 +981,13 @@ class MainWindowScreenState extends State<MainWindowScreen>
     BuildContext context,
     library_model.Library library,
   ) async {
+    if (WindowRole.isSecondary) {
+      _startupWorkGate.markIndexingDecisionResolved(expectIndexing: false);
+      _tryStartDeferredStartupWork();
+      context.read<IndexingBloc>().add(CheckIndexStatus(library));
+      return;
+    }
+
     final autoUpdateIndex = context.read<SettingsBloc>().state.autoUpdateIndex;
 
     final requiresManualReindex = await _indexingRepository
@@ -985,7 +1008,9 @@ class MainWindowScreenState extends State<MainWindowScreen>
 
     switch (decision) {
       case StartupIndexingDecision.autoReindexThenStart:
-        await _indexingRepository.clearIndex();
+        if (!await _indexingRepository.clearIndex()) {
+          return;
+        }
         if (!mounted || !context.mounted) {
           return;
         }
@@ -1034,7 +1059,9 @@ class MainWindowScreenState extends State<MainWindowScreen>
         return;
       }
 
-      await _indexingRepository.clearIndex();
+      if (!await _indexingRepository.clearIndex()) {
+        return;
+      }
       if (!mounted || !context.mounted) {
         return;
       }
@@ -1138,11 +1165,16 @@ class MainWindowScreenState extends State<MainWindowScreen>
       _handleExternalActivationUriString(uriString);
 
   Future<void> _bringWindowToFront() async {
-    if (!kIsWeb &&
-        (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
-      await windowManager.show();
-      await windowManager.focus();
+    if (kIsWeb) return;
+    if (!Platform.isWindows && !Platform.isLinux && !Platform.isMacOS) return;
+    if (!mounted) return;
+    if (MultiWindowService.isSupported) {
+      await const MultiWindowService().raiseSelf();
+      return;
     }
+    final window = AppWindowScope.controllerOf(context);
+    await window.show();
+    await window.focus();
   }
 
   Future<void> _showPluginInstallDialog(PluginSystemState state) async {
@@ -2894,6 +2926,22 @@ class MainWindowScreenState extends State<MainWindowScreen>
                 !identical(previous.tabs, current.tabs),
             listener: (context, state) => _jumpListService.sync(state.tabs),
           ),
+          // כותרת החלון עוקבת אחרי הכרטיסיה הפעילה, כמו בדפדפן.
+          //
+          // ⚠️ גם על החלפת כרטיסיה ולא רק על שינוי הרשימה: הכותרת מתארת את
+          // הכרטיסיה **הפעילה**, וזו משתנה בלי שהרשימה תיגע.
+          BlocListener<TabsBloc, TabsState>(
+            listenWhen: (previous, current) =>
+                !identical(previous.tabs, current.tabs) ||
+                previous.currentTabIndex != current.currentTabIndex ||
+                previous.currentTab?.title != current.currentTab?.title,
+            listener: (context, state) => unawaited(
+              WindowTitleSync.update(
+                state.currentTab?.title,
+                tabCount: state.tabs.length,
+              ),
+            ),
+          ),
           // settings.changed עבור selectedCity ו-calendarType —
           // שדות אלה נמצאים ב-CalendarState ולא ב-SettingsState
           BlocListener<CalendarCubit, CalendarState>(
@@ -3356,7 +3404,12 @@ class MainWindowScreenState extends State<MainWindowScreen>
                                                           .readingTabsOnSide,
                                                     ),
                                               ),
-                                              Expanded(child: pageView),
+                                              Expanded(
+                                                child: RepaintBoundary(
+                                                  key: windowContentBoundaryKey,
+                                                  child: pageView,
+                                                ),
+                                              ),
                                             ],
                                           ),
                                         ),

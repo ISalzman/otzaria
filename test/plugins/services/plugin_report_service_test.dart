@@ -482,7 +482,7 @@ class _InMemoryPluginReportRepository
   }
 
   @override
-  Future<void> save(List<PluginReportRecord> items) async {
+  Future<void> overwrite(List<PluginReportRecord> items) async {
     _items = List<PluginReportRecord>.from(items);
   }
 

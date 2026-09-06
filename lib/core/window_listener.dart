@@ -6,12 +6,18 @@ import 'package:window_manager/window_manager.dart';
 import 'package:otzaria/core/http_client_registry.dart';
 import 'package:otzaria/core/pre_close_registry.dart';
 import 'package:otzaria/core/window_persistence.dart';
+import 'package:otzaria/core/windowing/app_window_controller.dart';
+import 'package:otzaria/core/windowing/app_window_id.dart';
+import 'package:otzaria/core/windowing/window_manager_app_window_controller.dart';
+import 'package:otzaria/core/windowing/last_active_window.dart';
+import 'package:otzaria/core/windowing/multi_window_service.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/data/data_providers/user_books_database_holder.dart';
 import 'package:otzaria/plugins/services/plugin_crash_guard.dart';
 import 'package:otzaria/plugins/services/plugin_runtime_dispatcher.dart';
 import 'package:otzaria/plugins/view/webview_environment_holder.dart';
 import 'package:otzaria/tabs/utils/confirm_close_tabs.dart';
+import 'package:otzaria/tabs/tabs_repository.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
 
 /// Callback type for fullscreen state changes
@@ -19,6 +25,74 @@ typedef FullscreenCallback = void Function(bool isFullscreen);
 
 /// Window listener that handles window events properly to prevent crashes
 class AppWindowListener extends WindowListener {
+  AppWindowListener({
+    this.windowId = AppWindowId.primary,
+    AppWindowController? window,
+  }) : _window = window ?? const WindowManagerAppWindowController() {
+    // הערוץ היה חד-כיווני (Dart → נייטיב) עד כאן. כיבוי מערכת הוא המקרה
+    // הראשון שבו הנייטיב צריך לקרוא **לנו**.
+    _processControlChannel.setMethodCallHandler(_handleProcessControlCall);
+  }
+
+  /// האם שטיפת סיום הסשן כבר רצה. `WM_QUERYENDSESSION` מגיע לא פעם יותר
+  /// מפעם אחת (המערכת שואלת כל אפליקציה, ולעיתים חוזרת), והשטיפה כבדה.
+  bool _sessionEndFlushStarted = false;
+
+  Future<Object?> _handleProcessControlCall(MethodCall call) async {
+    switch (call.method) {
+      case 'prepareForSessionEnd':
+        await _flushForSessionEnd();
+        return null;
+      case 'sessionEndCancelled':
+        // הכיבוי בוטל (`shutdown /a`) — כתיבות חדשות שיצטברו מכאן ואילך
+        // חייבות להישטף בפעם הבאה.
+        _sessionEndFlushStarted = false;
+        return null;
+      default:
+        return null;
+    }
+  }
+
+  /// שוטפת את הכתיבות התלויות כשהמערכת שואלת אם מותר לסיים את הסשן.
+  ///
+  /// ⚠️ הנייטיב **חוסם** את ה-platform thread עד שנקרא ל-`sessionEndFlushDone`
+  /// או עד פקיעת זמן. לכן החוזה כאן: לסמן תמיד, גם בכשל — אחרת המשתמש
+  /// מקבל שלוש שניות של תקיעה בכל כיבוי.
+  Future<void> _flushForSessionEnd() async {
+    try {
+      if (!_sessionEndFlushStarted) {
+        _sessionEndFlushStarted = true;
+        final flushFailure = await _closeWindowScoped();
+        if (flushFailure != null) {
+          // אותו טיפול כמו במסלול הסגירה הרגיל: הכשל הוא האות היחיד
+          // לכך שכתיבות תלויות לא נשמרו.
+          try {
+            await Sentry.captureException(
+              flushFailure,
+              stackTrace: StackTrace.current,
+            );
+          } catch (_) {
+            // דיווח הוא best-effort ולעולם אינו חוסם את הכיבוי.
+          }
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('Session-end flush failed: $e');
+      }
+    } finally {
+      try {
+        await _processControlChannel.invokeMethod('sessionEndFlushDone');
+      } catch (_) {
+        // אם הערוץ מת, הנייטיב ישתחרר בפקיעת הזמן שלו.
+      }
+    }
+  }
+
+  /// החלון שה-listener סוגר. מוזרק ולא נשלף מעץ ה-widgets: הסגירה רצה
+  /// כשהעץ כבר מתפרק.
+  final AppWindowController _window;
+
   static const MethodChannel _processControlChannel = MethodChannel(
     'otzaria/process_control',
   );
@@ -88,8 +162,40 @@ class AppWindowListener extends WindowListener {
     onWindowStateChanged?.call();
   }
 
+  /// האם זה החלון האחרון, כלומר האם סגירתו היא סגירת התהליך.
+  ///
+  /// ⚠️ ה-runner הוא מקור האמת. ה-isolate של כל חלון רואה רק את עצמו,
+  /// ולכן חלון אינו יכול לדעת מ-Dart בלבד אם נותרו אחרים. כשהשאלה נכשלת
+  /// מניחים "כן" — התנהגות חלון יחיד, שהיא הבטוחה מבין השתיים: כיבוי
+  /// מלא ששוטף הכול, במקום תהליך שנשאר תלוי בלי חלונות.
+  Future<bool> _isLastWindowClosing() async {
+    try {
+      // ⚠️ timeout חובה. השאלה הזו יושבת **לפני** חימוש שעון היציאה הכפויה
+      // (הצעד הראשון ב-`_shutdownProcessUpToFlush`), ולכן ערוץ שלא עונה
+      // היה משאיר את החלון פתוח ואת התהליך חי בלי שום רשת ביטחון —
+      // המשתמש לוחץ X ושום דבר לא קורה, לנצח.
+      final info = await const MultiWindowService().windowCount().timeout(
+        const Duration(seconds: 2),
+      );
+      return info.count <= 1;
+    } catch (e) {
+      debugPrint('windowCount failed during close, assuming last: $e');
+      return true;
+    }
+  }
+
   @override
-  void onWindowClose() async {
+  void onWindowClose() {
+    unawaited(handleWindowClose());
+  }
+
+  /// גוף הסגירה, כ-`Future` שאפשר להמתין לו.
+  ///
+  /// ⚠️ נפרד מ-[onWindowClose] כי החוזה של `window_manager` הוא `void`,
+  /// ורצף הסגירה — ה-flush, מחיקת הסשן והסגירה עצמה — הוא בדיוק מה שצריך
+  /// להיות ניתן לבדיקה.
+  @visibleForTesting
+  Future<void> handleWindowClose() async {
     if (_isClosing) {
       return;
     }
@@ -100,6 +206,45 @@ class AppWindowListener extends WindowListener {
     }
     _isClosing = true;
 
+    // ⚠️ הפיצול הוא לפי *בעלות* — מה פר-חלון ומה פר-תהליך — ולא לפי סדר.
+    // הצעד הפר-חלוני היחיד הוא ה-flush, והוא יושב באמצע רצף פר-תהליכי:
+    // אחרי סגירת ה-DB ולפני הדיווח והריגת התהליך. לכן החלק הפר-תהליכי
+    // מפוצל לשניים סביבו. **הסדר בין שלושת החלקים זהה לסדר המקורי של
+    // הצעדים, ואסור לשנותו** — הרצת ה-flush ראשון תקדים אותו לסגירת ה-DB.
+    // ⚠️ נשאל **פעם אחת**, בתחילת הסגירה. שאלה חוזרת אחרי ה-flush עלולה
+    // לקבל תשובה אחרת אם חלון אחר נסגר בינתיים, והתוצאה תהיה חצי כיבוי:
+    // הצעדים שלפני ה-flush רצו והצעדים שאחריו לא, או להפך.
+    final isLast = await _isLastWindowClosing();
+
+    if (isLast) {
+      await _shutdownProcessUpToFlush();
+    }
+    final flushFailure = await _closeWindowScoped();
+    if (isLast) {
+      await _shutdownProcessAfterFlush(flushFailure);
+    } else {
+      // חלון אחד מתוך כמה: לסגור רק אותו. `setPreventClose(true)` מנע את
+      // הסגירה הרגילה, ובלי הסגירה המפורשת החלון היה נשאר פתוח.
+      //
+      // ⚠️ אחרי ה-flush ולפני הסגירה. המשתמש סגר את החלון הזה במכוון,
+      // ולכן הסשן שלו אינו "פתוח" יותר: השארתו הייתה מחזירה בהפעלה הבאה
+      // כרטיסיות שהוא בחר לסגור (`adoptOrphanWindowSessions`).
+      // `Ctrl+Shift+T` אינו נשען עליו אלא על המנוע שנשאר חי בזיכרון.
+      await TabsRepository().discardWindowSession();
+
+      // ⚠️ דרך ה-runner ולא `_window.destroy()`: זה האחרון הורס את החלון
+      // מתוך טיפול בערוץ, והריסת מנוע משם היא ריאנטרנטית ומפילה את
+      // התהליך. ה-runner דוחה את ההריסה לאיטרציה הבאה של לולאת ההודעות.
+      await const MultiWindowService().closeSelf();
+      // ⚠️ החלון מוסתר ולא נהרס, וה-listener שלו חי. חלון שיוחזר לשימוש
+      // (`ReviveWith` / Ctrl+Shift+T) חייב שסגירה חוזרת שלו תעבוד — עם
+      // דגל שנשאר דלוק לחיצה על X פשוט לא הייתה עושה כלום.
+      _isClosing = false;
+    }
+  }
+
+  /// הצעדים שקודמים ל-flush — כולם פר-תהליך.
+  Future<void> _shutdownProcessUpToFlush() async {
     // סגירה יזומה אינה קריסה — לנקות canaries של טעינות תוספים שבטיסה
     // לפני שה-WebViews נהרסים (dispose של הטאבים לא רץ במסלול היציאה).
     PluginCrashGuard.markCleanShutdownSync();
@@ -144,19 +289,35 @@ class AppWindowListener extends WindowListener {
     } catch (e) {
       if (kDebugMode) print('Non-critical cleanup error: $e');
     }
+  }
 
-    // Step 2: Flush pending in-memory writes to Hive.
-    // A flush failure must NOT prevent Hive.close() — closing Hive without
-    // flushing first is safe, but skipping Hive.close() would corrupt the DB.
-    Object? flushFailure;
+  /// Step 2: Flush pending in-memory writes to Hive.
+  ///
+  /// זהו הצעד הפר-חלוני היחיד ברצף: [PreCloseRegistry] הוא סינגלטון
+  /// פר-isolate, ולכן הוא שוטף את הכתיבות התלויות של החלון הזה בלבד.
+  ///
+  /// A flush failure must NOT prevent Hive.close() — closing Hive without
+  /// flushing first is safe, but skipping Hive.close() would corrupt the DB.
+  /// הכשל **מוחזר** לקורא ואינו נבלע כאן: [_shutdownProcessAfterFlush] הוא
+  /// שמדווח עליו ל-Sentry, ובלי ההחזרה היה נעלם האות היחיד לכך שה-flush
+  /// נכשל.
+  Future<Object?> _closeWindowScoped() async {
     try {
       await PreCloseRegistry.runAll();
+      return null;
     } on PreCloseFlushFailure catch (e) {
-      flushFailure = e;
       if (kDebugMode) print('Flush failed at exit: $e');
+      return e;
     }
+  }
 
-    // Step 3: Error reporting and window destruction.
+  /// מסלול הסגירה המלא מסתיים ב-`exit(0)` ואינו ניתן לבדיקה, אבל דווקא
+  /// הצעד הפר-חלוני הוא זה שחייב להחזיר את הכשל ולא לבלוע אותו.
+  @visibleForTesting
+  Future<Object?> closeWindowScopedForTest() => _closeWindowScoped();
+
+  /// Step 3: Error reporting and window destruction — כולם פר-תהליך.
+  Future<void> _shutdownProcessAfterFlush(Object? flushFailure) async {
     //
     // הוסרו במכוון:
     //   - `WindowPersistence.saveNow()` — `Settings.setValue` כותב ל-Hive
@@ -244,9 +405,27 @@ class AppWindowListener extends WindowListener {
             // **אותה התנהגות בדיוק שהייתה לפני שינוי forceTerminate**.
             // המשמעות: סביבות שבהן Job Object נכשל לא מקבלות את ה-fast
             // exit, אבל גם לא מאבדות שום הגנה שהייתה להן קודם.
+            // ⚠️ מספר המנועים החיים נרשם כאן, וזה המידע שחסר לאבחון.
+            //
+            // המסלול הזה מסתיים ב-`exit(0)` של Dart, שמריץ teardown של
+            // ה-VM — ו-P-2 מדד שזה מפיל את הבדיקה
+            // "Isolate main is owned by os thread X, failed to schedule
+            // from os thread Y" ב-~1% מהיציאות **כשמנוע אחר חי**. המסלול
+            // הרגיל (`TerminateProcess`) חסין, כי הוא אינו מריץ teardown
+            // בכלל.
+            //
+            // חלון סגור מוסתר ולא נהרס, ולכן `engines` יכול להיות 4 בעוד
+            // `count` הוא 1 — ובלי המספר הזה בלוג אין דרך לדעת אם קריסת
+            // יציאה שדווחה הייתה בתצורה המסוכנת.
+            final live = await const MultiWindowService().windowCount().timeout(
+              const Duration(seconds: 1),
+              onTimeout: () => (count: 1, max: 1, engines: 1),
+            );
             _logForceTerminateFailure(
               'Job Object not ready in native runner — degraded close, '
-              'WebView2 children may still orphan (pre-fix behavior)',
+              'WebView2 children may still orphan (pre-fix behavior); '
+              'live engines=${live.engines} visible windows=${live.count}'
+              '${live.engines > 1 ? ' — exit() teardown is unsafe here (P-2 §3)' : ''}',
               null,
             );
             await Future<void>.delayed(const Duration(milliseconds: 500));
@@ -257,9 +436,14 @@ class AppWindowListener extends WindowListener {
           exit(0);
         }
 
+        // ⚠️ `setPreventClose(true)` נקבע לפני `runApp`, ולכן
+        // `window_manager` בולע את `WM_CLOSE` ומחזיר `-1` — כלומר מסלול
+        // ה-hide אינו נגיש בחלון הראשי, וכל מסלולי הסגירה שלו (X, Alt+F4,
+        // "סיים משימה") עוברים דרך Dart. זו הסיבה שהמעבר ל"מוסתר ולא
+        // נהרס" לא השאיר את התהליך תלוי.
         await windowManager.setPreventClose(false);
         // סגירה רגילה דרך ה-WindowManager
-        await windowManager.destroy();
+        await _window.destroy();
       }
     } catch (e) {
       if (kDebugMode) {
@@ -289,6 +473,9 @@ class AppWindowListener extends WindowListener {
     }
   }
 
+  /// מזהה החלון שה-listener הזה משרת. היום יש חלון אחד.
+  final AppWindowId windowId;
+
   @override
   void onWindowFocus() {
     // מקש שהוחזק במעבר חלון ושוחרר בחוץ נשאר "תקוע" (אין KeyUpEvent) וגורם
@@ -307,6 +494,7 @@ class AppWindowListener extends WindowListener {
         ),
       );
     }
+    LastActiveWindow.markActive(windowId);
   }
 
   @override
@@ -377,6 +565,11 @@ class AppWindowListener extends WindowListener {
     // Remove this listener from window manager
     if (!kIsWeb &&
         (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
+      // ⚠️ רשימת ה-listeners של `window_manager` היא פר-isolate, ולכן אין
+      // כאן מה לרשום במקום מרכזי — חלון אינו יכול לרשום listener בחלון
+      // אחר. מה שכן צריך תשומת לב: `dispose` **אינו נקרא** כשחלון נסגר,
+      // כי הוא מוסתר ולא נהרס ועץ ה-widgets אינו מתפרק. ניקוי שחייב
+      // לקרות בסגירת חלון תולים על המסלול שקורא ל-`closeSelf`.
       windowManager.removeListener(this);
     }
   }

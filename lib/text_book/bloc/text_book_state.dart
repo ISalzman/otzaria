@@ -540,6 +540,7 @@ class TextBookLoaded extends TextBookState {
     bool? hasLinksFile,
     // לאיפוס highlightText ו-permanentHighlightLine יש להעביר ערכים מפורשים
     String? highlightText,
+    bool clearHighlightText = false,
     int? permanentHighlightLine,
     bool clearPermanentHighlight = false,
   }) {
@@ -687,7 +688,9 @@ class TextBookLoaded extends TextBookState {
       editorText: editorText ?? this.editorText,
       hasDraft: hasDraft ?? this.hasDraft,
       hasLinksFile: hasLinksFile ?? this.hasLinksFile,
-      highlightText: highlightText ?? this.highlightText,
+      highlightText: clearHighlightText
+          ? ''
+          : (highlightText ?? this.highlightText),
       permanentHighlightLine: clearPermanentHighlight
           ? null
           : (permanentHighlightLine ?? this.permanentHighlightLine),

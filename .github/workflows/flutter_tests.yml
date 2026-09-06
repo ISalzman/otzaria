@@ -271,3 +271,64 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
           exit $second_exit
+
+  # שער הבנייה היחיד ל-Windows על PR. עד עכשיו לא היה כזה: `analyze` ו-`test`
+  # רצים שניהם על ubuntu, ו-`webview2_smoke` מסונן ב-`paths`. המשמעות הייתה
+  # ששבירה בקוד הנייטיבי (windows/runner, רישום תוספים, cargokit) התגלתה רק
+  # אצל המפתח הבא שניסה לבנות מקומית.
+  build_windows:
+    name: Build (Windows)
+    runs-on: windows-2022
+    # מדידה מקומית: בנייה קרה 6 דקות. ראנר CI איטי יותר ומוסיף checkout,
+    # setup ו-pub get. 30 נותן מרווח בלי לתת ל-job תקוע לשרוף שעה שלמה.
+    # לכווץ אחרי הריצה הראשונה לפי הזמן שנמדד בפועל.
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7.0.1
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          # ⚠️ חייב להתאים לשאר ה-jobs. `pubspec.lock` דורש Flutter >=3.47.0,
+          # ולכן עם 3.44.0 ה-job הזה נכשל ב-`pub get` ומעולם לא רץ ירוק.
+          flutter-version: 3.47.2
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      # זה הצעד שבגללו ה-job קיים: MSBuild, רישום התוספים הנייטיביים
+      # ו-cargokit. debug ולא release — הוא מפעיל את אותה שרשרת נייטיבית
+      # בשבריר מהזמן, ובניית ה-release כבר מכוסה ב-build-and-announce.
+      - name: Build Windows (debug)
+        run: flutter build windows --debug
+
+      # ⚠️ הבנייה חייבת לקדום לבדיקות, ולא רק כדי לחסוך זמן:
+      # `test/support/search_engine_test_init.dart` מאתר את מנוע החיפוש
+      # בין השאר תחת `build/windows/x64/plugins/otzaria_search_engine/Debug`.
+      # בלי בנייה קודמת האתחול נכשל **בשקט**, וכל בדיקה שתלויה במנוע
+      # מדולגת בלי להיכשל — כלומר ה-job היה ירוק ולא בודק כלום.
+      #
+      # ההיקף מכוון וצר: הסוללה המלאה רצה על Linux ב-6 shards. כאן רצות
+      # רק הקבוצות שאומתו כירוקות ב-Windows (1,073 בדיקות), והקבוצות
+      # הידועות כתלויות-סביבה או flaky (migration, installer, personal_notes,
+      # tools/calendar) נשארות ל-Linux בלבד. הרחבת ההיקף מחייבת אימות
+      # מקומי ב-Windows קודם — אחרת ה-job נהיה רועש ומתחילים להתעלם ממנו.
+      - name: Run Windows-relevant tests
+        run: flutter test test/core/ test/tabs/ test/navigation/ test/workspaces/
+
+      # רץ גם בכישלון: כשהבנייה נופלת, הלוג של MSBuild הוא הדבר היחיד
+      # שמסביר למה — ההודעה ב-stdout מפנה לכיוון הלא נכון בדרך כלל.
+      - name: Upload build logs on failure
+        if: always()
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: windows-build-logs
+          path: |
+            build/windows/x64/**/*.log
+            build/windows/x64/**/*.tlog
+          if-no-files-found: ignore
+          retention-days: 7

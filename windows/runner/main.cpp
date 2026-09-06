@@ -19,6 +19,68 @@ static const wchar_t* kSingleInstanceMutexName = L"OtzariaAppSingleInstance";
 static const wchar_t* kFlutterWindowClassName = L"FLUTTER_RUNNER_WIN32_WINDOW";
 static const wchar_t* kMainWindowTitle = L"אוצריא";
 
+// מאפיין חלון שמסמן את החלון **הראשי**, לזיהוי מתהליך אחר.
+//
+// ⚠️ נדרש בגלל ריבוי חלונות. `FindWindowW(class, title)` מחזיר חלון
+// **שרירותי** מבין המתאימים, וכל חלונות אוצריא חולקים את אותה מחלקה ואת
+// אותה כותרת. כלומר מופע שני יכול היה להעלות חלון משני — או גרוע מכך חלון
+// **מוסתר** (חלון שהמשתמש סגר אינו נהרס), ואז `otzaria://` או הפעלה חוזרת
+// לא עשו שום דבר נראה. השבירות הזו הייתה תיאורטית בחלון יחיד.
+//
+// זהו אחד משלושת המנגנונים ש-T-1.6 מונה, והזול מביניהם: מאפיין חלון נגיש
+// דרך `GetPropW` מכל תהליך. החלפת המנגנון בבעלות נייטיבית מלאה היא T-G1.1;
+// עד אז זה החוזה, והכותרת נשארת עזר נפילה-לאחור בלבד.
+static const wchar_t* kMainWindowPropName = L"OtzariaMainWindow";
+
+namespace {
+
+struct MainWindowSearch {
+  // חלון אוצריא **גלוי**, אם נמצא — היעד המועדף.
+  HWND visible = nullptr;
+  // חלון אוצריא כלשהו, כנפילה-לאחור.
+  HWND any = nullptr;
+};
+
+BOOL CALLBACK FindMainWindowProc(HWND hwnd, LPARAM param) {
+  wchar_t class_name[64] = {0};
+  ::GetClassNameW(hwnd, class_name,
+                  sizeof(class_name) / sizeof(class_name[0]));
+  if (::wcscmp(class_name, kFlutterWindowClassName) != 0) return TRUE;
+  auto* search = reinterpret_cast<MainWindowSearch*>(param);
+
+  // ⚠️ **גלוי** קודם לכול, וזה לא ניואנס. חלון שהמשתמש סגר מוסתר ולא
+  // נהרס, והמאפיין נשאר עליו — כלומר הסריקה החזירה חלון בלתי-נראה, ומופע
+  // שני או `otzaria://` "העלו" חלון שאיש אינו רואה. עם ריבוי חלונות זה
+  // הפסיק להיות תרחיש תיאורטי.
+  if (::IsWindowVisible(hwnd)) {
+    // בין חלונות גלויים מעדיפים את זה שנושא את המאפיין — הראשי.
+    if (search->visible == nullptr ||
+        ::GetPropW(hwnd, kMainWindowPropName) != nullptr) {
+      search->visible = hwnd;
+    }
+    return TRUE;
+  }
+  if (search->any == nullptr &&
+      ::GetPropW(hwnd, kMainWindowPropName) != nullptr) {
+    search->any = hwnd;
+  }
+  return TRUE;
+}
+
+// החלון של המופע שרץ שיש להעלות, או nullptr.
+//
+// נפילה-לאחור ל-`FindWindowW`: מופע שרץ מבנייה קודמת אינו מציב את המאפיין,
+// והתנהגות ההעלאה שלו צריכה להישאר כשהייתה.
+HWND FindRunningMainWindow() {
+  MainWindowSearch search;
+  ::EnumWindows(FindMainWindowProc, reinterpret_cast<LPARAM>(&search));
+  if (search.visible) return search.visible;
+  if (search.any) return search.any;
+  return ::FindWindowW(kFlutterWindowClassName, kMainWindowTitle);
+}
+
+}  // namespace
+
 // Escapes a UTF-8 string for safe embedding inside a JSON string value.
 static std::string JsonEscape(const std::string& s) {
   std::string out;
@@ -170,6 +232,31 @@ static void BringWindowToFront(HWND hwnd) {
   SetForegroundWindow(hwnd);
 }
 
+namespace {
+
+HHOOK g_activation_hook = nullptr;
+
+// חוסם הפעלה תוכניתית שגוזלת מהמשתמש את החלון שהרגע בחר.
+//
+// ⚠️ `WH_CBT` הוא המקום היחיד שמאפשר **לסרב** להפעלה, והוא רץ סינכרונית
+// בהקשר של הקורא — כלומר גם על הפעלה שמגיעה מתוך מנוע Flutter ולא דרך
+// לולאת ההודעות שלנו. ראו [Win32Window::ShouldVetoActivation] להסבר
+// מלא על מה שנמדד.
+LRESULT CALLBACK ActivationGuardProc(int code, WPARAM wparam, LPARAM lparam) {
+  if (code == HCBT_ACTIVATE &&
+      Win32Window::ShouldVetoActivation(reinterpret_cast<HWND>(wparam))) {
+    return 1;  // מסרב להפעלה.
+  }
+  return ::CallNextHookEx(g_activation_hook, code, wparam, lparam);
+}
+
+void InstallActivationGuard() {
+  g_activation_hook = ::SetWindowsHookExW(WH_CBT, ActivationGuardProc, nullptr,
+                                          ::GetCurrentThreadId());
+}
+
+}  // namespace
+
 int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
                       _In_ wchar_t* command_line, _In_ int show_command) {
   // Attach to console when present (e.g., 'flutter run') or create a
@@ -184,6 +271,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   // is rendered.
   std::vector<std::string> early_args = GetCommandLineArguments();
   const bool is_cli_invocation = IsCliInvocation(early_args);
+
 
   // Single-instance check: must happen before the Flutter engine starts so
   // that the second instance never acquires any shared resources (DB, etc.).
@@ -209,7 +297,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
                    UrlEncodeQueryComponent(arg));
       }
     }
-    BringWindowToFront(FindWindowW(kFlutterWindowClassName, kMainWindowTitle));
+    BringWindowToFront(FindRunningMainWindow());
     CloseHandle(mutex);
     return EXIT_SUCCESS;
   }
@@ -239,7 +327,12 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   std::vector<std::string> command_line_arguments =
       GetCommandLineArguments();
 
+  // ⚠️ בלי זה `main(List<String> args)` מקבל רשימה ריקה תמיד, ואז:
+  // `IsCliInvocation` עוקף את המופע היחיד בנייטיב, אבל Dart אינו רואה את
+  // תת-הפקודה ומעלה ממשק מלא — שני מופעים על אותה ספרייה. בנוסף נבלעים
+  // קישורי `otzaria://` והתקנות תוספים בהפעלה קרה.
   project.set_dart_entrypoint_arguments(std::move(command_line_arguments));
+
 
   FlutterWindow window(project, /*headless=*/is_cli_invocation);
   Win32Window::Point origin(10, 10);
@@ -255,12 +348,30 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
     if (mutex) CloseHandle(mutex);
     return EXIT_FAILURE;
   }
-  window.SetQuitOnClose(true);
+  // ⚠️ `false` ולא `true`: עם ריבוי חלונות, סגירת החלון הראשי אינה
+  // מסיימת את התהליך כל עוד חלונות אחרים פתוחים. `FlutterWindow::OnDestroy`
+  // מפרסם `WM_QUIT` רק כשנסגר החלון האחרון.
+  window.SetQuitOnClose(false);
+
+  // מסמן את החלון הזה כראשי, כדי שמופע שני יעלה **אותו** ולא חלון משני
+  // שרירותי. ראו [kMainWindowPropName].
+  if (const HWND main_hwnd = window.GetHandle()) {
+    ::SetPropW(main_hwnd, kMainWindowPropName, reinterpret_cast<HANDLE>(1));
+  }
+
+  InstallActivationGuard();
 
   ::MSG msg;
   while (::GetMessage(&msg, nullptr, 0, 0)) {
     ::TranslateMessage(&msg);
     ::DispatchMessage(&msg);
+  }
+
+  // ⚠️ מאפיין חלון שלא הוסר לפני ההריסה נחשב דליפה על ידי Windows
+  // (`DestroyWindow` מדווח עליו ב-debug heap). המסלול הרגיל יוצא ב-
+  // `TerminateProcess` ולא מגיע לכאן; זה המסלול המסודר.
+  if (const HWND main_hwnd = window.GetHandle()) {
+    ::RemovePropW(main_hwnd, kMainWindowPropName);
   }
 
   if (mutex) CloseHandle(mutex);

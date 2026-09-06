@@ -170,7 +170,7 @@ class BackupService {
         final workspacesData = await _backupWorkspaces();
         backupData['workspaces'] = workspacesData['workspaces'];
         backupData['currentWorkspace'] = workspacesData['currentWorkspace'];
-        final openTabs = _backupOpenTabs();
+        final openTabs = await _backupOpenTabs();
         if (openTabs != null) backupData['openTabs'] = openTabs;
       }
 
@@ -244,6 +244,12 @@ class BackupService {
     'library_loaded.marker':
         'סימון מקומי שספרייה נטענה במכשיר זה — שחזורו למכשיר אחר מטעה',
     'biographies.tsb': 'נתוני ביוגרפיות ארוזים באפליקציה ומתעדכנים מהרשת',
+    windowRootsDirName:
+        'שורשי Hive פרטיים של חלונות נוספים; נמחקים בהפעלה קרה '
+        '(deleteStaleWindowRoots) ואין בהם נתונים שאינם אצל החלון הראשון',
+    AppPaths.libraryPathRecordFileName:
+        'נתיב הספרייה עבור ה-uninstaller; נגזר מההגדרות ונרשם מחדש בכל '
+        'עלייה, ושחזור נתיב ממכשיר אחר מטעה אותו',
   };
 
   /// מפתחות הגדרות שאינם מועברים בין התקנות.
@@ -556,7 +562,7 @@ class BackupService {
   /// Backup workspaces
   static Future<Map<String, dynamic>> _backupWorkspaces() async {
     final repo = WorkspaceRepository();
-    final (workspaces, currentWorkspace) = repo.loadWorkspaces();
+    final (workspaces, currentWorkspace) = await repo.loadWorkspaces();
     return {
       'workspaces': workspaces.map((w) => w.toJson()).toList(),
       'currentWorkspace': currentWorkspace,
@@ -568,7 +574,7 @@ class BackupService {
   ///
   /// היעדר ה-box אינו מסמן את השחזור כחלקי: הטאבים הפתוחים הם מצב רגעי
   /// שמשתנה בכל פתיחת ספר, ואין להבהיל את המשתמש בגללם.
-  static Map<String, dynamic>? _backupOpenTabs() {
+  static Future<Map<String, dynamic>?> _backupOpenTabs() async {
     if (!Hive.isBoxOpen(TabsRepository.boxName)) {
       _logger.warning('_backupOpenTabs: tabs box not open — skipping');
       return null;
@@ -993,15 +999,21 @@ class BackupService {
         .map((data) => Bookmark.fromJson(data))
         .toList();
     if (counts == null) {
-      await repo.saveBookmarks(bookmarks);
+      await repo.replaceBookmarks(bookmarks);
       return;
     }
-    final result = BackupImportMerge.mergeBookmarks(
-      await repo.loadBookmarks(),
-      bookmarks,
-    );
-    counts.bookmarks += result.added;
-    await repo.saveBookmarks(result.merged);
+    // ⚠️ `mutate` ולא `load` + `replace`. הייבוא הממזג הוא **תוספת**, ולכן
+    // הוא בדיוק המקרה שבו read-modify-write מוחק: סימנייה שנוספה בחלון אחר
+    // בין הקריאה לכתיבה נעלמה. אותה המרה נעשתה כבר בשולחנות העבודה.
+    var added = 0;
+    await repo.mutateBookmarks((current) {
+      final result = BackupImportMerge.mergeBookmarks(current, bookmarks);
+      // ⚠️ נקבע בכל ניסיון ולא נסכם: `mutate` עשוי להריץ את הפונקציה שוב
+      // על רשימה טרייה, וצבירה הייתה סופרת פעמיים.
+      added = result.added;
+      return result.merged;
+    });
+    counts.bookmarks += added;
   }
 
   /// Restore history. [counts] לא ריק = ייבוא ממזג, והרשומות מתווספות.
@@ -1012,15 +1024,17 @@ class BackupService {
     final repo = HistoryRepository();
     final history = historyData.map((data) => Bookmark.fromJson(data)).toList();
     if (counts == null) {
-      await repo.saveHistory(history);
+      await repo.replaceHistory(history);
       return;
     }
-    final result = BackupImportMerge.mergeHistory(
-      await repo.loadHistory(),
-      history,
-    );
-    counts.history += result.added;
-    await repo.saveHistory(result.merged);
+    // ⚠️ `mutate` — ראו ההערה ב-`_restoreBookmarks`.
+    var added = 0;
+    await repo.mutateHistory((current) {
+      final result = BackupImportMerge.mergeHistory(current, history);
+      added = result.added;
+      return result.merged;
+    });
+    counts.history += added;
   }
 
   /// מפתח העיגון שנוכחותו מעידה שהגיבוי יודע לבטא עיגון להערה.
@@ -1290,18 +1304,23 @@ class BackupService {
         .map((data) => Workspace.fromJson(data))
         .toList();
     if (counts != null) {
-      final (existing, currentId) = repo.loadWorkspaces();
+      final (existing, _) = await repo.loadWorkspaces();
       final toAdd = BackupImportMerge.workspacesToAdd(existing, workspaces);
       if (toAdd.isEmpty) return;
       counts.workspaces += toAdd.length;
-      await repo.saveWorkspaces([...existing, ...toAdd], currentId);
+      await repo.mutateWorkspaces(
+        (current) => [
+          ...current,
+          ...BackupImportMerge.workspacesToAdd(current, workspaces),
+        ],
+      );
       return;
     }
     final currentId = _resolveCurrentWorkspaceId(
       workspaces: workspaces,
       currentWorkspace: currentWorkspace,
     );
-    await repo.saveWorkspaces(workspaces, currentId);
+    await repo.replaceWorkspaces(workspaces, currentId);
   }
 
   /// שחזור הטאבים הפתוחים (ראה [_backupOpenTabs]). גיבוי בלעדיהם משאיר את
@@ -1539,7 +1558,7 @@ class BackupService {
     if (_hasSettingsChanges(backupData)) return true;
 
     // Always recommend: workspace added
-    if (_hasWorkspaceAdded(backupData)) return true;
+    if (await _hasWorkspaceAdded(backupData)) return true;
 
     // Always recommend: plugin added
     if (await _hasPluginAdded(backupData)) return true;
@@ -1569,10 +1588,12 @@ class BackupService {
     return false;
   }
 
-  static bool _hasWorkspaceAdded(Map<String, dynamic> backupData) {
+  static Future<bool> _hasWorkspaceAdded(
+    Map<String, dynamic> backupData,
+  ) async {
     final backedUpWorkspaces = backupData['workspaces'] as List?;
     if (backedUpWorkspaces == null) return false;
-    final (workspaces, _) = WorkspaceRepository().loadWorkspaces();
+    final (workspaces, _) = await WorkspaceRepository().loadWorkspaces();
     return workspaces.length > backedUpWorkspaces.length;
   }
 

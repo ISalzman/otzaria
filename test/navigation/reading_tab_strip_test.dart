@@ -8,6 +8,10 @@ import 'package:otzaria/tabs/view/pane_drop_target.dart';
 class _StubTab extends OpenedTab {
   _StubTab(super.title);
 
+  /// stub חסר state — אין מה לשכפל.
+  @override
+  OpenedTab clone() => this;
+
   @override
   Map<String, dynamic> toJson() => {'type': '_StubTab', 'title': title};
 }
@@ -58,11 +62,12 @@ void main() {
                     stripWidth ??
                     widths.fold<double>(0, (sum, width) => sum + width),
                 child: ReadingTabStrip(
+                  stripColor: const Color(0xFFF2EBE0),
                   tabs: tabs,
                   widths: widths,
                   requireLongPressToDrag: requireLongPress,
                   onReorder: log.reorder,
-                  onDragStarted: () => log.dragStarts++,
+                  onDragStarted: (_, _) => log.dragStarts++,
                   onSpringOpen: log.springOpened.add,
                   tabBuilder: (tab, index, width) => SizedBox(
                     width: width,
@@ -472,13 +477,14 @@ void main() {
                   width: 200,
                   height: stripHeight ?? tabs.length * itemHeight,
                   child: ReadingTabStrip(
+                    stripColor: const Color(0xFFF2EBE0),
                     axis: Axis.vertical,
                     scrollable: true,
                     crossExtent: 200,
                     tabs: tabs,
                     widths: [for (final _ in tabs) itemHeight],
                     onReorder: log.reorder,
-                    onDragStarted: () => log.dragStarts++,
+                    onDragStarted: (_, _) => log.dragStarts++,
                     onSpringOpen: log.springOpened.add,
                     tabBuilder: (tab, index, extent) => SizedBox(
                       height: extent,

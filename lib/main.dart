@@ -11,6 +11,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart' show FrameCallback;
 import 'package:flutter/services.dart';
+import 'package:path/path.dart' as p;
 import 'package:flutter_single_instance/flutter_single_instance.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -30,6 +31,7 @@ import 'package:otzaria/library/bloc/library_bloc.dart';
 import 'package:otzaria/settings/services/custom_folders/bloc/custom_folders_bloc.dart';
 import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
 import 'package:otzaria/navigation/bloc/navigation_event.dart';
+import 'package:otzaria/navigation/bloc/navigation_state.dart';
 import 'package:otzaria/navigation/navigation_repository.dart';
 import 'package:otzaria/settings/engine/settings_bloc.dart';
 import 'package:otzaria/settings/engine/settings_event.dart';
@@ -58,7 +60,6 @@ import 'package:otzaria/library_update/services/startup_recovery_check.dart';
 import 'package:seforim_library_updater/seforim_library_updater.dart';
 import 'package:zstandard/zstandard.dart';
 import 'package:otzaria/work_status/work_status_cubit.dart';
-import 'package:otzaria/printing/export_restriction_service.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_bloc.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_event.dart';
 import 'package:otzaria/plugins/bloc/plugin_updates_cubit.dart';
@@ -72,7 +73,9 @@ import 'package:otzaria_search_engine/otzaria_search_engine.dart';
 import 'package:otzaria/core/app_paths.dart';
 import 'package:otzaria/core/data_root_writability_warning.dart';
 import 'package:otzaria/core/cli_command.dart';
+import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/core/error_log_file.dart';
+import 'package:otzaria/core/messages/window_messages.dart';
 import 'package:otzaria/core/update_check_frequency.dart';
 import 'package:otzaria/core/info/app_info_cli.dart';
 import 'package:otzaria/core/info/app_install_timeline.dart';
@@ -80,6 +83,13 @@ import 'package:otzaria/core/external_activation_queue.dart';
 import 'package:otzaria/core/portable_paths.dart';
 import 'package:otzaria/core/window_listener.dart';
 import 'package:otzaria/core/window_persistence.dart';
+import 'package:otzaria/core/windowing/app_window_scope.dart';
+import 'package:otzaria/core/windowing/multi_window_service.dart';
+import 'package:otzaria/core/windowing/window_bus_host.dart';
+import 'package:otzaria/core/windowing/thread_contention_probe.dart';
+import 'package:otzaria/core/windowing/window_bus.dart';
+import 'package:otzaria/core/windowing/window_role.dart';
+import 'package:otzaria/core/windowing/window_manager_app_window_controller.dart';
 import 'package:otzaria/tools/shamor_zachor/providers/shamor_zachor_data_provider.dart';
 import 'package:otzaria/tools/shamor_zachor/providers/shamor_zachor_progress_provider.dart';
 import 'package:otzaria/settings/services/backup_service.dart';
@@ -114,7 +124,13 @@ import 'package:sentry_flutter/sentry_flutter.dart';
 // Updated automatically by version update scripts - do not edit manually
 const int _latestReleasedBuildNumber = 90960;
 
-// Global reference to window listener for cleanup
+/// החלון של ה-isolate הזה. מקור אמת אחד לכל מי שצריך אותו כאן: ה-listener,
+/// [WindowPersistence] ו-[AppWindowScope] מקבלים את אותו מופע.
+///
+/// `windowManager` הוא סינגלטון פר-isolate ולכן הבקר פונה תמיד לחלון של
+/// ה-isolate שבו הוא רץ — גם בחלון משני.
+const _appWindow = WindowManagerAppWindowController();
+
 AppWindowListener? _appWindowListener;
 const ExternalActivationQueue _externalActivationQueue =
     ExternalActivationQueue();
@@ -466,21 +482,37 @@ Future<void> _runAppBootstrap() async {
 
   // הגדרת window_manager לפני runApp.
   if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
+    // נשאר על ה-singleton: אתחול ה-backend קודם לקיומו של כל חלון.
     await windowManager.ensureInitialized();
     WindowPersistence.splashMode = true;
+    // WindowPersistence היא static ואין לה BuildContext — היא מקבלת את
+    // אותו מופע שנכנס ל-AppWindowScope, כדי שיהיה מקור אמת אחד.
+    WindowPersistence.bindWindow(
+      controller: _appWindow,
+      geometry: _appWindow,
+    );
 
-    _appWindowListener = AppWindowListener();
-    windowManager.addListener(_appWindowListener!);
-    await windowManager.setPreventClose(true);
+    await _installWindowCloseHandling();
 
     // ה-splash נייטיבי ב-runner והחלון הראשי נשאר מוסתר עד presentMainWindow,
     // שם הוא נחשף ישר בגבולותיו הסופיים — לכן אין כאן waitUntilReadyToShow.
   }
 
+  _claimWindowBusSlot();
+
+  // ה-scope עוטף את כל העץ כדי שכל widget יוכל להגיע לחלון שהוא יושב בו
+  // בלי לפנות ל-singleton גלובלי. היום יש חלון אחד, ולכן הבקר הוא של
+  // החלון הראשי; ריבוי חלונות יזריק כאן בקר אחר לכל עץ.
+  _maybeScheduleDebugSecondWindow();
+
   runApp(
-    SentryWidget(
-      child: RestartWidget(
-        child: const AppBootstrap(),
+    AppWindowScope(
+      controller: _appWindow,
+      geometry: _appWindow,
+      child: SentryWidget(
+        child: RestartWidget(
+          child: const AppBootstrap(),
+        ),
       ),
     ),
   );
@@ -513,15 +545,34 @@ Future<void> presentMainWindow() async {
   try {
     // show/maximize זורקים את ה-swapchain (חלון שקוף עד פריים חדש) — תחת cloak
     // זה בלתי-נראה; החשיפה היא ביטול ה-cloak הנייטיבי ב-flutter_window.cpp.
-    if (!kIsWeb && Platform.isWindows && !await windowManager.isVisible()) {
+    if (!kIsWeb && Platform.isWindows && !await _appWindow.isVisible()) {
       try {
         await _splashChannel.invokeMethod<void>('cloak');
       } catch (_) {
         // לא קריטי — בלי cloak נשארת ההתנהגות הקודמת (חשיפה לא-אטומית).
       }
     }
-    await windowManager.show();
-    await windowManager.focus();
+    // ⚠️ **החשיפה של חלון משני שייכת לנייטיב בלבד.**
+    //
+    // `RevealOnFirstFrame` כבר הציג אותו והביא אותו לחזית ברגע הפריים
+    // הראשון — כלומר שניות לפני שהאתחול כאן מסתיים. חזרה על
+    // `show`/`focus`/`raiseSelf` בנקודה הזו חוטפת את הפוקוס מהמשתמש
+    // שבינתיים כבר חזר לעבוד בחלון הראשי, וזו הייתה מחצית "מריבת
+    // הפוקוסים" בין החלונות. המחצית השנייה הייתה ב-`SetChildContent`.
+    if (!WindowRole.isSecondary) {
+      await _appWindow.show();
+      await _appWindow.focus();
+    }
+    if (WindowRole.isSecondary) {
+      final startup = _secondaryWindowStartup;
+      if (startup != null && startup.isRunning) {
+        startup.stop();
+        // נמדד ולא משוער: כל צעד שמדולג בחלון משני צריך להיראות כאן.
+        debugPrint(
+          '[window] חלון משני עלה תוך ${startup.elapsedMilliseconds}ms',
+        );
+      }
+    }
     // maximize חייב לקרות *אחרי* show (show מבצע restore לגודל הקודם).
     await WindowPersistence.applyPendingMaximize();
     // חייב אחרי show (setFullScreen על חלון מוסתר מאבד WS_VISIBLE) ואחרי
@@ -558,12 +609,24 @@ Future<void> _initializeProcessSingletons() async {
       await Settings.init(cacheProvider: SharePreferenceCache());
     }
 
-    _clearErrorLogOnVersionChange();
-    await AppInstallTimelineStore.recordLaunch(ErrorLogFile.appVersion);
+    // ⚠️ פר-תהליך, לא פר-חלון. ניקוי יומן השגיאות בשינוי גרסה ורישום
+    // ההפעלה מתארים את **התהליך**; חלון נוסף שרושם "הפעלה" מזייף את
+    // הנתונים, וניקוי היומן פעם שנייה עלול למחוק שגיאות שנרשמו בינתיים.
+    if (!WindowRole.isSecondary) {
+      _clearErrorLogOnVersionChange();
+      await AppInstallTimelineStore.recordLaunch(ErrorLogFile.appVersion);
+    }
 
     if (!kIsWeb &&
         (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
-      await WindowPersistence.restoreIfAny();
+      // ⚠️ חלון משני אינו משחזר גבולות שמורים.
+      //
+      // הגבולות השמורים הם של החלון הראשי, ובדרך כלל ממוקסמים — ולכן כל
+      // חלון נוסף נפתח על מסך מלא ובאותו מקום בדיוק, ומכסה את הקודם.
+      // ה-runner כבר יצר אותו בגודל ובהיסט סבירים, וזה מה שצריך להישאר.
+      if (!WindowRole.isSecondary) {
+        await WindowPersistence.restoreIfAny();
+      }
       // מחילים את הגבולות הסופיים כאן — מוקדם, בזמן שה-splash הנייטיב מוצג
       // והחלון הראשי עדיין מוסתר — ולא ברגע החשיפה. החלון נוצר ב-(10,10) על
       // המסך הראשי; אם הגבולות השמורים נמצאים על מסך עם DPI שונה, ה-setBounds
@@ -571,18 +634,20 @@ Future<void> _initializeProcessSingletons() async {
       // המנוע מספיק לעבד את שינוי ה-DPI ולצייר מחדש ב-devicePixelRatio הנכון
       // הרבה לפני שהחלון נחשף — מונע מצב שבו כל הממשק מופיע "מוגדל" כי הוצג
       // לפני שה-DPR התעדכן.
-      await WindowPersistence.applyRestoredBounds();
+      if (!WindowRole.isSecondary) {
+        await WindowPersistence.applyRestoredBounds();
+      }
       // גם מסגרת החלון מוגדרת כאן — מוקדם, בעוד החלון מוסתר — ולא ברגע
       // החשיפה: הסתרת ה-title bar (החלון נוצר ב-runner עם WS_OVERLAPPEDWINDOW)
       // משנה את גודל אזור-הלקוח, מה שמאתחל את ה-swapchain של המנוע וזורק את
       // כל התוכן שכבר צויר. כשזה רץ ברגע החשיפה, show() הציג חלון ריק לשבריר
       // שנייה עד שפריים חדש הספיק להתרסטר. כאן השינוי קורה לפני שפריים התוכן
       // הראשון מצויר בכלל — והוא נצבע ישר במסגרת ובגודל הסופיים.
-      await windowManager.setMinimumSize(WindowPersistence.minSize);
+      await _appWindow.setMinimumSize(WindowPersistence.minSize);
       // windowButtonVisibility ברירת מחדל true — חובה false מפורש כדי להסתיר
       // את כפתורי המערכת של macOS (traffic lights) שאחרת יופיעו כפול לצד
       // הכפתורים המותאמים.
-      await windowManager.setTitleBarStyle(
+      await _appWindow.setTitleBarStyle(
         TitleBarStyle.hidden,
         windowButtonVisibility: false,
       );
@@ -591,18 +656,25 @@ Future<void> _initializeProcessSingletons() async {
 
   // RustLib (טעינת FFI) ו-loadCerts (קריאת asset קטן) אינם תלויים בהגדרות
   // ולא זה בזה — רצים במקביל לשרשרת ההגדרות/חלון במקום בזה אחר זה.
-  await Future.wait([
-    RustLib.init(),
-    loadCerts(),
-    initSettingsAndWindow(),
-  ]);
+  await _timedPhase('rustlib+certs+settings', () async {
+    await Future.wait([
+      RustLib.init(),
+      loadCerts(),
+      initSettingsAndWindow(),
+    ]);
+  });
 
-  await initHive();
+  await _timedPhase('initHive', initHive);
   // מצב נייד: אם תיקיית הנתונים זזה (אות כונן אחרת / מיקום אחר), הנתיבים
   // האבסולוטיים השמורים משוכתבים לפני שכל קוד אחר צורך אותם. חייב לרוץ
   // אחרי Settings.init ואחרי initHive (ה-boxes פתוחים), ולפני
   // SqliteDataProvider ו-FileSystemData שקוראים את נתיב הספרייה.
-  await PortablePaths.migrateIfMoved();
+  // ⚠️ פר-תהליך. המיגרציה משכתבת נתיבים אבסולוטיים בהגדרות המשותפות;
+  // החלון הראשון כבר ביצע אותה, וחלון משני שיריץ אותה שוב יעבוד על
+  // ה-Hive הפרטי שלו ולא על המשותף — כלומר בזבוז במקרה הטוב.
+  if (!WindowRole.isSecondary) {
+    await PortablePaths.migrateIfMoved();
+  }
 
   // נתיב הספרייה נרשם לקובץ טקסט שה-uninstaller קורא; ההגדרות עצמן
   // ב-Hive בינארי שאינו נגיש לו (issue #1020).
@@ -611,8 +683,20 @@ Future<void> _initializeProcessSingletons() async {
   // שירות ההתראות (לוח השנה) ושירות דיווחי השגיאות אינם חיוניים להצגת
   // המסך הראשי. tz.initializeTimeZones + plugin init של flutter_local_notifications
   // יכולים לקחת מאות מילי-שניות ב-Windows, ודיווחי השגיאות הם רק Timer.periodic.
-  unawaited(_runDeferredNotificationService());
-  unawaited(_runDeferredErrorReportFlush());
+  // ⚠️ פר-תהליך, לא פר-חלון. שירות ההתראות רושם התראות מערכת, ושטיפת
+  // דיווחי השגיאות שולחת את אותו תור — חלון משני שמריץ אותם שוב מייצר
+  // התראות כפולות ודיווחים כפולים.
+  if (!WindowRole.isSecondary) {
+    unawaited(_runDeferredNotificationService());
+    unawaited(_runDeferredErrorReportFlush());
+  } else {
+    // ⚠️ אבל מסד אזורי הזמן **כן** נדרש, והוא פר-isolate.
+    //
+    // חסימת השירות כולו הפילה את לוח השנה בחלון משני עם "Tried to get
+    // location before initializing timezone database". מה שפר-תהליך הוא
+    // רישום ההתראות, לא בסיס הנתונים שמאחוריו.
+    unawaited(_initializeTimeZonesOnly());
+  }
 }
 
 /// משחזר עדכון ספרייה שנקטע (marker+backup) לפני פתיחת ה-DB.
@@ -652,13 +736,20 @@ Future<void> _initializeRestartableRuntime() async {
   // שני השחזורים חייבים לרוץ לפני פתיחת ה-DB ולפני בדיקת "ספרייה ריקה".
   // שחזור עדכון ספרייה שנקטע (marker+backup) קודם: הוא כותב DB משלו, ולהחזיר
   // לפניו גיבוי יתום פירושו העתקת ~5.5GB שתידרס מיד.
-  await _recoverInterruptedLibraryUpdate();
-  await _recoverOrphanedDbBackup();
+  //
+  // ⚠️ פר-תהליך, **שניהם**. הם נוגעים בקובצי הספרייה המשותפים, ושני
+  // חלונות שמריצים אותם במקביל היו מתנגשים על אותם קבצים — כולל אותה
+  // העתקה של ~5.5GB פעמיים. החלון הראשון כבר ביצע אותם לפני שהחלון הזה
+  // בכלל נוצר.
+  if (!WindowRole.isSecondary) {
+    await _recoverInterruptedLibraryUpdate();
+    await _recoverOrphanedDbBackup();
+  }
 
   // initHive נקרא כבר ב-_initializeProcessSingletons. הקריאה הכפולה כאן
   // הייתה no-op (Hive.openBox מחזיר box קיים), אבל בכל זאת חוסכת קצת זמן
   // בקריאה הראשונה. ב-restart אין צורך לפתוח שוב — boxes לא נסגרים.
-  await SqliteDataProvider.instance.initialize();
+  await _timedPhase('sqlite', SqliteDataProvider.instance.initialize);
 
   // הגדרת cache של pdfrx — לא חיונית להצגת המסך הראשי. PDF הראשון יקבל
   // cache ברירת מחדל אם זה עוד לא הוגדר.
@@ -668,7 +759,7 @@ Future<void> _initializeRestartableRuntime() async {
   // המקורות שהאפליקציה מציעה לתוספים. חייב לרוץ לפני שתוסף יקרא ל-
   // database.listSources — אחרת תוסף שנפתח מוקדם יראה את כל המקורות
   // כלא-זמינים (regression: ראה PluginDatabaseService._registry.getSource).
-  await initPluginDatabaseSources();
+  await _timedPhase('pluginDbSources', initPluginDatabaseSources);
 
   // PluginCrashGuard.ensureInitialized חייב להסתיים לפני שטעינת תוסף מתחילה.
   // PluginTabPage.markLoadAttemptSync דורש state אתחל (אחרת ה-canary לא נשמר
@@ -716,6 +807,19 @@ Future<void> _logJobObjectContainmentFailure() async {
     );
   } catch (error, stackTrace) {
     _logNonFatalInitializationError('Job Object status', error, stackTrace);
+  }
+}
+
+/// מאתחל את מסד אזורי הזמן בלבד, בלי לרשום התראות מערכת.
+///
+/// חלון משני צריך את `tz.local` (לוח השנה, זמני היום) אבל אסור לו לרשום
+/// התראות — הן היו נשלחות פעמיים.
+Future<void> _initializeTimeZonesOnly() async {
+  try {
+    // מקור אחד עם [NotificationService.init] — כולל אזור הזמן.
+    NotificationService.initializeTimeZones();
+  } catch (error, stackTrace) {
+    _logNonFatalInitializationError('Timezone database', error, stackTrace);
   }
 }
 
@@ -819,11 +923,6 @@ Future<void> _runDeferredCacheWarmups() async {
   unawaited(
     DictionaryLookupRepository.instance.ensureLoaded().catchError((e) {
       if (kDebugMode) debugPrint('Failed to warm up dictionary: $e');
-    }),
-  );
-  unawaited(
-    ExportRestrictionService.ensureLoaded().catchError((e) {
-      if (kDebugMode) debugPrint('Failed to load export restrictions: $e');
     }),
   );
   unawaited(
@@ -1153,22 +1252,70 @@ class _AppBootstrapState extends State<AppBootstrap> {
             create: (_) => HistoryBloc(historyRepository),
           ),
           BlocProvider<TabsBloc>(
-            create: (_) => TabsBloc(
-              repository: TabsRepository(),
-            )..add(LoadTabs()),
+            create: (_) {
+              final bloc = TabsBloc(repository: TabsRepository())
+                ..add(LoadTabs());
+              // חלון שנפתח עם מטען מקבל את הכרטיסיה שהועברה אליו. `LoadTabs`
+              // נשלח קודם כדי שסדר האירועים יהיה זהה לחלון רגיל — הכרטיסיה
+              // המועברת נכנסת אחריו, ולכן היא זו שתהיה פעילה.
+              // הפענוח כאן ולא בנקודת הכניסה: בשלב הזה `Settings` כבר
+              // מאותחל, ו-`TextBookTab.fromJson` תלוי בו.
+              final payload = secondaryWindowPayload;
+              secondaryWindowPayload = null;
+              final transferred = MultiWindowService.decodePayload(payload);
+              if (transferred != null) {
+                bloc.add(AddTab(transferred));
+              } else if (MultiWindowService.payloadHasTab(payload)) {
+                // ⚠️ המטען **הכיל** כרטיסיה והפענוח נכשל. עד כה זה היה
+                // כשל שקט: חלון חדש נפתח ריק, המקור כבר מחק את הכרטיסיה,
+                // והשורה היחידה שהסבירה למה נכתבה ל-stdout שאיש אינו רואה
+                // בהפעלה מהסייר.
+                //
+                // ההודעה נדחית לאחרי הבנייה — `UiSnack` זקוק ל-navigator,
+                // ובנקודה הזו העץ עוד לא הורכב.
+                debugPrint('⚠️ פענוח הכרטיסיה שהועברה נכשל — החלון ייפתח ריק');
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  UiSnack.showError(
+                    WindowMessages.transferredTabDecodeFailed,
+                  );
+                });
+                try {
+                  ErrorLogFile.append(
+                    title: 'פענוח כרטיסיה שהועברה לחלון חדש נכשל',
+                    error:
+                        'decodePayload returned null for a payload with a tab',
+                    stackTrace: StackTrace.current,
+                  );
+                } catch (_) {
+                  // רישום הוא best-effort ולעולם אינו חוסם את עליית החלון.
+                }
+              }
+              return bloc;
+            },
           ),
           BlocProvider<NavigationBloc>(
-            create: (context) => NavigationBloc(
-              repository: NavigationRepository(),
-              tabsRepository: TabsRepository(),
-              // "חיפוש" ו"עיון" הם אותו עמוד טאבים; היישור לפי החלונית
-              // הפעילה שומר שהאייקון המודגש בסרגל יתאים למה שמוצג בפועל.
-              activePaneStream: context
-                  .read<TabsBloc>()
-                  .stream
-                  .map((tabsState) => tabsState.activePane)
-                  .distinct(),
-            )..add(const CheckLibrary()),
+            create: (context) {
+              final nav = NavigationBloc(
+                repository: NavigationRepository(),
+                tabsRepository: TabsRepository(),
+                // "חיפוש" ו"עיון" הם אותו עמוד טאבים; היישור לפי החלונית
+                // הפעילה שומר שהאייקון המודגש בסרגל יתאים למה שמוצג בפועל.
+                activePaneStream: context
+                    .read<TabsBloc>()
+                    .stream
+                    .map((tabsState) => tabsState.activePane)
+                    .distinct(),
+              )..add(const CheckLibrary());
+              // ⚠️ אחרי `CheckLibrary` ולא במקומו. `CheckLibrary` מחליט
+              // לאן לנווט לפי מצב הספרייה, ובחלון שנפתח עם כרטיסיה מועברת
+              // ההחלטה שגויה: הוא היה נשאר במסך הספרייה בעוד הכרטיסיה
+              // פתוחה מאחוריו — בדיוק מה שנצפה. הניווט נשלח אחריו ולכן
+              // גובר עליו.
+              if (WindowRole.openedWithTab) {
+                nav.add(const NavigateToScreen(Screen.reading));
+              }
+              return nav;
+            },
           ),
           BlocProvider<FindRefBloc>(
             create: (_) => FindRefBloc(
@@ -1187,13 +1334,26 @@ class _AppBootstrapState extends State<AppBootstrap> {
               return WorkspaceBloc(
                 repository: WorkspaceRepository(),
                 onWorkspaceTabsChanged:
-                    (List<OpenedTab> tabs, int activeIndex) async {
+                    (
+                      List<OpenedTab> tabs,
+                      int activeIndex,
+                      String? activePane,
+                    ) async {
+                      // ⚠️ ההמתנה נרשמת **לפני** השליחה: `ReplaceAllTabs`
+                      // מטופל סינכרונית, ורישום אחריו היה מפספס את המצב
+                      // שהוא מחפש ומחכה לנצח.
                       final replaced = tabsBloc.stream.firstWhere(
                         (state) =>
                             identical(state.tabs, tabs) &&
                             state.currentTabIndex == activeIndex,
                       );
-                      tabsBloc.add(ReplaceAllTabs(tabs, activeIndex));
+                      tabsBloc.add(
+                        ReplaceAllTabs(
+                          tabs,
+                          activeIndex,
+                          activePane: activePane,
+                        ),
+                      );
                       await replaced;
                     },
               )..add(LoadWorkspaces());
@@ -1225,11 +1385,16 @@ class _AppBootstrapState extends State<AppBootstrap> {
               isOfflineMode: () =>
                   Settings.getValue<bool>(SettingsRepository.keyOfflineMode) ??
                   false,
+              // ⚠️ חלון משני לעולם אינו בודק עדכונים. עדכון ספרייה הוא
+              // פעולה פר-תהליך: שני חלונות ששאלו את GitHub במקביל קיבלו
+              // 403, והמשתמש ראה "שגיאה בקבלת רשימת ה-releases" בכל
+              // פתיחת חלון.
               areUpdatesEnabled: () =>
-                  Settings.getValue<bool>(
-                    SettingsRepository.keySoftwareAndBookUpdatesEnabled,
-                  ) ??
-                  true,
+                  !WindowRole.isSecondary &&
+                  (Settings.getValue<bool>(
+                        SettingsRepository.keySoftwareAndBookUpdatesEnabled,
+                      ) ??
+                      true),
               // עדכוני ספרייה תמיד ליציב בלבד — מנותק מערוץ הפיתוח, שמשפיע רק
               // על עדכוני התוכנה.
               allowPrerelease: () => false,
@@ -1282,14 +1447,28 @@ class _AppBootstrapState extends State<AppBootstrap> {
             },
           ),
         ],
-        child: const App(),
+        // מתחת לכל ה-blocs: האפיק עונה על בקשות מחלונות אחרים, ושתי
+        // הבקשות הנתמכות — "תאר את עצמך" ו"קלוט כרטיסיה" — זקוקות
+        // ל-TabsBloc ול-NavigationBloc.
+        child: const WindowBusHost(child: App()),
       ),
     );
   }
 }
 
 Future<void> initHive() async {
-  Hive.init(await AppPaths.getDataRootPath());
+  // ⚠️ החלון הראשון, וכל עוד אין חלון נוסף חי. שורש Hive פרטי שנשאר תחת
+  // `<dataRoot>/windows` הוא שארית מהפעלה קודמת ואף אחד לא ימחק אותו
+  // אחרת — נמדדו 69 תיקיות ו-33MB. תנאי `hasOtherWindows` מגן על המסלול
+  // של `RestartWidget`, שמריץ את האתחול מחדש בזמן שחלון משני חי ופתח שם
+  // קבצים.
+  if (!WindowRole.isSecondary && !WindowBus.instance.hasOtherWindows) {
+    await deleteStaleWindowRoots();
+  }
+  // ⚠️ `hiveRootPath` ולא `getDataRootPath`: בחלון משני קובצי ה-Hive
+  // יושבים בתיקייה נפרדת, אבל שאר שורש הנתונים — תוספים, WebView2,
+  // מסדי נתונים — נשאר משותף. ראו `configureHiveRootForWindow`.
+  Hive.init(await hiveRootPath());
   // כל box הוא קובץ נפרד ועצמאי — הפתיחות רצות במקביל במקום בזו אחר זו.
   await Future.wait([
     Hive.openBox<dynamic>('tabs'),
@@ -1299,6 +1478,11 @@ Future<void> initHive() async {
     Hive.openBox<dynamic>(DirectErrorReportService.queueBoxName),
     Hive.openBox<dynamic>(PluginReportService.queueBoxName),
   ]);
+  // ⚠️ כאן ולא ב-`TabsBloc`. שני קוראים שונים טוענים את הכרטיסיות
+  // (`TabsBloc` דרך `LoadTabs`, ו-`NavigationBloc` בקונסטרוקטור שלו), והסדר
+  // ביניהם תלוי בתזמון של תור האירועים. איחוד שמוחק מפתחות חייב לרוץ פעם
+  // אחת, לפני שניהם.
+  await TabsRepository.adoptOrphanWindowSessions();
 }
 
 Future<void> loadCerts() async {
@@ -1322,3 +1506,319 @@ void cleanup() {
 }
 
 // Note: TOC parsing helper moved to lib/utils/toc_parser.dart for reuse
+
+/// נקודת הכניסה של חלון אוצריא נוסף.
+///
+/// רץ ב-isolate נפרד משלו, באותו תהליך ועל **ה-thread הראשי כמו כל
+/// המנועים** (ראו [MultiWindowService]). זו **אינה** `main()`: אין בדיקת
+/// מופע יחיד (היא הייתה סוגרת את החלון מיד), אין splash נייטיב, ואין תור
+/// הפעלות חיצוניות — כל אלה שייכים לתהליך, וכבר רצו בחלון הראשון.
+///
+/// ⚠️ שורש Hive פרטי. `hive_ce` נועל את קובצי ה-`.lock` בלעדית, והנעילה
+/// היא פר-handle ולא פר-תהליך: שני isolates באותו תהליך נכשלים באותו
+/// errno 33 כמו שני תהליכים. לכן ההיסטוריה, הסימניות, שולחנות העבודה
+/// והכרטיסיות **מנותבים לחלון הראשון** (`SharedHiveStore`), וההגדרות
+/// נזרעות פעם אחת ומסונכרנות חי (`SettingsSync`). הספרייה עצמה —
+/// הספרים, SQLite ואינדקס Tantivy — משותפת, כי אלה **כן** נפתחים פעמיים
+/// בהצלחה. ראו `docs/multi-window.md`.
+@pragma('vm:entry-point')
+void secondaryWindowMain(List<String> args) async {
+  if (kReleaseMode) {
+    debugPrint = (String? message, {int? wrapWidth}) {};
+  }
+  WindowRole.isSecondary = true;
+  _secondaryWindowStartup = Stopwatch()..start();
+  SentryWidgetsFlutterBinding.ensureInitialized();
+  EditableText.debugDeterministicCursor = true;
+
+  // ⚠️ **לפני** הקמת שורש ה-Hive: המשבצת היא שם התיקייה. `register` נשען
+  // על [IsolateNameServer] בלבד ואינו תלוי ב-Hive, ולכן אין מניעה להקדים.
+  _claimWindowBusSlot();
+
+  try {
+    // ⚠️ **רק** הפניית קובצי ה-Hive נעשית כאן.
+    //
+    // את כל שאר האתחול — `RustLib.init`, `Settings.init`, `initHive`,
+    // `SqliteDataProvider`, `windowManager.ensureInitialized` — מבצע
+    // `AppBootstrap` דרך `_initializeProcessSingletons`, בדיוק כמו בחלון
+    // הראשון. שכפול שלהם כאן נכשל ב-"Should not initialize
+    // flutter_rust_bridge twice": `RustLib` שומר את מצבו על
+    // `RustLib.instance`, שהוא סטטי פר-isolate, ולכן שתי קריאות **באותו**
+    // isolate הן שגיאה — גם אם החלון חדש.
+    //
+    // הכלל: נקודת הכניסה של חלון משני קובעת רק מה **שונה** בו. כל השאר
+    // עובר במסלול היחיד והמשותף.
+    final sharedRoot = await AppPaths.getDataRootPath();
+    // ⚠️ שם קבוע פר-משבצת ולא חותמת זמן. חותמת זמן יצרה תיקייה חדשה בכל
+    // פתיחת חלון ואף אחד לא מחק אותן — 69 תיקיות ו-33MB נמדדו במחשב אחד.
+    // התיקיות האלה נמחקות בהפעלה קרה של החלון הראשון ([initHive]), שבה אין
+    // עוד חלונות משניים ולכן כולן שאריות.
+    final windowRoot = p.join(
+      sharedRoot,
+      windowRootsDirName,
+      'slot-${WindowBus.instance.slot ?? 0}',
+    );
+    await Directory(windowRoot).create(recursive: true);
+    // ⚠️ Hive בלבד, ולא `configureDataRootPathForProcess`. הפניית שורש
+    // הנתונים כולו רוקנה את `<dataRoot>/plugins` — תפריט הכלים בחלון
+    // משני היה ריק, וכרטיסיית תוסף נעלמה מהמקור במקום להיפתח ביעד.
+    configureHiveRootForWindow(windowRoot);
+
+    // ⚠️ **חובה לפני כל שימוש ב-PDF בחלון הזה.** ראו
+    // [_isolatePdfiumForThisWindow].
+    await _isolatePdfiumForThisWindow(windowRoot);
+
+    // זריעת ההעדפות של החלון שפתח אותנו.
+    //
+    // ⚠️ חייבת לקרות **לפני** ש-`AppBootstrap` מריץ את `Settings.init`,
+    // אחרת החלון יעלה בלי נתיב ספרייה ויציג את מסך ההתחלה כאילו זו התקנה
+    // חדשה. הכתיבה היא ל-box של שורש הנתונים הפרטי, ולכן אין התנגשות
+    // נעילה; `Settings.init` יפתח מאוחר יותר את אותו box הפתוח ויראה את
+    // הערכים.
+    final seed = MultiWindowService.decodePreferences(
+      args.isEmpty ? null : args.first,
+    );
+    if (seed.isNotEmpty) {
+      Hive.init(windowRoot);
+      final box = await Hive.openBox<dynamic>(
+        HiveCache.keyName,
+        path: windowRoot,
+      );
+      await box.putAll(seed);
+    }
+  } catch (e, st) {
+    // ⚠️ אין להמשיך. בלי `configureHiveRootForWindow` שורש ה-Hive נופל
+    // לשורש המשותף, `initHive` נכשל בנעילה בלעדית (errno 33), והמשתמש מקבל
+    // חלון ריק או קורס. ב-release `debugPrint` מושתק ולכן אין שום עקבה —
+    // הכתיבה ללוג המקומי היא הראיה היחידה.
+    debugPrint('secondaryWindowMain: data root setup failed: $e\n$st');
+    try {
+      ErrorLogFile.append(
+        title: 'Secondary window data root setup failed',
+        error: e,
+        stackTrace: st,
+      );
+    } catch (_) {
+      // כתיבת הלוג היא best-effort ולא תמנע את הסגירה.
+    }
+    await const MultiWindowService().closeSelf();
+    return;
+  }
+
+  Bloc.observer = AppBlocObserver();
+  unawaited(AppCursors.ensureInitialized());
+
+  // ⚠️ המטען נשמר **גולמי** ומפוענח מאוחר יותר, ב-`TabsBloc`.
+  //
+  // `TextBookTab.fromJson` קורא ל-`Settings.getValue('key-splited-view')`,
+  // ו-`Settings` מאותחל רק בתוך `AppBootstrap`. פענוח כאן זרק, נתפס והחזיר
+  // null — הכרטיסיה נעלמה מהחלון המקורי ולא נפתחה בחדש. `ToolTab.fromJson`
+  // אינו נוגע ב-Settings, ולכן דווקא כלים עברו בהצלחה והבאג נראה אקראי.
+  secondaryWindowPayload = args.isEmpty || args.first.isEmpty
+      ? null
+      : args.first;
+  WindowRole.openedWithTab = MultiWindowService.payloadHasTab(
+    secondaryWindowPayload,
+  );
+
+  // ⚠️ נדרש לפני `runApp`: בלעדיו `setTitleBarStyle(hidden)` שב-bootstrap
+  // אינו נתפס, והחלון עולה עם מסגרת Windows סטנדרטית **מעל** סרגל הכותרת
+  // המותאם של האפליקציה — "חלון בתוך חלון". החלון הראשון עושה זאת
+  // ב-`main()`, ולכן הבעיה לא נראתה בו.
+  if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
+    try {
+      await windowManager.ensureInitialized();
+      // ⚠️ בדיוק כמו בחלון הראשון. בלי זה לחיצה על X בחלון משני עוקפת את
+      // Dart לגמרי — ראו [_installWindowCloseHandling].
+      await _installWindowCloseHandling();
+    } catch (e) {
+      debugPrint('secondaryWindowMain: windowManager init failed: $e');
+    }
+  }
+
+  _maybeMeasureThreadContention();
+
+  runApp(
+    AppWindowScope(
+      controller: _appWindow,
+      geometry: _appWindow,
+      child: SentryWidget(
+        child: RestartWidget(
+          child: const AppBootstrap(),
+        ),
+      ),
+    ),
+  );
+}
+
+/// פותח חלון נוסף אחרי השהיה, לבדיקה מקצה לקצה בלי אינטראקציה ידנית.
+///
+/// עובר במסלול המלא — כולל צילום ההעדפות — ולכן הוא בודק את מה שהמשתמש
+/// יקבל, ולא רק את הצד הנייטיב. מופעל רק כאשר `OTZARIA_DEBUG_OPEN_WINDOW_MS`
+/// מוגדר.
+void _maybeScheduleDebugSecondWindow() {
+  // ⚠️ מגודר ב-`kDebugMode`: פתיחת חלון אוטומטית לפי משתנה סביבה אינה
+  // התנהגות שצריכה להיות נגישה בבנייה שהמשתמש מריץ, וגם קריאת
+  // `Platform.environment` בכל עלייה מתייתרת שם.
+  if (!kDebugMode) return;
+  final ms = int.tryParse(
+    Platform.environment['OTZARIA_DEBUG_OPEN_WINDOW_MS'] ?? '',
+  );
+  if (ms == null || ms <= 0) return;
+  Timer(Duration(milliseconds: ms), () async {
+    final opened = await const MultiWindowService().openWindow();
+    debugPrint('[debug] openWindow -> $opened');
+  });
+}
+
+/// נותן לחלון הזה **עותק פרטי של `pdfium.dll`**, ומכוון אליו את pdfrx.
+///
+/// ## למה זה נדרש: PDFium גלובלי לתהליך, והקולבקים שלו שייכים ל-isolate
+///
+/// `FPDF_InitLibrary` ו-`FPDF_SetSystemFontInfo` הם מצב של **התהליך** (C
+/// globals במודול), בעוד ש-pdfrx מחזיק את כל מצבו במשתנים ברמת הקובץ —
+/// כלומר **פר isolate group**, וכל חלון הוא group משלו. התוצאה:
+///
+/// 1. החלון הראשון מתקין font mapper ו-`FPDF_SetSystemFontInfo(A)`.
+/// 2. החלון השני אינו רואה את `_fontMapper` של הראשון (משתנה פר-group),
+///    מתקין mapper משלו, ו-`FPDF_SetSystemFontInfo(B)` **דורס** את המצביע.
+/// 3. הקולבקים של ה-mapper הם `NativeCallable.isolateLocal`, כלומר קשורים
+///    ל-`PdfrxEngineWorker` של אותו group. ה-`FPDF_LoadPage` הבא בחלון
+///    הראשון קורא ל-`MapFont` של B מתוך worker A, וה-VM נופל בשגיאה
+///    `Cannot invoke native callback from a different isolate` — קריסה
+///    קטלנית שאי אפשר לתפוס.
+///
+/// ה-pre-warm של תוכני העניינים ב-`ReferenceBooksCache` פותח עשרות קובצי
+/// PDF בכל חלון, ולכן די היה בפתיחת חלון שני כדי לחמש את הקריסה.
+///
+/// ## הפתרון: מודול נפרד לכל חלון
+///
+/// `DynamicLibrary.open('pdfium.dll')` בשם בלבד מחזיר את המודול **שכבר
+/// טעון** בתהליך. עותק בנתיב אחר ובשם אחר נטען כמודול נפרד עם סגמנט
+/// נתונים משלו, ולכן לכל חלון יש PDFium משלו — כולל font mapper משלו.
+/// המחיר: עותק DLL בתיקיית החלון (נמחקת בהפעלה קרה) ומודול נוסף בזיכרון.
+///
+/// כשל כאן עוצר את החלון המשני לפני הפעלת Flutter, כדי שלא ישתף PDFium
+/// עם החלון הראשי ויפיל את ה-VM בעת פתיחת PDF.
+Future<void> _isolatePdfiumForThisWindow(String windowRoot) async {
+  if (kIsWeb || !Platform.isWindows) return;
+  try {
+    final source = File(
+      p.join(p.dirname(Platform.resolvedExecutable), 'pdfium.dll'),
+    );
+    if (!await source.exists()) {
+      throw FileSystemException('pdfium.dll not found', source.path);
+    }
+    // ⚠️ גם **שם** שונה ולא רק נתיב שונה: הלוודר של Windows מזהה מודולים
+    // לפי שם הבסיס במקרים מסוימים, ושם ייחודי מסיר כל ספק.
+    final slot = WindowBus.instance.slot ?? 0;
+    final target = File(p.join(windowRoot, 'pdfium-window-$slot.dll'));
+    if (!await target.exists() ||
+        await target.length() != await source.length()) {
+      await source.copy(target.path);
+    }
+    Pdfrx.pdfiumModulePath = target.path;
+    debugPrint('[pdf] מודול PDFium פרטי לחלון: ${target.path}');
+  } catch (e, st) {
+    debugPrint('⚠️ _isolatePdfiumForThisWindow failed: $e\n$st');
+    try {
+      ErrorLogFile.append(
+        title: 'Private PDFium module for secondary window failed',
+        error: e,
+        stackTrace: st,
+        details: const {
+          'impact':
+              'PDF rendering in this window shares the process-global PDFium '
+              'with the main window and can abort the VM',
+        },
+      );
+    } catch (_) {
+      // רישום ללוג הוא best-effort.
+    }
+    rethrow;
+  }
+}
+
+/// מעביר את סגירת החלון הזה דרך Dart.
+///
+/// ⚠️ חייב לרוץ **בכל** חלון, לא רק בראשון. בלי `setPreventClose(true)`
+/// הפלאגין מעביר את `WM_CLOSE` הלאה ל-`Win32Window::MessageHandler`, שמסתיר
+/// את החלון — ואף שורת Dart של הסגירה אינה רצה: לא ה-flush של ההיסטוריה
+/// והכרטיסיות ([PreCloseRegistry]), לא השאלה על שינויים שלא נשמרו, ולא
+/// מחיקת סשן החלון. חלון משני נסגר כך בשקט תוך אובדן כתיבות תלויות.
+Future<void> _installWindowCloseHandling() async {
+  _appWindowListener = AppWindowListener(window: _appWindow);
+  windowManager.addListener(_appWindowListener!);
+  await windowManager.setPreventClose(true);
+}
+
+/// תופס את משבצת החלון באפיק ההודעות, **לפני `runApp`**.
+///
+/// ⚠️ העיתוי אינו נוחות. התפיסה הייתה ב-`WindowBusHost.initState`, שהוא
+/// **צאצא** של `MultiBlocProvider` — כלומר ה-blocs נבנים לפניו, ושניים
+/// מהם ניגשים למצב שתלוי במשבצת עוד לפני שהיא קיימת:
+///
+/// * `TabsRepository.saveTabs` בחלון משני זקוק למשבצת כדי לדעת לאיזה מפתח
+///   סשן לכתוב, ובלעדיה הוא **מדלג על השמירה** במכוון (הנפילה למפתח של
+///   החלון הראשון הייתה דורסת את הכרטיסיות שלו). כלומר הכרטיסיה שהועברה
+///   לחלון החדש עלולה לא להישמר עד השינוי הבא.
+/// * הבעלים רושם כאן את הכינוי `otzaria.window.owner`, שדרכו כל חלון משני
+///   מאתר אותו.
+///
+/// הסדר בין `BlocProvider.create` ל-`initState` תלוי בעצלנות של הספק, ולכן
+/// הוא אינו משהו שאפשר להישען עליו. `register` אידמפוטנטי, ולכן הקריאה
+/// ב-`WindowBusHost` נשארת כרשת ביטחון.
+void _claimWindowBusSlot() {
+  // ⚠️ מגודר בפלטפורמה: בלי זה גם מובייל פתח `ReceivePort` ורשם כינוי
+  // בעלים בשביל אפיק שאף אחד לא ידבר בו.
+  if (!MultiWindowService.isSupported) return;
+  final slot = WindowBus.instance.register(asOwner: !WindowRole.isSecondary);
+  if (slot == null) {
+    debugPrint('⚠️ כל משבצות האפיק תפוסות — החלון הזה לא יוכל לשתף מצב');
+  }
+}
+
+/// מריץ את בדיקה 10 של P-2 — תחרות thread בין חלונות.
+///
+/// ⚠️ **מהחלון המשני**, ולא מהראשון. המדידה צריכה חלון שאינו עסוק בזמן
+/// שהאחר שורף CPU, והחלון הראשון הוא זה שנשרף. ההשהיה נותנת לאתחול
+/// להסתיים — מדידת בסיס בזמן שהחלון עוד עולה מודדת את האתחול, לא את
+/// התחרות.
+///
+/// ראו [ThreadContentionProbe] לנוהל ההרצה.
+void _maybeMeasureThreadContention() {
+  if (!ThreadContentionProbe.isEnabled || !WindowRole.isSecondary) return;
+  Timer(const Duration(seconds: 5), () => unawaited(_runContentionProbe()));
+}
+
+Future<void> _runContentionProbe() async {
+  try {
+    await ThreadContentionProbe.run();
+  } catch (e, st) {
+    debugPrint('[contention] probe failed: $e\n$st');
+  }
+}
+
+/// מודד את זמן העלייה של חלון משני, מנקודת הכניסה ועד החשיפה.
+Stopwatch? _secondaryWindowStartup;
+
+/// מריץ שלב אתחול ומודד אותו — בחלון משני בלבד.
+///
+/// ⚠️ אין למדוד בחלון הראשון: שם השלבים רצים תחת ה-splash הנייטיב וזמנם
+/// אינו מורגש, וההדפסות היו רק רעש בלוג.
+Future<T> _timedPhase<T>(String name, Future<T> Function() body) async {
+  if (!WindowRole.isSecondary) return body();
+  final sw = Stopwatch()..start();
+  try {
+    return await body();
+  } finally {
+    debugPrint('[window-phase] $name: ${sw.elapsedMilliseconds}ms');
+  }
+}
+
+/// המטען הגולמי שאיתו נפתח החלון, אם נפתח כחלון משני.
+///
+/// נצרך **פעם אחת** ביצירת `TabsBloc` ומתאפס שם, כדי ש-`RestartWidget`
+/// לא יוסיף את הכרטיסיה שוב בהפעלה מחדש של העץ. הפענוח קורה שם ולא
+/// כאן — ראו ההערה ב-[secondaryWindowMain].
+String? secondaryWindowPayload;

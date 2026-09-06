@@ -21,13 +21,21 @@ class _BlockingHistoryRepository extends HistoryRepository {
     return releaseLoad.future;
   }
 
+  /// מה ש"על הדיסק". [mutate] האמיתי קורא אותו מחדש לפני כל החלה, וזה מה
+  /// שהופך שתי כתיבות רצופות לצטברות במקום לדרוס.
+  List<Bookmark> stored = [];
+
   @override
-  Future<void> save(List<Bookmark> items) async {
+  Future<List<Bookmark>> mutate(
+    List<Bookmark> Function(List<Bookmark> current) apply,
+  ) async {
     saveCount++;
     if (saveCount == 1) {
       firstSaveStarted.complete();
       await releaseFirstSave.future;
     }
+    stored = List<Bookmark>.from(apply(List<Bookmark>.from(stored)));
+    return List<Bookmark>.from(stored);
   }
 }
 

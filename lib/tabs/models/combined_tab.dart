@@ -1,7 +1,5 @@
 import 'package:flutter/foundation.dart';
 import 'package:otzaria/tabs/models/tab.dart';
-import 'package:otzaria/tabs/models/commentators_tab.dart';
-import 'package:otzaria/tabs/models/pdf_commentators_tab.dart';
 import 'package:otzaria/utils/file/hive_utils.dart';
 
 /// טאב המציג בדיוק שתי חלוניות זו לצד זו, עם מפריד ניתן לגרירה.
@@ -62,6 +60,17 @@ class CombinedTab extends OpenedTab {
     );
   }
 
+  /// שתי החלוניות משוכפלות אף הן — בלי זה שני הטאבים היו חולקים את אותם
+  /// אובייקטי חלונית, ו-[dispose] של האחד היה סוגר את ה-BLoC של השני.
+  /// [title] אינו מועבר: הוא נגזר מהחלוניות וה-setter זורק.
+  @override
+  OpenedTab clone() => CombinedTab(
+    rightTab: OpenedTab.from(rightTab),
+    leftTab: OpenedTab.from(leftTab),
+    splitRatio: splitRatio,
+    isPinned: isPinned,
+  );
+
   /// משחררת את הטאב ואת שתי החלוניות שבו.
   @override
   void dispose() {
@@ -86,14 +95,7 @@ class CombinedTab extends OpenedTab {
 OpenedTab decodeCombinedTab(Map<String, dynamic> json) {
   OpenedTab? decodePane(dynamic raw) {
     try {
-      final map = castMap(raw);
-      if (map['type'] == 'PdfCommentatorsTab') {
-        return PdfCommentatorsTab.fromJson(map);
-      }
-      if (map['type'] == 'CommentatorsTab') {
-        return CommentatorsTab.fromJson(map);
-      }
-      return OpenedTab.fromJson(map);
+      return OpenedTab.fromJson(castMap(raw));
     } catch (e) {
       debugPrint('⚠️ Skipping split pane that failed to restore: $e');
       return null;
@@ -174,6 +176,36 @@ class _RestoredCombinedTab extends OpenedTab {
     'splitRatio': splitRatio,
     'isPinned': isPinned,
     'type': 'CombinedTab',
+  };
+}
+
+/// שמות הצדדים כפי שהם נשמרים לדיסק.
+///
+/// ⚠️ [CombinedTab.rightTab] הוא ה**ראשון** בסדר התצוגה — החלונית הימנית
+/// ב-RTL. סריאליזציה של "left"/"right" שהופכת אותם תחליף בשקט בין החלוניות.
+const String kRightPaneSide = 'right';
+const String kLeftPaneSide = 'left';
+
+/// הצד שבו יושבת [pane] בתוך [tab], או `null` כש-[tab] אינו מפוצל או
+/// ש-[pane] אינה אחת משתי חלוניותיו.
+///
+/// ההשוואה היא [identical] ולא `==`, בדיוק כמו [CombinedTab.sibling]: שני
+/// עותקים של אותו ספר הם שתי חלוניות שונות.
+String? activePaneSideOf(OpenedTab tab, OpenedTab? pane) {
+  if (tab is! CombinedTab || pane == null) return null;
+  if (identical(pane, tab.rightTab)) return kRightPaneSide;
+  if (identical(pane, tab.leftTab)) return kLeftPaneSide;
+  return null;
+}
+
+/// החלונית שבצד [side] של [tab], או `null` כשהטאב אינו מפוצל או שהערך
+/// השמור פגום. `null` מוביל את [TabsState] ליפול ל-`panes.first`.
+OpenedTab? paneForSide(OpenedTab tab, String? side) {
+  if (tab is! CombinedTab) return null;
+  return switch (side) {
+    kRightPaneSide => tab.rightTab,
+    kLeftPaneSide => tab.leftTab,
+    _ => null,
   };
 }
 

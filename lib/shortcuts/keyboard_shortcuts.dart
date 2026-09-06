@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:otzaria/core/focus_repository.dart';
+import 'package:otzaria/core/windowing/multi_window_service.dart';
 import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
 import 'package:otzaria/navigation/bloc/navigation_event.dart';
 import 'package:otzaria/navigation/bloc/navigation_state.dart';
@@ -360,9 +361,25 @@ class _KeyboardShortcutsState extends State<KeyboardShortcuts> {
       return KeyEventResult.handled;
     }
 
-    if (isReadingScreen &&
-        ShortcutHelper.matchesShortcut(event, restoreClosedTabShortcut)) {
-      context.read<TabsBloc>().add(const RestoreLastClosedTab());
+    // ⚠️ **אינו** מוגדר ל-`isReadingScreen`, בשונה משאר קיצורי הכרטיסיות.
+    //
+    // "שחזר את מה שסגרתי" תקף מכל מסך: משתמש שסגר חלון וחזר למסך הספרייה
+    // לחץ `Ctrl+Shift+T` ושום דבר לא קרה — הקיצור נחסם בדיוק בתרחיש
+    // שבשבילו הוא נוסף. שחזור כרטיסיה מנווט למסך הקריאה, כי שם היא נמצאת.
+    if (ShortcutHelper.matchesShortcut(event, restoreClosedTabShortcut)) {
+      // כמו בדפדפן: קודם כרטיסיה שנסגרה, ורק אם אין כזו — חלון שנסגר.
+      // הסדר חשוב, כי הכרטיסיה היא הפעולה השכיחה בהרבה.
+      final tabsBloc = context.read<TabsBloc>();
+      if (tabsBloc.hasRecentlyClosedTabs) {
+        tabsBloc.add(const RestoreLastClosedTab());
+        if (!isReadingScreen) {
+          context.read<NavigationBloc>().add(
+            const NavigateToScreen(Screen.reading),
+          );
+        }
+      } else {
+        unawaited(const MultiWindowService().restoreLastClosedWindow());
+      }
       return KeyEventResult.handled;
     }
 

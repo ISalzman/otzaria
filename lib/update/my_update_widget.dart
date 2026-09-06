@@ -21,6 +21,8 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path/path.dart' as p;
 import 'package:updat/utils/file_handler.dart' show openInstaller;
 import 'package:window_manager/window_manager.dart';
+import 'package:otzaria/core/windowing/app_window_controller.dart';
+import 'package:otzaria/core/windowing/app_window_scope.dart';
 import 'hebrew_update_widgets.dart';
 import 'linux_installer.dart';
 import 'macos_installer.dart';
@@ -573,6 +575,16 @@ class _ManagedUpdatWidgetState extends State<_ManagedUpdatWidget> {
   Timer? _offlineRecheckTimer;
   int _offlineRecheckAttempt = 0;
 
+  /// נתפס פעם אחת ולא נשלף בזמן הסגירה: `_handleWindowClose` רץ כשהעץ כבר
+  /// מתפרק, ו-`controllerOf` הוא חיפוש בעץ ה-widgets.
+  late AppWindowController _appWindow;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _appWindow = AppWindowScope.controllerOf(context);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -642,6 +654,8 @@ class _ManagedUpdatWidgetState extends State<_ManagedUpdatWidget> {
     _settingsSubscription?.cancel();
     _offlineRecheckTimer?.cancel();
     if (_windowCloseHookInstalled) {
+      // ⚠️ ה-singleton של `window_manager` ולא `AppWindowController`: רשימת
+      // ה-listeners שלו היא פר-isolate, ולכן היא **כבר** של החלון הזה.
       windowManager.removeListener(_windowListener);
       _windowCloseHookInstalled = false;
     }
@@ -658,6 +672,8 @@ class _ManagedUpdatWidgetState extends State<_ManagedUpdatWidget> {
 
   Future<void> _installWindowCloseHook() async {
     try {
+      // ⚠️ `window_manager` הוא סינגלטון פר-isolate, ולכן הקריאה חלה על
+      // החלון של ה-isolate הזה — לא על "החלון של התהליך".
       await windowManager.setPreventClose(true);
       if (!mounted) {
         return;
@@ -689,7 +705,7 @@ class _ManagedUpdatWidgetState extends State<_ManagedUpdatWidget> {
         if (launched) _installerFile = null;
       }
     } finally {
-      await windowManager.destroy();
+      await _appWindow.destroy();
     }
   }
 
@@ -708,7 +724,7 @@ class _ManagedUpdatWidgetState extends State<_ManagedUpdatWidget> {
       // איפוס הקובץ מונע שיגור מתקין כפול אם יגיע אירוע סגירת חלון נוסף
       // (למשל מהמתקין עצמו) לפני שה-destroy מסתיים.
       _installerFile = null;
-      await windowManager.destroy();
+      await _appWindow.destroy();
     }
   }
 

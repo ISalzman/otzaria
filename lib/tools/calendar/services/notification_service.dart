@@ -20,11 +20,18 @@ class NotificationService {
   bool _permissionsGranted = false;
   bool _isInitialized = false;
 
-  Future<void> init() async {
-    // Initialize timezone database
+  /// מאתחל את מסד אזורי הזמן וקובע את אזור הזמן המקומי.
+  ///
+  /// ⚠️ נפרד מ-[init] כדי שחלון משני יוכל לקרוא לו לבדו: הוא צריך את
+  /// `tz.local` (לוח השנה, זמני היום) אבל אסור לו לרשום התראות מערכת —
+  /// הן היו נשלחות פעמיים. מקור אחד לשניהם, כולל אזור הזמן.
+  static void initializeTimeZones() {
     tz.initializeTimeZones();
-    // Set default timezone to Israel
     tz.setLocalLocation(tz.getLocation('Asia/Jerusalem'));
+  }
+
+  Future<void> init() async {
+    initializeTimeZones();
 
     const AndroidInitializationSettings initializationSettingsAndroid =
         AndroidInitializationSettings('@mipmap/ic_launcher');

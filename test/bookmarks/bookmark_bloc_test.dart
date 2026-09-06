@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/bookmarks/bloc/bookmark_bloc.dart';
 import 'package:otzaria/bookmarks/bloc/bookmark_state.dart';
 import 'package:otzaria/bookmarks/models/bookmark.dart';
+import 'package:otzaria/bookmarks/models/bookmark_group.dart';
 import 'package:otzaria/bookmarks/repository/bookmark_repository.dart';
 import 'package:otzaria/models/books.dart';
 
@@ -19,9 +20,12 @@ class _FakeBookmarkRepository implements BookmarkRepository {
   Future<List<Bookmark>> loadBookmarks() async => List.from(_bookmarks);
 
   @override
-  Future<void> saveBookmarks(List<Bookmark> bookmarks) async {
-    _bookmarks = List.from(bookmarks);
+  Future<List<Bookmark>> mutateBookmarks(
+    List<Bookmark> Function(List<Bookmark> current) apply,
+  ) async {
+    _bookmarks = List.from(apply(List.from(_bookmarks)));
     saveCallCount++;
+    return List.from(_bookmarks);
   }
 
   @override
@@ -29,6 +33,15 @@ class _FakeBookmarkRepository implements BookmarkRepository {
     _bookmarks = [];
     clearCallCount++;
   }
+
+  @override
+  Future<List<BookmarkGroup>> loadGroups() async => const [];
+
+  @override
+  Stream<void> get remoteChanges => const Stream<void>.empty();
+
+  @override
+  Stream<void> get groupsRemoteChanges => const Stream<void>.empty();
 
   // Unused BaseListRepository methods
   @override
@@ -65,7 +78,9 @@ class _FailingBookmarkRepository extends _FakeBookmarkRepository {
   _FailingBookmarkRepository({super.initial});
 
   @override
-  Future<void> saveBookmarks(List<Bookmark> bookmarks) async {
+  Future<List<Bookmark>> mutateBookmarks(
+    List<Bookmark> Function(List<Bookmark> current) apply,
+  ) async {
     saveCallCount++;
     throw Exception('disk full');
   }
