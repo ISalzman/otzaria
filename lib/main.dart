@@ -81,6 +81,7 @@ import 'package:otzaria/core/info/app_info_cli.dart';
 import 'package:otzaria/core/info/app_install_timeline.dart';
 import 'package:otzaria/core/external_activation_queue.dart';
 import 'package:otzaria/core/portable_paths.dart';
+import 'package:otzaria/core/startup_timeline.dart';
 import 'package:otzaria/core/window_listener.dart';
 import 'package:otzaria/core/window_persistence.dart';
 import 'package:otzaria/core/windowing/app_window_scope.dart';
@@ -143,6 +144,7 @@ void _markMainWindowRevealed() {
   if (!_mainWindowRevealedCompleter.isCompleted) {
     _mainWindowRevealedCompleter.complete();
   }
+  if (!WindowRole.isSecondary) StartupTimeline.instance.finishAtReveal();
 }
 
 /// Getter for accessing the window listener from other parts of the app
@@ -304,6 +306,7 @@ void main(List<String> args) async {
   if (await _maybeRunCliCommand(args)) {
     return;
   }
+  StartupTimeline.instance.start();
 
   PluginDevToolsMode.initFromArgs(args);
 
@@ -321,10 +324,12 @@ void main(List<String> args) async {
 
   unawaited(AppCursors.ensureInitialized());
 
-  await _initializeDataRootForEarlyLogging();
-  await _initializeLogMetadata();
-  hierarchicalLoggingEnabled = true;
-  await _enqueueExternalActivationArgs(args);
+  await StartupTimeline.instance.phase('earlyInit', () async {
+    await _initializeDataRootForEarlyLogging();
+    await _initializeLogMetadata();
+    hierarchicalLoggingEnabled = true;
+    await _enqueueExternalActivationArgs(args);
+  });
 
   // Set up custom error handlers before Sentry initialization
   // Sentry will automatically wrap these handlers
@@ -454,7 +459,10 @@ Future<void> _runAppBootstrap() async {
         .last
         .replaceAll(RegExp(r'\.exe$', caseSensitive: false), '');
     FlutterSingleInstance flutterSingleInstance = FlutterSingleInstance();
-    bool isFirstInstance = await flutterSingleInstance.isFirstInstance();
+    bool isFirstInstance = await StartupTimeline.instance.phase(
+      'singleInstance',
+      flutterSingleInstance.isFirstInstance,
+    );
     if (!isFirstInstance) {
       // אם נשלח ack מוקדם לאתר החנות — ממתינים לסיומו לפני היציאה, אחרת
       // התהליך מת לפני שהבקשה יוצאת (לשירות יש timeout פנימי של 10 שניות).
@@ -483,7 +491,10 @@ Future<void> _runAppBootstrap() async {
   // הגדרת window_manager לפני runApp.
   if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
     // נשאר על ה-singleton: אתחול ה-backend קודם לקיומו של כל חלון.
-    await windowManager.ensureInitialized();
+    await StartupTimeline.instance.phase(
+      'windowManager',
+      windowManager.ensureInitialized,
+    );
     WindowPersistence.splashMode = true;
     // WindowPersistence היא static ואין לה BuildContext — היא מקבלת את
     // אותו מופע שנכנס ל-AppWindowScope, כדי שיהיה מקור אמת אחד.
@@ -492,7 +503,10 @@ Future<void> _runAppBootstrap() async {
       geometry: _appWindow,
     );
 
-    await _installWindowCloseHandling();
+    await StartupTimeline.instance.phase(
+      'windowCloseHandling',
+      _installWindowCloseHandling,
+    );
 
     // ה-splash נייטיבי ב-runner והחלון הראשי נשאר מוסתר עד presentMainWindow,
     // שם הוא נחשף ישר בגבולותיו הסופיים — לכן אין כאן waitUntilReadyToShow.
@@ -673,7 +687,7 @@ Future<void> _initializeProcessSingletons() async {
   // החלון הראשון כבר ביצע אותה, וחלון משני שיריץ אותה שוב יעבוד על
   // ה-Hive הפרטי שלו ולא על המשותף — כלומר בזבוז במקרה הטוב.
   if (!WindowRole.isSecondary) {
-    await PortablePaths.migrateIfMoved();
+    await _timedPhase('portablePaths', PortablePaths.migrateIfMoved);
   }
 
   // נתיב הספרייה נרשם לקובץ טקסט שה-uninstaller קורא; ההגדרות עצמן
@@ -742,8 +756,11 @@ Future<void> _initializeRestartableRuntime() async {
   // העתקה של ~5.5GB פעמיים. החלון הראשון כבר ביצע אותם לפני שהחלון הזה
   // בכלל נוצר.
   if (!WindowRole.isSecondary) {
-    await _recoverInterruptedLibraryUpdate();
-    await _recoverOrphanedDbBackup();
+    await _timedPhase(
+      'recoverInterruptedUpdate',
+      _recoverInterruptedLibraryUpdate,
+    );
+    await _timedPhase('recoverOrphanedBackup', _recoverOrphanedDbBackup);
   }
 
   // initHive נקרא כבר ב-_initializeProcessSingletons. הקריאה הכפולה כאן
@@ -765,16 +782,19 @@ Future<void> _initializeRestartableRuntime() async {
   // PluginTabPage.markLoadAttemptSync דורש state אתחל (אחרת ה-canary לא נשמר
   // והתוסף לא ייכנס ל-quarantine אם יקרוס), ו-PluginCrashGuard.isBlocked
   // מחזיר false כל עוד _blocked הוא null. הקריאה זולה (קריאת JSON קטן).
-  await PluginCrashGuard.ensureInitialized().catchError((
-    Object error,
-    StackTrace stackTrace,
-  ) {
-    _logNonFatalInitializationError(
-      'Plugin crash guard initialization',
-      error,
-      stackTrace,
-    );
-  });
+  await _timedPhase(
+    'pluginCrashGuard',
+    () => PluginCrashGuard.ensureInitialized().catchError((
+      Object error,
+      StackTrace stackTrace,
+    ) {
+      _logNonFatalInitializationError(
+        'Plugin crash guard initialization',
+        error,
+        stackTrace,
+      );
+    }),
+  );
 
   // גיבוי אוטומטי ורישום פרוטוקול אינם נחוצים להצגת ה-UI הראשי (טאבים,
   // ספרים, ניווט). הם מועברים ל-unawaited כדי שלא יעכבו את ה-bootstrap —
@@ -999,9 +1019,9 @@ Future<void> _preWarmWebViewEnvironment() async {
 Future<void>? _processInitializationFuture;
 
 Future<void> _ensureBootstrapInitialized() {
-  return (_processInitializationFuture ??= _initializeProcessSingletons()).then(
-    (_) => _initializeRestartableRuntime(),
-  );
+  return (_processInitializationFuture ??= _initializeProcessSingletons())
+      .then((_) => _initializeRestartableRuntime())
+      .then((_) => StartupTimeline.instance.mark('bootstrapDone'));
 }
 
 @visibleForTesting
@@ -1807,12 +1827,13 @@ Stopwatch? _secondaryWindowStartup;
 /// ⚠️ אין למדוד בחלון הראשון: שם השלבים רצים תחת ה-splash הנייטיב וזמנם
 /// אינו מורגש, וההדפסות היו רק רעש בלוג.
 Future<T> _timedPhase<T>(String name, Future<T> Function() body) async {
-  if (!WindowRole.isSecondary) return body();
   final sw = Stopwatch()..start();
   try {
-    return await body();
+    return await StartupTimeline.instance.phase(name, body);
   } finally {
-    debugPrint('[window-phase] $name: ${sw.elapsedMilliseconds}ms');
+    if (WindowRole.isSecondary) {
+      debugPrint('[window-phase] $name: ${sw.elapsedMilliseconds}ms');
+    }
   }
 }
 
