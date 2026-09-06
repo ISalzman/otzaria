@@ -202,6 +202,11 @@ flutter:
     - assets/export_restricted_books.json
 
   fonts:
+    # החבילה מספקת את הגופן אך אינה מצהירה עליו, ולכן שני אייקוני ה-light
+    # שבמפת התוספים היו נטענים כריבוע ריק.
+    - family: FluentSystemIcons-Light
+      fonts:
+        - asset: packages/fluentui_system_icons/fonts/FluentSystemIcons-Light.ttf
     - family: TaameyAshkenaz
       fonts:
         - asset: fonts/TaameyAshkenaz-Medium.ttf
