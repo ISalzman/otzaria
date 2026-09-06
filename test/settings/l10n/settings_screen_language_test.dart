@@ -95,6 +95,7 @@ void main() {
       await tester.pump();
     }
 
+    // "קיצורי מקשים" מוצג רק בדסקטופ, וברירת המחדל בבדיקות היא Android.
     testWidgets('עברית — לשוניות בעברית והמסך RTL', (tester) async {
       givenLanguageCode(SettingsLanguage.hebrew.code);
       await pumpScreen(tester);
@@ -110,7 +111,7 @@ void main() {
         Directionality.of(tester.element(find.byType(SidebarNavItem).first)),
         TextDirection.rtl,
       );
-    });
+    }, variant: TargetPlatformVariant.only(TargetPlatform.windows));
 
     testWidgets('אנגלית — לשוניות באנגלית והמסך LTR', (tester) async {
       givenLanguageCode(SettingsLanguage.english.code);
@@ -128,7 +129,7 @@ void main() {
         Directionality.of(tester.element(find.byType(SidebarNavItem).first)),
         TextDirection.ltr,
       );
-    });
+    }, variant: TargetPlatformVariant.only(TargetPlatform.windows));
 
     testWidgets('אנגלית — העץ שמחוץ למסך ההגדרות נשאר RTL', (tester) async {
       givenLanguageCode(SettingsLanguage.english.code);
