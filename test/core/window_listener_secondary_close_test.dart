@@ -35,6 +35,14 @@ void main() {
   setUp(() async {
     WindowBus.namespace = _namespace;
     WindowRole.isSecondary = false;
+    // ⚠️ בלי זה כל הסוויטה בודקת את מסלול חלון-יחיד. `windowCount` ו-
+    // `closeSelf` מגודרים ב-`MultiWindowService.isSupported`, שהוא
+    // `Platform.isWindows` — כלומר על ubuntu (ה-CI) `windowCount` מחזיר
+    // 1 בלי לגעת בערוץ המדומה, `_isLastWindowClosing` עונה "כן", והרצף
+    // פונה לכיבוי התהליך במקום לסגירת החלון הבודד. הבדיקות היו ירוקות
+    // על מכונת המפתח ואדומות ב-CI, ומה שהן מתארות אינו תלוי פלטפורמה:
+    // ה-runner שמעבר לערוץ מדומה כאן ממילא.
+    MultiWindowService.debugSupportedOverride = true;
     runner = _FakeRunner()..install();
     tmp = Directory.systemTemp.createTempSync('otzaria_secclose_');
     Hive.init(tmp.path);
@@ -43,6 +51,7 @@ void main() {
 
   tearDown(() async {
     runner.uninstall();
+    MultiWindowService.debugSupportedOverride = null;
     WindowRole.isSecondary = false;
     WindowBus.instance.onRequest = null;
     WindowBus.instance.unregister();

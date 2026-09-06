@@ -1,3 +1,5 @@
+import 'dart:io' show Platform;
+
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/core/windowing/app_window_id.dart';
@@ -133,15 +135,31 @@ void main() {
     expect(methods, containsAllInOrder(['restore', 'show']));
   });
 
-  test('startDragging הוא no-op במסך מלא ב-Windows', () async {
+  test('startDragging במסך מלא — no-op ב-Windows בלבד', () async {
     // התנהגות של הספרייה שכדאי להכיר לפני שמעבירים אליה קוראים: גרירה
     // מסרגל הכותרת פשוט לא תקרה במסך מלא.
+    //
+    // ⚠️ **הבדיקה מגודרת בפלטפורמה, כי ההתנהגות עצמה מגודרת בה.** המקור
+    // הוא `if (Platform.isWindows && await isFullScreen()) return;`
+    // ב-`window_manager`, ולכן הצפייה ההפוכה — שהקריאה כן מגיעה לערוץ —
+    // היא הנכונה בכל שאר הפלטפורמות. ניסוח שבדק רק את צד Windows היה
+    // ירוק על מכונת המפתח ואדום ב-CI שרץ על ubuntu.
     boolResponses['isFullScreen'] = true;
     calls.clear();
 
     await controller.startDragging();
 
-    expect(calls.map((c) => c.method), isNot(contains('startDragging')));
+    expect(
+      calls.map((c) => c.method),
+      Platform.isWindows
+          ? isNot(contains('startDragging'))
+          : contains(
+              'startDragging',
+            ),
+      reason: Platform.isWindows
+          ? 'ב-Windows הספרייה בולעת את הגרירה במסך מלא'
+          : 'מחוץ ל-Windows אין גידור, והגרירה חייבת להגיע לערוץ',
+    );
   });
 
   test('השאילתות מחזירות את תשובת הערוץ', () async {
