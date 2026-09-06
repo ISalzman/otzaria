@@ -140,6 +140,7 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
     on<ClearTabSelection>(_onClearTabSelection, transformer: sequential());
     on<SetCurrentTab>(_onSetCurrentTab, transformer: sequential());
     on<CloseAllTabs>(_onCloseAllTabs, transformer: sequential());
+    on<AdoptTab>(_onAdoptTab, transformer: sequential());
     on<CloseOtherTabs>(_onCloseOtherTabs, transformer: sequential());
     on<CloneTab>(_onCloneTab, transformer: sequential());
     on<MoveTab>(_onMoveTab, transformer: sequential());
@@ -1167,6 +1168,36 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
     _scheduleSave(pinnedTabs, newIndex);
 
     for (final tab in tabsToDispose) {
+      _disposeTabLater(tab);
+    }
+  }
+
+  /// מחליף את תוכן החלון בכרטיסיה שאומצה, **בעדכון מצב יחיד**.
+  ///
+  /// התוצאה זהה ל-[CloseAllTabs] ואחריו [AddTab] — המוצמדות נשארות,
+  /// השאר נזכרות לשחזור ומשוחררות — אבל בלי מצב הביניים של אפס
+  /// כרטיסיות, שהוא באג ולא מצב אמיתי. ראו [AdoptTab].
+  Future<void> _onAdoptTab(AdoptTab event, Emitter<TabsState> emit) async {
+    final pinned = state.tabs.where((tab) => tab.isPinned).toList();
+    final toDispose = state.tabs.where((tab) => !tab.isPinned).toList();
+    for (var i = 0; i < state.tabs.length; i++) {
+      if (!state.tabs[i].isPinned) {
+        _rememberClosedTab(state.tabs[i], i);
+      }
+    }
+
+    final newTabs = [...pinned, event.tab];
+    final newIndex = newTabs.length - 1;
+    emit(
+      state.copyWith(
+        tabs: newTabs,
+        currentTabIndex: newIndex,
+        selectedTabs: const <OpenedTab>[],
+      ),
+    );
+    _scheduleSave(newTabs, newIndex);
+
+    for (final tab in toDispose) {
       _disposeTabLater(tab);
     }
   }

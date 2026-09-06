@@ -92,13 +92,15 @@ class _WindowBusHostState extends State<WindowBusHost> {
   /// ⚠️ חלון סגור מוסתר ולא נהרס, ולכן הוא נפתח שוב עם הכרטיסיות הישנות
   /// שלו. הן נסגרות כאן: המשתמש גרר כרטיסיה אחת החוצה וזה מה שהוא מצפה
   /// לראות, לא שרידים מחלון שסגר קודם.
+  ///
+  /// ⚠️ **ההחלפה היא אירוע אחד ([AdoptTab]) ולא `CloseAllTabs` ואחריו
+  /// `AddTab`.** הצמד העביר את המצב דרך אפס כרטיסיות, ו-`ReadingScreen`
+  /// מנווט למסך הספרייה בדיוק במעבר הזה — כלומר כל חלון שכבר היה פתוח
+  /// ונסגר נחת בספרייה במקום על הכרטיסיה שנגררה אליו.
   Future<void> _adoptPayload(String payload) async {
     final tab = MultiWindowService.decodePayload(payload);
     if (tab == null || !mounted) return;
-    final tabsBloc = context.read<TabsBloc>();
-    tabsBloc
-      ..add(CloseAllTabs())
-      ..add(AddTab(tab));
+    context.read<TabsBloc>().add(AdoptTab(tab));
     context.read<NavigationBloc>().add(
       const NavigateToScreen(Screen.reading),
     );
