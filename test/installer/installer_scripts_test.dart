@@ -44,6 +44,56 @@ String _squeeze(String value) =>
     value.replaceAll(RegExp(r'[ \t]+'), ' ').trim();
 
 void main() {
+  group('# בתחילת שורה נקרא כדירקטיבת preprocessor', () {
+    // ISPP מפרש # בתחילת שורה גם אחרי הזחה, ולכן קבוע תווים שנדחף לראש
+    // שורה בעיצוב מחדש שובר את הקומפילציה. ה-.iss אינו נבנה כאן, ולכן זו
+    // ההגנה היחידה עליו.
+    const directives = {
+      'if',
+      'ifdef',
+      'ifndef',
+      'ifexist',
+      'ifnexist',
+      'elif',
+      'else',
+      'endif',
+      'define',
+      'undef',
+      'include',
+      'error',
+      'pragma',
+      'expr',
+      'insert',
+      'sub',
+      'endsub',
+      'for',
+      'dim',
+      'emit',
+      'file',
+      'append',
+      'preproc',
+    };
+    for (final name in _scripts) {
+      test('$name: אין שורה שמתחילה ב-# שאינו דירקטיבה מוכרת', () {
+        final offenders = <String>[];
+        final lines = _script(name).split('\n');
+        for (var i = 0; i < lines.length; i++) {
+          final match = RegExp(r'^\s*#([A-Za-z_]*)').firstMatch(lines[i]);
+          if (match == null) continue;
+          if (directives.contains(match.group(1)!.toLowerCase())) continue;
+          offenders.add('${i + 1}: ${lines[i].trim()}');
+        }
+        expect(
+          offenders,
+          isEmpty,
+          reason:
+              'שורות אלה ייכשלו ב-ISCC עם "Unknown preprocessor directive" — '
+              'יש להמשיך בהן שורה קיימת:\n${offenders.join('\n')}',
+        );
+      });
+    }
+  });
+
   group('system_install.marker — כתיבה ומחיקה סימטריות', () {
     for (final name in _scripts) {
       test('$name: המסמן נכתב רק בהתקנת מנהל לא-ניידת', () {
