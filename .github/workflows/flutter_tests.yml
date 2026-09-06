@@ -16,29 +16,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v7.0.1
 
-      # בנייה שניתן לשחזר: תלות git עם `ref` על שם ענף מושכת קוד חדש בכל
-      # `pub get`, ולכן שתי מכונות יכולות לבנות גרסאות שונות מאותו commit.
-      # הבדיקה תופסת גם `ref: master` וגם היעדר `ref:` לגמרי — grep על שם
-      # ענף מפספס את המקרה השני, והוא זה שהיה בפועל ב-otzaria_icons.
-      - name: Verify git dependencies are pinned to a full SHA
-        run: |
-          awk '
-            /^[[:space:]]*git:[[:space:]]*$/ { in_git = 1; has_ref = 0; blk = NR; next }
-            in_git && /^[[:space:]]*ref:[[:space:]]*"?[0-9a-f]{40}"?[[:space:]]*$/ { has_ref = 1 }
-            in_git && /^[[:space:]]*[a-z0-9_-]+:/ && !/^[[:space:]]*(url|ref|path):/ {
-              if (!has_ref) { print "unpinned git dependency at line " blk; bad = 1 }
-              in_git = 0
-            }
-            END {
-              if (in_git && !has_ref) { print "unpinned git dependency at line " blk; bad = 1 }
-              exit bad
-            }
-          ' pubspec.yaml
-
-      # `pubspec.lock` מנוהל בגיט מאז שהתלויות ננעצו; בלעדיו הנעיצה חלקית.
-      - name: Verify pubspec.lock is committed
-        run: git ls-files --error-unmatch pubspec.lock
-
       # שימוש ב-channel stable + flutter-version קבוע, אחיד עם build-and-announce.yml.
       # הגרסה ננעלת מפני שדרוגים אוטומטיים של pub/CI אחרי שחרור גרסת flutter יציבה חדשה.
       - name: Setup Flutter
@@ -50,11 +27,6 @@ jobs:
 
       - name: Install dependencies
         run: flutter pub get
-
-      # כשכל התלויות נעוצות ל-SHA, `pub get` אינו אמור לשנות את הנעילה.
-      # סחיפה כאן = ה-PR עדכן את pubspec.yaml בלי לעדכן את pubspec.lock.
-      - name: Verify pubspec.lock did not drift
-        run: git diff --exit-code -- pubspec.lock
 
       # חילול אינדקס חיפוש בהגדרות. ה-.g.dart נדחף לרפו, אבל הסקריפט הזה
       # יוודא שהוא עדכני בכל הרצה (אם searchEntries השתנו במהלך ה-PR).

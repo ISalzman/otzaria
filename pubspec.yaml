@@ -98,7 +98,7 @@ dependencies:
   flutter_inappwebview:
     git:
       url: https://github.com/Otzaria/flutter_inappwebview
-      ref: 9a517950c04ac42493a990a4b583be72272e91aa
+      ref: master
       path: flutter_inappwebview
   # נדרש ישירות עבור WindowsFileDropManager (גרירת קבצים אל החלון).
   flutter_inappwebview_windows: any
@@ -113,22 +113,22 @@ dependency_overrides:
   flutter_inappwebview_windows:
     git:
       url: https://github.com/Otzaria/flutter_inappwebview
-      ref: 9a517950c04ac42493a990a4b583be72272e91aa
+      ref: master
       path: flutter_inappwebview_windows
   flutter_inappwebview_platform_interface:
     git:
       url: https://github.com/Otzaria/flutter_inappwebview
-      ref: 9a517950c04ac42493a990a4b583be72272e91aa
+      ref: master
       path: flutter_inappwebview_platform_interface
   flutter_inappwebview_ios:
     git:
       url: https://github.com/Otzaria/flutter_inappwebview
-      ref: 9a517950c04ac42493a990a4b583be72272e91aa
+      ref: master
       path: flutter_inappwebview_ios
   flutter_inappwebview_macos:
     git:
       url: https://github.com/Otzaria/flutter_inappwebview
-      ref: 9a517950c04ac42493a990a4b583be72272e91aa
+      ref: master
       path: flutter_inappwebview_macos
 
 flutter_launcher_icons:
