@@ -20,6 +20,9 @@ class _StubTab extends OpenedTab {
   _StubTab(super.title);
 
   @override
+  OpenedTab clone() => _StubTab(title)..isPinned = isPinned;
+
+  @override
   Map<String, dynamic> toJson() => {'type': '_StubTab', 'title': title};
 }
 

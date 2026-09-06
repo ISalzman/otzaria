@@ -115,15 +115,18 @@ void main() {
   test('סימניות והיסטוריה מתווספות, והמקומיות נשמרות', () async {
     final repo = BookmarkRepository();
     final history = HistoryRepository();
-    await repo.saveBookmarks([
+    await repo.replaceBookmarks([
       buildBookmark('משותף'),
       buildBookmark('מהגיבוי'),
     ]);
-    await history.saveHistory([buildBookmark('היסטוריה מהגיבוי')]);
+    await history.replaceHistory([buildBookmark('היסטוריה מהגיבוי')]);
     final path = await createFullBackup();
 
-    await repo.saveBookmarks([buildBookmark('משותף'), buildBookmark('מקומי')]);
-    await history.saveHistory([buildBookmark('היסטוריה מקומית')]);
+    await repo.replaceBookmarks([
+      buildBookmark('משותף'),
+      buildBookmark('מקומי'),
+    ]);
+    await history.replaceHistory([buildBookmark('היסטוריה מקומית')]);
 
     final added = await importMerge(path);
 
@@ -151,18 +154,18 @@ void main() {
 
   test('שולחן עבודה מיובא נוסף ואינו מחליף את הקיימים', () async {
     final repo = WorkspaceRepository();
-    await repo.saveWorkspaces([
+    await repo.replaceWorkspaces([
       Workspace(id: 'from-backup', name: 'לימוד', tabs: const []),
     ], 'from-backup');
     final path = await createFullBackup();
 
-    await repo.saveWorkspaces([
+    await repo.replaceWorkspaces([
       Workspace(id: 'local', name: 'לימוד', tabs: const []),
     ], 'local');
 
     final added = await importMerge(path);
 
-    final (workspaces, currentId) = repo.loadWorkspaces();
+    final (workspaces, currentId) = await repo.loadWorkspaces();
     expect(workspaces.map((w) => w.name), ['לימוד', 'לימוד (ממכשיר אחר)']);
     expect(currentId, 'local', reason: 'השולחן הפעיל אינו זז בייבוא');
     expect(added?.workspaces, 1);
@@ -204,8 +207,8 @@ void main() {
   });
 
   test('ייבוא חוזר של אותו קובץ אינו מוסיף דבר', () async {
-    await BookmarkRepository().saveBookmarks([buildBookmark('ספר')]);
-    await WorkspaceRepository().saveWorkspaces([
+    await BookmarkRepository().replaceBookmarks([buildBookmark('ספר')]);
+    await WorkspaceRepository().replaceWorkspaces([
       Workspace(id: 'w1', name: 'לימוד', tabs: const []),
     ], 'w1');
     final path = await createFullBackup();

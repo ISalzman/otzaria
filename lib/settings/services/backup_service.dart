@@ -1304,11 +1304,16 @@ class BackupService {
         .map((data) => Workspace.fromJson(data))
         .toList();
     if (counts != null) {
-      final (existing, currentId) = repo.loadWorkspaces();
+      final (existing, _) = await repo.loadWorkspaces();
       final toAdd = BackupImportMerge.workspacesToAdd(existing, workspaces);
       if (toAdd.isEmpty) return;
       counts.workspaces += toAdd.length;
-      await repo.saveWorkspaces([...existing, ...toAdd], currentId);
+      await repo.mutateWorkspaces(
+        (current) => [
+          ...current,
+          ...BackupImportMerge.workspacesToAdd(current, workspaces),
+        ],
+      );
       return;
     }
     final currentId = _resolveCurrentWorkspaceId(

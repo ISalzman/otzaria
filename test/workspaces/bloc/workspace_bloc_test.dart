@@ -113,7 +113,7 @@ void main() {
       final allowTabReplacement = Completer<void>();
       final bloc = WorkspaceBloc(
         repository: repository,
-        onWorkspaceTabsChanged: (_, _) {
+        onWorkspaceTabsChanged: (_, _, _) {
           callbackStarted.complete();
           return allowTabReplacement.future;
         },
