@@ -1698,8 +1698,8 @@ void _maybeScheduleDebugSecondWindow() {
 /// נתונים משלו, ולכן לכל חלון יש PDFium משלו — כולל font mapper משלו.
 /// המחיר: עותק DLL בתיקיית החלון (נמחקת בהפעלה קרה) ומודול נוסף בזיכרון.
 ///
-/// כשל כאן אינו עוצר את החלון: הוא נרשם ללוג, וה-pre-warm מדולג בחלונות
-/// משניים בכל מקרה — כך שהחשיפה מצטמצמת ל-PDF שהמשתמש פותח בפועל.
+/// כשל כאן עוצר את החלון המשני לפני הפעלת Flutter, כדי שלא ישתף PDFium
+/// עם החלון הראשי ויפיל את ה-VM בעת פתיחת PDF.
 Future<void> _isolatePdfiumForThisWindow(String windowRoot) async {
   if (kIsWeb || !Platform.isWindows) return;
   try {
@@ -1735,6 +1735,7 @@ Future<void> _isolatePdfiumForThisWindow(String windowRoot) async {
     } catch (_) {
       // רישום ללוג הוא best-effort.
     }
+    rethrow;
   }
 }
 

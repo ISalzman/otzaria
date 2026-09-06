@@ -111,7 +111,7 @@ void main() {
         Directionality.of(tester.element(find.byType(SidebarNavItem).first)),
         TextDirection.rtl,
       );
-    }, variant: TargetPlatformVariant.only(TargetPlatform.windows));
+    }, variant: _desktopOnly);
 
     testWidgets('אנגלית — לשוניות באנגלית והמסך LTR', (tester) async {
       givenLanguageCode(SettingsLanguage.english.code);
@@ -129,7 +129,7 @@ void main() {
         Directionality.of(tester.element(find.byType(SidebarNavItem).first)),
         TextDirection.ltr,
       );
-    }, variant: TargetPlatformVariant.only(TargetPlatform.windows));
+    }, variant: _desktopOnly);
 
     testWidgets('אנגלית — העץ שמחוץ למסך ההגדרות נשאר RTL', (tester) async {
       givenLanguageCode(SettingsLanguage.english.code);

@@ -981,6 +981,13 @@ class MainWindowScreenState extends State<MainWindowScreen>
     BuildContext context,
     library_model.Library library,
   ) async {
+    if (WindowRole.isSecondary) {
+      _startupWorkGate.markIndexingDecisionResolved(expectIndexing: false);
+      _tryStartDeferredStartupWork();
+      context.read<IndexingBloc>().add(CheckIndexStatus(library));
+      return;
+    }
+
     final autoUpdateIndex = context.read<SettingsBloc>().state.autoUpdateIndex;
 
     final requiresManualReindex = await _indexingRepository
@@ -1001,7 +1008,9 @@ class MainWindowScreenState extends State<MainWindowScreen>
 
     switch (decision) {
       case StartupIndexingDecision.autoReindexThenStart:
-        await _indexingRepository.clearIndex();
+        if (!await _indexingRepository.clearIndex()) {
+          return;
+        }
         if (!mounted || !context.mounted) {
           return;
         }
@@ -1050,7 +1059,9 @@ class MainWindowScreenState extends State<MainWindowScreen>
         return;
       }
 
-      await _indexingRepository.clearIndex();
+      if (!await _indexingRepository.clearIndex()) {
+        return;
+      }
       if (!mounted || !context.mounted) {
         return;
       }

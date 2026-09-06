@@ -72,6 +72,8 @@ class IndexingBloc extends Bloc<IndexingEvent, IndexingState> {
     IndexingWorkEvent event,
     Emitter<IndexingState> emit,
   ) async {
+    if (_rejectIndexMutationInSecondaryWindow(emit)) return;
+
     _isFinalizing = false;
     _finalizingProgress = null;
     // ריצה חדשה מתחילה ללא השהיה; המצב החסכוני נשמר בין ריצות.
@@ -196,15 +198,6 @@ class IndexingBloc extends Bloc<IndexingEvent, IndexingState> {
     StartIndexing event,
     Emitter<IndexingState> emit,
   ) async {
-    // ⚠️ אינדוקס בחלון משני **אינו יכול** להצליח: Tantivy נועל את ה-writer
-    // בלעדית, והחלון הראשון מחזיק את הנעילה (נמדד `LockBusy` בעליית כל
-    // חלון משני). בלי הגידור הפעולה נכשלה עמוק בתוך ה-FFI, המשתמש ראה
-    // סרגל התקדמות שלא זז, ואינדוקס אמיתי לא רץ בשום חלון.
-    if (WindowRole.isSecondary) {
-      UiSnack.show(WindowMessages.indexingOnlyInMainWindow);
-      emit(IndexingInitial());
-      return;
-    }
     final workId = ++_nextWorkId;
     _activeWorkId = workId;
 
@@ -476,9 +469,17 @@ class IndexingBloc extends Bloc<IndexingEvent, IndexingState> {
     ClearIndex event,
     Emitter<IndexingState> emit,
   ) async {
+    if (_rejectIndexMutationInSecondaryWindow(emit)) return;
     _activeWorkId = null;
-    await _repository.clearIndex();
+    if (!await _repository.clearIndex()) return;
     emit(IndexingInitial());
+  }
+
+  bool _rejectIndexMutationInSecondaryWindow(Emitter<IndexingState> emit) {
+    if (!WindowRole.isSecondary) return false;
+    UiSnack.show(WindowMessages.indexingOnlyInMainWindow);
+    emit(IndexingInitial());
+    return true;
   }
 
   /// Handles the UpdateIndexingProgress event
