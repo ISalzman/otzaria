@@ -1122,9 +1122,11 @@ void main() {
       expect(
         _workflowStep('Bundle plugins into the app bundle'),
         contains(
-          'Contents/MacOS/${AppPaths.bundledPluginsFolderName}',
+          'Contents/Resources/${AppPaths.bundledPluginsFolderName}',
         ),
-        reason: 'התיקייה חייבת לשבת ליד ה-executable בתוך ה-bundle',
+        reason:
+            'Contents/MacOS שמורה לקוד — קובצי נתונים בה פוסלים את החתימה; '
+            'הנתיב חייב להתאים ל-AppPaths.getBundledPluginsPath',
       );
 
       final workflow = File(
@@ -1134,6 +1136,61 @@ void main() {
         workflow.indexOf('- name: Bundle plugins into the app bundle'),
         lessThan(workflow.indexOf('- name: Create DMG installer')),
         reason: 'הזרקה אחרי ה-DMG משאירה את המתקין של מק בלי התוספים',
+      );
+    });
+
+    test('מק: ה-.app נחתם מחדש ונבדק אחרי ההזרקה ולפני האריזה', () {
+      final workflow = File(
+        '.github/workflows/build-and-announce.yml',
+      ).readAsStringSync().replaceAll('\r\n', '\n');
+      final resign = workflow.indexOf(
+        '- name: Re-sign and verify the app bundle',
+      );
+
+      expect(
+        resign,
+        greaterThan(
+          workflow.indexOf('- name: Bundle plugins into the app bundle'),
+        ),
+        reason: 'חתימה לפני ההזרקה מתבטלת שוב ברגע שהקבצים נכנסים',
+      );
+      for (final step in const [
+        '- name: Create DMG installer',
+        '- name: Create macOS update zip',
+        '- name: Create macOS FULL portable bundle',
+      ]) {
+        expect(
+          resign,
+          lessThan(workflow.indexOf(step)),
+          reason: '$step אורז bundle שחתימתו שבורה — Gatekeeper יפסול אותו',
+        );
+      }
+
+      final step = _workflowStep('Re-sign and verify the app bundle');
+      expect(step, contains('codesign --force --sign -'));
+      expect(
+        step,
+        contains('--entitlements macos/Runner/Release.entitlements'),
+        reason: 'חתימה מחדש בלי ההרשאות מוחקת אותן מהבינארי',
+      );
+      expect(
+        step,
+        contains('codesign --verify --deep --strict'),
+        reason: 'בלי שער האימות bundle פגום עובר בשקט אל המשתמשים',
+      );
+
+      expect(
+        File('macos/Runner/Release.entitlements').existsSync(),
+        isTrue,
+        reason: 'הנתיב מקודד בפקודת החתימה — העברת הקובץ תפיל את ה-CI',
+      );
+
+      // ‏'Contents/Resources' מקודד כאן ובנפרד ב-app_paths.dart; בלי הקישור
+      // הזה שינוי בצד אחד משאיר את הטסטים ירוקים והאפליקציה בלי תוספים.
+      expect(
+        File('lib/core/app_paths.dart').readAsStringSync(),
+        contains("p.join(exeDir, '..', 'Resources', bundledPluginsFolderName)"),
+        reason: 'קוד הריצה במק חייב לחפש באותו נתיב שה-workflow מעתיק אליו',
       );
     });
   });

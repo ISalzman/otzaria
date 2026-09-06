@@ -1970,8 +1970,8 @@ jobs:
         run: bash installer/download_bundled_plugins.sh macos
 
       # רץ לפני יצירת ה-DMG — כך הארכיונים מגיעים גם ל-zip העדכון ולחבילת
-      # ה-FULL, שמעתיקים את אותו .app. התיקייה יושבת ליד ה-executable
-      # (Contents/MacOS), הנתיב ש-AppPaths.getBundledPluginsPath מחפש.
+      # ה-FULL, שמעתיקים את אותו .app. Contents/Resources היא מקום הנתונים
+      # ב-bundle, הנתיב ש-AppPaths.getBundledPluginsPath מחפש במק.
       - name: Bundle plugins into the app bundle
         shell: bash
         run: |
@@ -1982,7 +1982,22 @@ jobs:
           fi
           APP_PATH=$(find build/macos/Build/Products/Release -maxdepth 1 -name "*.app" | head -1)
           [ -n "$APP_PATH" ] || { echo "::error::No .app bundle found for plugin bundling"; exit 1; }
-          cp -R installer/bundled_plugins "$APP_PATH/Contents/MacOS/bundled_plugins"
+          cp -R installer/bundled_plugins "$APP_PATH/Contents/Resources/bundled_plugins"
+
+      # כל שינוי בתוכן ה-bundle מבטל את חותם _CodeSignature, ואז Gatekeeper
+      # מכריז אצל המשתמש "האפליקציה פגומה". חייב לרוץ לפני ה-DMG וה-zip-ים.
+      - name: Re-sign and verify the app bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP_PATH=$(find build/macos/Build/Products/Release -maxdepth 1 -name "*.app" | head -1)
+          [ -n "$APP_PATH" ] || { echo "::error::No .app bundle found for re-signing"; exit 1; }
+          # אותה חתימה ad-hoc שה-Xcode עושה (CODE_SIGN_IDENTITY = "-"); בלי
+          # --entitlements החתימה מחדש מוחקת את ההרשאות שהבינארי קיבל.
+          codesign --force --sign - \
+            --entitlements macos/Runner/Release.entitlements \
+            "$APP_PATH"
+          codesign --verify --deep --strict --verbose=2 "$APP_PATH"
 
       - name: Create DMG installer
         run: |
