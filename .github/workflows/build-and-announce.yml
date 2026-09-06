@@ -179,9 +179,9 @@ jobs:
       #     path: |
       #       ${{ env.CARGO_HOME }}\registry
       #       ${{ env.CARGO_HOME }}\git
-      #     key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+      #     key: ${{ runner.os }}-${{ runner.arch }}-cargo-${{ hashFiles('pubspec.yaml') }}
       #     restore-keys: |
-      #       ${{ runner.os }}-cargo-
+      #       ${{ runner.os }}-${{ runner.arch }}-cargo-
 
       # - name: Add cargo to PATH & verify toolchain
       #   shell: pwsh
@@ -876,10 +876,12 @@ jobs:
           path: |
             ${{ env.CARGO_HOME }}/registry
             ${{ env.CARGO_HOME }}/git
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          # אין Cargo.lock ב-repo (מנוע החיפוש מגיע כחבילת pub), לכן hashFiles עליו
+          # מחזיר ריק והמפתח נשאר קבוע — ומפתח מטמון שנשמר לא מתעדכן לעולם.
+          key: ${{ runner.os }}-${{ runner.arch }}-cargo-${{ hashFiles('pubspec.yaml') }}
           restore-keys: |
-            ${{ runner.os }}-cargo-
-      
+            ${{ runner.os }}-${{ runner.arch }}-cargo-
+
       - name: Install Linux build dependencies
         shell: bash
         run: |
@@ -1184,7 +1186,9 @@ jobs:
 
           # 1. הרץ את פקודת הבנייה, אבל תפוס את הכישלון כדי שנוכל לתקן אחריו
           echo "Attempting to build with flutter_distributor, it might fail..."
-          flutter_distributor release --name=production --jobs=release-linux-deb || true
+          # --skip-clean: בלעדיו ה-distributor מריץ flutter clean ובונה מאפס
+          # (Rust + CMake) את מה שכבר נבנה בשלב הקודם — ~9 דקות לפח.
+          flutter_distributor release --name=production --jobs=release-linux-deb --skip-clean || true
 
           # 2. שני מסלולים: אם ה-distributor הצליח (Depends תקין) — נפרק את ה-deb
           # שיצר כדי להזריק את ה-WPE runtime; אם נכשל — נשאר עץ מפורק עם control.
@@ -1273,7 +1277,8 @@ jobs:
 
           # 1. הרץ את פקודת הבנייה הבעייתית, ותפוס את הכישלון
           echo "Attempting to build with flutter_distributor, expecting it to fail..."
-          flutter_distributor release --name=production --jobs=release-linux-rpm || true
+          # --skip-clean: ראה ההסבר בשלב ה-deb — בלעדיו זו בנייה מלאה נוספת.
+          flutter_distributor release --name=production --jobs=release-linux-rpm --skip-clean || true
 
           # 2. מצא את קובץ ה-spec הפגום שהכלי יצר
           SPEC_FILE=$(find dist -type f -name "*.spec" | head -n 1)
@@ -1610,9 +1615,10 @@ jobs:
             ${{ env.CARGO_HOME }}/registry
             ${{ env.CARGO_HOME }}/git
             ${{ env.RUSTUP_HOME }}
-          key: ${{ runner.os }}-rust-android-${{ hashFiles('**/Cargo.lock') }}
+          # אין Cargo.lock ב-repo — ראה ההסבר בשלב המקביל ב-build_linux.
+          key: ${{ runner.os }}-${{ runner.arch }}-rust-android-${{ hashFiles('pubspec.yaml') }}
           restore-keys: |
-            ${{ runner.os }}-rust-android-
+            ${{ runner.os }}-${{ runner.arch }}-rust-android-
 
       - name: Pre-install Android Rust targets (with retry)
         run: |
@@ -1669,9 +1675,9 @@ jobs:
         with:
           path: |
             ~/.pub-cache
-          key: ${{ runner.os }}-pub-${{ hashFiles('**/pubspec.lock') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-pub-${{ hashFiles('pubspec.yaml') }}
           restore-keys: |
-            ${{ runner.os }}-pub-
+            ${{ runner.os }}-${{ runner.arch }}-pub-
       
       - name: Create Google Calendar Credentials
         shell: bash
@@ -1897,9 +1903,10 @@ jobs:
           path: |
             ${{ env.CARGO_HOME }}/registry
             ${{ env.CARGO_HOME }}/git
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          # אין Cargo.lock ב-repo — ראה ההסבר בשלב המקביל ב-build_linux.
+          key: ${{ runner.os }}-${{ runner.arch }}-cargo-${{ hashFiles('pubspec.yaml') }}
           restore-keys: |
-            ${{ runner.os }}-cargo-
+            ${{ runner.os }}-${{ runner.arch }}-cargo-
 
       - name: Fetch biographies data
         uses: ./.github/actions/fetch-biographies
