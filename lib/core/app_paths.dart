@@ -27,7 +27,8 @@ class AppPaths {
   static const String prebuiltIndexMarkerFileName = '.otzaria_prebuilt_index';
 
   /// שם תיקיית הספרייה בתוך חבילות FULL ל-Linux ו-macOS.
-  static const String _bundledLibraryFolderName = 'אוצריא';
+  //static const String _bundledLibraryFolderName = 'אוצריא';
+  static const String _bundledLibraryFolderName = 'otzaria_library';
 
   /// קובץ marker שמפעיל מצב נייד (portable): כשהוא קיים ליד ה-executable,
   /// כל נתוני האפליקציה נשמרים בתיקיית [_portableDataFolderName] ליד
@@ -553,7 +554,8 @@ class AppPaths {
   }
 
   /// שם תיקיית ברירת המחדל לגיבויים תחת מסמכי המשתמש בדסקטופ.
-  static const String _documentsBackupFolderName = 'אוצריא - גיבויים';
+  //static const String _documentsBackupFolderName = 'אוצריא - גיבויים';
+  static const String _documentsBackupFolderName = 'otzaria_backups';
   static const String _legacyBackupMigrationMarker =
       '.otzaria-legacy-migration-complete';
 
