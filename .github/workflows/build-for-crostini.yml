@@ -44,7 +44,7 @@ jobs:
           WPE_RUNTIME_SHA256: "ca7e706c0ec2f66623fede2c369e3e13339448843e125f2ccd1553f4a3c4bcaf"
           WPE_RUNTIME_REPO: "Otzaria/otzaria-wpe-runtime"
         run: |
-          WPE_RUNTIME_TAG="wpe-${WPE_RUNTIME_VERSION}-primt-to-pdf"
+          WPE_RUNTIME_TAG="wpe-${WPE_RUNTIME_VERSION}-print-to-pdf"
           WPE_RUNTIME_ASSET="wpe-runtime-${WPE_RUNTIME_VERSION}-linux-${{ matrix.arch }}.tar.zst"
           WPE_RUNTIME_BASEURL="https://github.com/${WPE_RUNTIME_REPO}/releases/download/${WPE_RUNTIME_TAG}"
 
