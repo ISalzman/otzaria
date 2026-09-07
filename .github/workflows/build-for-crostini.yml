@@ -120,6 +120,8 @@ jobs:
           RPATH=$(patchelf --print-rpath $BUNDLE_DIR/lib/libzstandard_linux_plugin.so)
           patchelf --set-rpath "\$ORIGIN:$RPATH" $BUNDLE_DIR/lib/libzstandard_linux_plugin.so
 
+          [[ -d installer/bundled_plugins ]] && cp -r installer/bundled_plugins "${BUNDLE_DIR}/bundled_plugins"
+
           # Remove WPE Runtime libraries
           rm -f $BUNDLE_DIR/lib/libwpe*
           rm -f $BUNDLE_DIR/lib/libWPE*
