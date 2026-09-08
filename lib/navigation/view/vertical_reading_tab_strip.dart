@@ -125,6 +125,7 @@ class _VerticalReadingTabStripState extends State<VerticalReadingTabStrip> {
           onTabSnapshot: (_, snapshot) =>
               _crossWindowDrag.applySnapshot(snapshot),
           onDragFinishedAnywhere: _crossWindowDrag.end,
+          onDragLeftStrip: _crossWindowDrag.notePointerLeftStrip,
           onDroppedOutside: MultiWindowService.isSupported
               ? (tab) => _crossWindowDrag.handleDroppedOutside(
                   tab,

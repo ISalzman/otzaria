@@ -414,15 +414,21 @@ class MultiWindowService {
   /// של "שוחרר על שולחן העבודה". כלומר כשל ערוץ פתח חלון חדש בפינה (0,0)
   /// ומחק את הכרטיסיה מהמקור.
   ///
-  /// [approachingTop] הוא "הסמן מתקרב לראש **הצג שתחת הסמן**". הוא מחושב
-  /// בנייטיב ולא כאן, כי הוא תלוי בגבולות הצג וב-DPI שלו — ובמערך
-  /// רב-צגים ראש הצג אינו y=0. ראו `CrossWindowTabDrag`.
+  /// [approachingTop] הוא "הסמן מתקרב לראש **הצג שתחת הסמן**", ו-
+  /// [minUpwardTravel] הוא הנסיעה מעלה (בפיקסלים פיזיים) שנדרשת שם כדי
+  /// שההתקרבות תיחשב יציאה. שניהם מחושבים בנייטיב ולא כאן, כי הם תלויים
+  /// בגבולות הצג וב-DPI שלו — ובמערך רב-צגים ראש הצג אינו y=0.
+  ///
+  /// ⚠️ **שניהם** מגיעים משם, ומאותה סיבה: הם מושווים זה לזה. גרסה
+  /// קודמת החזיקה את הנסיעה כקבוע פיזי ב-Dart בעוד האזור מוכפל ב-DPI,
+  /// והיחס ביניהם השתנה עם קנה המידה. ראו `CrossWindowTabDrag`.
   Future<
     ({
       int? slot,
       bool isSelf,
       bool isShellTray,
       bool approachingTop,
+      int minUpwardTravel,
       int x,
       int y,
     })?
@@ -439,6 +445,9 @@ class MultiWindowService {
         isSelf: info['isSelf'] == true,
         isShellTray: info['isShellTray'] == true,
         approachingTop: info['approachingTop'] == true,
+        // ברירת מחדל שמרנית: בלי הערך מהנייטיב נדרשת נסיעה גדולה יותר,
+        // ולא קטנה.
+        minUpwardTravel: (info['minUpwardTravel'] as int?) ?? 24,
         x: (info['x'] as int?) ?? 0,
         y: (info['y'] as int?) ?? 0,
       );

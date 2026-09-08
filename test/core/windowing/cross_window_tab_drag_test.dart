@@ -560,8 +560,12 @@ void main() {
     //    אינה משאירה שום נסיעה שתיראה כמו כניסה. יציאה בצד
     //    (`cursor=(890,134)`) כן קיבלה מסדר חלונות; `(582,0)` לא.
     //
-    // לכן המסירה מוקדמת, והנסיעה מעלה היא מה שמפריד אותה מסידור
-    // כרטיסיות — מחווה אופקית שאינה עולה.
+    // ⚠️ ומה שמפריד את המסירה מסידור כרטיסיות הוא **יציאה מהרצועה**,
+    // ולא גאומטריית המסך. גרסה ראשונה של התיקון גידרה לפי אזור
+    // ההתקרבות ולפי נסיעה מעלה, בהנחה שהאזור נשאר מעל הרצועה — והנחה
+    // זו שגויה: הרצועה **היא** הסרגל העליון (0..40 יחידות לוגיות),
+    // והאזור (28) יושב בתוכה. סקירה מצאה את זה, והבדיקות כאן שחזרו:
+    // סידור אופקי עם סחיפה מעלה נמסר למערכת והמחווה אבדה.
 
     /// די לכמה פעימות של 60ms, בזמן אמת.
     const settle = Duration(milliseconds: 200);
@@ -584,10 +588,15 @@ void main() {
     ///
     /// [withMock] הוא ברירת המחדל כי זה המצב האמיתי: הרצועה מרכיבה את מוק
     /// החלון ושולחת אותו בתחילת כל גרירה. המסירה המוקדמת ממתינה לו.
+    ///
+    /// [leftStrip] מדמה את מה שהרצועה מדווחת ב-`onLeave` — הסמן משך את
+    /// הכרטיסיה מחוץ לרצועה. ברירת המחדל היא **סידור**, כלומר בלי יציאה,
+    /// כדי שבדיקה שלא הצהירה על יציאה לא תיהנה מהמסירה בשקט.
     Future<bool Function()> startDragAt(
       OpenedTab tab,
       int fromY, {
       bool withMock = true,
+      bool leftStrip = false,
     }) async {
       overSelf();
       runner.cursorY = fromY;
@@ -599,6 +608,7 @@ void main() {
         tabsBloc: tabsBloc,
         cancelDrag: () => cancelled = true,
       );
+      if (leftStrip) drag.notePointerLeftStrip();
       if (withMock) await applyMock(drag);
       await Future<void>.delayed(const Duration(milliseconds: 100));
       return () => cancelled;
@@ -611,7 +621,7 @@ void main() {
     }
 
     test('נסיעה מעלה אל אזור ההתקרבות מוסרת את הגרירה למערכת', () async {
-      final cancelled = await startDragAt(firstTab(), 200);
+      final cancelled = await startDragAt(firstTab(), 200, leftStrip: true);
       expect(runner.systemDragCalls, 0, reason: 'ברצועה — אין מסירה');
 
       moveToTop(20);
@@ -630,7 +640,7 @@ void main() {
       // המשתמש ממשיך לנסוע מעלה בתוך לולאת ההזזה של Windows, וזו
       // הנסיעה שה-shell רואה כ"החלון נכנס לאזור העליון". מסירה
       // ב-`y=0` — מה שהיה קורה קודם — אינה משאירה כלום.
-      await startDragAt(firstTab(), 200);
+      await startDragAt(firstTab(), 200, leftStrip: true);
       moveToTop(20);
       await Future<void>.delayed(settle);
 
@@ -654,7 +664,7 @@ void main() {
         height: 1040,
       );
 
-      await startDragAt(firstTab(), 200);
+      await startDragAt(firstTab(), 200, leftStrip: true);
       moveToTop(20);
       await Future<void>.delayed(settle);
 
@@ -679,7 +689,7 @@ void main() {
         height: 678,
       );
 
-      await startDragAt(firstTab(), 200);
+      await startDragAt(firstTab(), 200, leftStrip: true);
       moveToTop(20);
       await Future<void>.delayed(settle);
 
@@ -688,11 +698,74 @@ void main() {
       expect(tabsBloc.events, isEmpty, reason: 'הכרטיסיה לא זזה');
     });
 
+    test('⚠️ סידור אופקי עם סחיפה מעלה בתוך הרצועה אינו נמסר', () async {
+      // ⚠️ הרגרסיה שהסקירה מצאה, ושהבדיקה הזו שחזרה לפני התיקון.
+      //
+      // הרצועה **היא** הסרגל העליון (0..40 יחידות לוגיות), ואזור
+      // ההתקרבות (28) יושב בתוכה — כלומר תפיסה בשליש התחתון של כרטיסיה
+      // וסחיפה מעלה בזמן סידור נמסרה למערכת, גרירת Flutter בוטלה,
+      // ו-`MoveTab` לא נורה מעולם. הסידור פשוט אבד.
+      //
+      // ‎`leftStrip: false` — סידור אינו יוצא מהרצועה, וזה כל ההבדל.
+      final cancelled = await startDragAt(firstTab(), 35);
+      moveToTop(8);
+      await Future<void>.delayed(settle);
+
+      expect(runner.systemDragCalls, 0, reason: 'הסידור נחטף למסירה');
+      expect(cancelled(), isFalse, reason: 'גרירת Flutter בוטלה באמצע סידור');
+      expect(tabsBloc.events, isEmpty);
+    });
+
+    test('⚠️ סידור ברצועה האנכית — שעולה מעצמו — אינו נמסר', () async {
+      // ⚠️ ברצועה האנכית זה גרוע יותר: שם סידור **הוא** מחווה שעולה,
+      // ומעבר של משבצת אחת (`kVerticalTabHeight` = 38) עובר את סף
+      // הנסיעה בעצמו. גרירה של הכרטיסיה השלישית למקום הראשון בחלון
+      // שצמוד לראש המסך נמסרה למערכת.
+      final cancelled = await startDragAt(firstTab(), 78);
+      moveToTop(20);
+      await Future<void>.delayed(settle);
+
+      expect(runner.systemDragCalls, 0);
+      expect(cancelled(), isFalse);
+      expect(tabsBloc.events, isEmpty);
+    });
+
+    test('⚠️ סידור של כרטיסיה שאינה ניתנת להעברה אינו מציג שגיאה', () async {
+      // ⚠️ `_rejectTransfer` במסלול שבתוך החלון הפך סידור מקומי של
+      // כרטיסיה כזו להודעת שגיאה "אי אפשר להעביר לחלון אחר" — משפט
+      // שאינו נכון על מה שהמשתמש עשה — וגם ביטל את הגרירה. ההודעה
+      // נשארת רק במסלול היציאה מהחלון, שם היא מתארת את הכוונה.
+      tabsBloc.emitState(
+        TabsState(tabs: [_UnserializableTab(), firstTab()], currentTabIndex: 0),
+      );
+
+      final cancelled = await startDragAt(tabsBloc.state.tabs.first, 35);
+      moveToTop(8);
+      await Future<void>.delayed(settle);
+
+      expect(cancelled(), isFalse, reason: 'הסידור בוטל בגלל הודעת שגיאה');
+      expect(runner.systemDragCalls, 0);
+      expect(tabsBloc.events, isEmpty);
+    });
+
+    test('⚠️ כרטיסיה שאינה ניתנת להעברה אינה נמסרת גם אחרי יציאה', () async {
+      tabsBloc.emitState(
+        TabsState(tabs: [_UnserializableTab(), firstTab()], currentTabIndex: 0),
+      );
+
+      await startDragAt(tabsBloc.state.tabs.first, 200, leftStrip: true);
+      moveToTop(20);
+      await Future<void>.delayed(settle);
+
+      expect(runner.systemDragCalls, 0);
+      expect(tabsBloc.events, isEmpty);
+    });
+
     test('⚠️ סידור כרטיסיות ברצועה אינו נחטף', () async {
       // ⚠️ הבדיקה שמגנה על המחווה הנפוצה. אזור ההתקרבות חייב להישאר
       // **מעל** רצועת הכרטיסיות: מסירה שהייתה נוגעת בה מבטלת את גרירת
       // Flutter באמצע סידור, כלומר הסידור אובד.
-      final cancelled = await startDragAt(firstTab(), 200);
+      final cancelled = await startDragAt(firstTab(), 200, leftStrip: true);
       final moving = Timer.periodic(
         const Duration(milliseconds: 30),
         (_) => runner.cursorX += 40,
@@ -726,7 +799,12 @@ void main() {
       // אחרי המסירה אינו מוצג לעולם והמשתמש גורר את שרטוט ה-GDI. בגרירה
       // החוצה זה לא נראה — הצילום מזמן הגיע — אבל המסירה המוקדמת יורה
       // תוך פעימות בודדות ומקדימה אותו.
-      final cancelled = await startDragAt(firstTab(), 200, withMock: false);
+      final cancelled = await startDragAt(
+        firstTab(),
+        200,
+        withMock: false,
+        leftStrip: true,
+      );
       moveToTop(20);
       await Future<void>.delayed(const Duration(milliseconds: 300));
 
@@ -752,7 +830,7 @@ void main() {
     test('ירידה לאזור הקריאה וחזרה מעלה נחשבת נסיעה מעלה', () async {
       // ⚠️ הנסיעה נמדדת מהנקודה **הנמוכה** ביותר ולא מנקודת ההתחלה:
       // גרירה שירדה לאזור הקריאה וחזרה מעלה היא יציאה מעלה לכל דבר.
-      await startDragAt(firstTab(), 100);
+      await startDragAt(firstTab(), 100, leftStrip: true);
       runner.cursorY = 400;
       await Future<void>.delayed(const Duration(milliseconds: 150));
       expect(runner.systemDragCalls, 0, reason: 'למטה — אין מסירה');
@@ -831,6 +909,9 @@ class _FakeRunner {
   int cursorX = 100;
   int cursorY = 200;
 
+  /// סף הנסיעה מעלה, כפי שהנייטיב מחשב אותו לפי ה-DPI של הצג.
+  int minUpwardTravel = 24;
+
   /// כמה פעימות של המעקב יצאו לנייטיב — מודד שהלולאה נעצרה.
   int cursorQueries = 0;
 
@@ -884,6 +965,7 @@ class _FakeRunner {
                 'isSelf': cursorTarget.isSelf,
                 'isShellTray': cursorTarget.isShellTray,
                 'approachingTop': approachingTop,
+                'minUpwardTravel': minUpwardTravel,
                 'x': cursorX,
                 'y': cursorY,
               };

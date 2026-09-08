@@ -103,6 +103,13 @@ class ReadingTabStrip extends StatefulWidget {
   /// את הנגררת לצדה באזור הקריאה בלי לוותר על הגרירה.
   final void Function(OpenedTab tab)? onSpringOpen;
 
+  /// נקרא כשהסמן **יצא** מהרצועה באמצע גרירה.
+  ///
+  /// ⚠️ זה מה שמפריד סידור כרטיסיות מהוצאת כרטיסיה, ולא גאומטריית המסך:
+  /// סידור אינו יוצא מהרצועה לעולם. ראו
+  /// `CrossWindowTabDrag.notePointerLeftStrip`.
+  final VoidCallback? onDragLeftStrip;
+
   /// נקרא כשכרטיסיה שוחררה מחוץ לכל יעד הפלה.
   ///
   /// ⚠️ זה כולל שחרור **מחוץ לחלון** — Flutter תופס את הסמן לכל אורך
@@ -124,6 +131,7 @@ class ReadingTabStrip extends StatefulWidget {
     this.onTabSnapshot,
     this.onDragFinishedAnywhere,
     this.onSpringOpen,
+    this.onDragLeftStrip,
     this.onDroppedOutside,
     this.requireLongPressToDrag = false,
     this.axis = Axis.horizontal,
@@ -402,6 +410,10 @@ class _ReadingTabStripState extends State<ReadingTabStrip> {
         _cancelSpring();
         _stopAutoScroll();
         if (_insertIndex != null) setState(() => _insertIndex = null);
+        // ⚠️ **הסימן שהמחווה אינה סידור.** סידור כרטיסיות אינו יוצא
+        // מהרצועה, ולכן היציאה עצמה היא מה שמתיר את המסירה המוקדמת
+        // ל-Windows. ראו [ReadingTabStrip.onDragLeftStrip].
+        widget.onDragLeftStrip?.call();
       },
       onAcceptWithDetails: (details) => _completeReorder(details.data),
       builder: (context, candidate, rejected) {
@@ -775,7 +787,14 @@ class _DraggableTabState extends State<_DraggableTab> {
     );
     tabHead.dispose();
     if (preview == null) return;
-    if (!mounted) {
+    // ⚠️ `_dragging` נבדק **שוב** כאן, ולא רק לפני ההרכבה.
+    //
+    // ההרכבה היא צילום שני ותמונה של ~4.8MB, ובגרירה קצרה היא מסתיימת
+    // אחרי השחרור — ואם בינתיים התחילה גרירה **חדשה**, המוק הזה היה
+    // נשלח לנייטיב בשמה: תמונה של כרטיסיה אחרת, בגודל יעד אחר, ו-
+    // `_snapshotSent` נדלק על סמכה. מאז שהמסירה המוקדמת מותנית בדגל
+    // הזה, טעות כזו אינה קוסמטית אלא מוסרת גרירה עם תמונה שקרית.
+    if (!mounted || !_dragging) {
       preview.image.dispose();
       return;
     }

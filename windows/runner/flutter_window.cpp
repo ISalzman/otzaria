@@ -296,11 +296,24 @@ POINT OriginForDrop(int origin_x, int origin_y, int width, int height) {
 // לכן המסירה חייבת לקרות **בעוד הסמן בדרך מעלה**, והאזור הזה הוא מה
 // שמזהה "בדרך".
 //
-// ⚠️ **חייב להישאר מעל רצועת הכרטיסיות.** בחלון שצמוד לראש המסך הרצועה
-// מתחילה בסביבות 40 יחידות לוגיות, ואזור עמוק ממנה היה חוטף כל סידור
-// כרטיסיות — המסירה מבטלת את גרירת Flutter, כלומר הסידור אובד. 28
-// יחידות נשארות מעל הרצועה, ובכל זאת משאירות נסיעה ללולאה.
+// ⚠️ **האזור הזה חופף לרצועת הכרטיסיות, ואינו יכול לא לחפוף.** גרסה
+// קודמת של ההערה כאן טענה שהרצועה מתחילה בסביבות 40 יחידות ולכן אזור של
+// 28 נשאר מעליה — וזה שגוי: `CustomTitleBar` הוא הילד הראשון ב-`Column`
+// והרצועה **היא** הסרגל העליון, כלומר בחלון שצמוד לראש המסך היא תופסת
+// יחידות 0..40. אין ערך שגם משאיר נסיעה ל-shell וגם נשאר מחוץ לרצועה.
+//
+// מה שמפריד בין סידור כרטיסיות למסירה הוא לכן **יציאה מהרצועה** בצד
+// Dart (`CrossWindowTabDrag`), ולא עומק האזור.
 constexpr int kTopApproachLogicalHeight = 28;
+
+// כמה הסמן צריך לעלות כדי שההתקרבות תיחשב יציאה מעלה, ביחידות לוגיות.
+//
+// ⚠️ מחושב **כאן** ולא ב-Dart, כדי שיהיה באותן יחידות כמו האזור שהוא
+// מגודר בו. גרסה קודמת החזיקה אותו כ-24 פיקסלים פיזיים בעוד האזור
+// מוכפל ב-DPI, כך שהיחס ביניהם השתנה עם קנה המידה — 28:24 ב-100%,
+// 42:24 ב-150%, 56:24 ב-200%. כלומר השמירה נחלשה בדיוק במסכים שרוב
+// המשתמשים עובדים בהם.
+constexpr int kUpwardTravelLogical = 24;
 
 // מתאר את היעד שתחת הסמן, בשפה ש-Dart מבין.
 //
@@ -343,19 +356,28 @@ flutter::EncodableMap DescribeTarget(HWND under, POINT cursor, HWND self) {
   // הפיזי בלי לצאת מהחלון, ובדיקה מולו לבדה לא הייתה מתממשת שם לעולם.
   // בהצבה הרגילה (שורה בתחתית) שני הקצוות זהים, ולכן זה אינו מרחיב דבר.
   bool approaching_top = false;
+  int upward_travel = kUpwardTravelLogical;
   const HMONITOR monitor = ::MonitorFromPoint(cursor, MONITOR_DEFAULTTONEAREST);
   MONITORINFO monitor_info{};
   monitor_info.cbSize = sizeof(monitor_info);
   if (monitor && ::GetMonitorInfoW(monitor, &monitor_info)) {
-    const UINT dpi = self ? ::GetDpiForWindow(self) : 96;
-    const int band =
-        ::MulDiv(kTopApproachLogicalHeight, dpi > 0 ? dpi : 96, 96);
-    approaching_top =
-        cursor.y - monitor_info.rcMonitor.top <= band ||
-        cursor.y - monitor_info.rcWork.top <= band;
+    // ⚠️ ה-DPI של **הצג שתחת הסמן**, ולא של חלון המקור. הם נפרדים במערך
+    // צגים מעורב-קנה-מידה, ואת גבולות הצג כבר לקחנו מאותו צג — כלומר
+    // שימוש ב-DPI של החלון היה משווה מרחק בצג אחד לסף שחושב לפי אחר.
+    // זה גם הדפוס הקיים ביצירת חלון (ראו `FlutterDesktopGetDpiForMonitor`
+    // ב-`OriginForDrop` ובמסלול ההחזרה לשימוש).
+    UINT dpi = FlutterDesktopGetDpiForMonitor(monitor);
+    if (dpi == 0) dpi = self ? ::GetDpiForWindow(self) : 96;
+    if (dpi == 0) dpi = 96;
+    const int band = ::MulDiv(kTopApproachLogicalHeight, dpi, 96);
+    upward_travel = ::MulDiv(kUpwardTravelLogical, dpi, 96);
+    approaching_top = cursor.y - monitor_info.rcMonitor.top <= band ||
+                      cursor.y - monitor_info.rcWork.top <= band;
   }
   info[flutter::EncodableValue("approachingTop")] =
       flutter::EncodableValue(approaching_top);
+  info[flutter::EncodableValue("minUpwardTravel")] =
+      flutter::EncodableValue(upward_travel);
 
   const auto& slots = WindowSlots();
   const auto it = slots.find(under);

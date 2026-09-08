@@ -197,8 +197,12 @@ Future<ui.Image?> composeTabContentPlaceholder({
 
     // הבלוק כולו ממורכז אנכית, ולכן גובהו נדרש לפני שמציירים את חלקו
     // הראשון.
+    //
+    // ⚠️ מהודק לאפס. באזור תוכן רחב-ונמוך (חלון מוצמד לחצי מסך אופקי,
+    // או חלון קטן) הבלוק גבוה מהאזור, והמרכוז יוצא שלילי — כלומר
+    // האייקון מצויר מעל הקצה העליון ונחתך.
     final blockHeight = iconParagraph.height + gap + titleParagraph.height;
-    var dy = (logicalSize.height - blockHeight) / 2;
+    var dy = math.max(0.0, (logicalSize.height - blockHeight) / 2);
     canvas.drawParagraph(iconParagraph, Offset(0, dy));
     dy += iconParagraph.height + gap;
     canvas.drawParagraph(

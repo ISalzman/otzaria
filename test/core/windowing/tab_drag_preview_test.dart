@@ -222,6 +222,46 @@ void main() {
       expect(image, isNull);
     });
 
+    /// כל הפיקסלים של [image] כרשימת `0xAARRGGBB`.
+    Future<List<int>> pixelsOf(ui.Image image) async {
+      final data = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
+      final bytes = data!.buffer.asUint8List();
+      return [
+        for (var i = 0; i < bytes.length; i += 4)
+          (bytes[i + 3] << 24) |
+              (bytes[i] << 16) |
+              (bytes[i + 1] << 8) |
+              bytes[i + 2],
+      ];
+    }
+
+    test('⚠️ באמת מצייר משהו, ולא רק מלבן ברקע', () async {
+      // ⚠️ בדיקות הגודל, האטימות והכותרת הארוכה עוברות כולן גם על
+      // מימוש שמצייר **רק** את הרקע. זו הבדיקה שמפילה אותו.
+      final image = await build(logicalSize: const Size(400, 300));
+      final pixels = await pixelsOf(image);
+      final background = pixels.first;
+
+      expect(
+        pixels.where((p) => p != background),
+        isNotEmpty,
+        reason: 'המוק יצא ריק — אין אייקון ואין כותרת',
+      );
+      image.dispose();
+    });
+
+    test('⚠️ הכותרת באמת מגיעה לפיקסלים', () async {
+      // ⚠️ שני שמות שונים חייבים לתת תמונות שונות. בלי זה מימוש שמצייר
+      // את האייקון ומתעלם מהכותרת עובר — והכותרת היא כל מה שאומר
+      // למשתמש **איזה** ספר הוא גורר.
+      final short = await build(title: 'א');
+      final long = await build(title: 'שולחן ערוך אורח חיים');
+
+      expect(await pixelsOf(short), isNot(await pixelsOf(long)));
+      short.dispose();
+      long.dispose();
+    });
+
     test('כותרת ארוכה אינה גולשת ואינה מפילה את הציור', () async {
       // ⚠️ שם ספר ארוך הוא הרגיל ולא הקצה ("שולחן ערוך אורח חיים עם באר
       // הגולה ובאר היטב"). התקרה על מספר השורות היא מה שמונע ממנו לכסות
