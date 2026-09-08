@@ -283,6 +283,25 @@ POINT OriginForDrop(int origin_x, int origin_y, int width, int height) {
   return POINT{left, top};
 }
 
+// עומק אזור ההתקרבות לראש הצג, ביחידות לוגיות (96 DPI).
+//
+// ## ⚠️ למה "התקרבות" ולא "הגעה לקצה"
+//
+// ה-shell של Windows פותח את מסדר החלונות כשהחלון הנגרר **נכנס** לאזור
+// שבראש המסך בזמן לולאת ההזזה — לא כשהוא נמצא שם כבר כשהלולאה מתחילה.
+// זה נמדד בלוג: גרירה שיצאה מהחלון בצד (`cursor=(890,134)`) קיבלה מסדר
+// חלונות, וגרירה שנמסרה בפיקסל העליון (`cursor=(582,0)`) לא — כי לא
+// נותרה לה שום נסיעה שה-shell יראה.
+//
+// לכן המסירה חייבת לקרות **בעוד הסמן בדרך מעלה**, והאזור הזה הוא מה
+// שמזהה "בדרך".
+//
+// ⚠️ **חייב להישאר מעל רצועת הכרטיסיות.** בחלון שצמוד לראש המסך הרצועה
+// מתחילה בסביבות 40 יחידות לוגיות, ואזור עמוק ממנה היה חוטף כל סידור
+// כרטיסיות — המסירה מבטלת את גרירת Flutter, כלומר הסידור אובד. 28
+// יחידות נשארות מעל הרצועה, ובכל זאת משאירות נסיעה ללולאה.
+constexpr int kTopApproachLogicalHeight = 28;
+
 // מתאר את היעד שתחת הסמן, בשפה ש-Dart מבין.
 //
 // ⚠️ עוזר משותף ל-`windowAtCursor` ול-`dragOutToSystem`, ובמכוון: שני
@@ -309,6 +328,34 @@ flutter::EncodableMap DescribeTarget(HWND under, POINT cursor, HWND self) {
       ::wcscmp(class_name, L"TopLevelWindowForOverflowXamlIsland") == 0;
   info[flutter::EncodableValue("isShellTray")] =
       flutter::EncodableValue(is_shell_tray);
+
+  // האם הסמן מתקרב לראש הצג — ראו [kTopApproachLogicalHeight].
+  //
+  // ⚠️ נמדד מול **הצג שתחת הסמן** ולא מול y=0. במערך רב-צגים לצג שמעל
+  // או משמאל לראשי יש קואורדינטות שליליות, ובדיקה מול 0 הייתה מזהה
+  // התקרבות באמצע הצג העליון ולא מזהה אותה כלל בתחתון.
+  //
+  // ⚠️ **שני** קצוות, `rcMonitor` וגם `rcWork`, ודי באחד מהם.
+  //
+  // `rcMonitor` הוא הקצה הפיזי — מה ש-Windows עצמו בודק, ומה שחלון
+  // חסר-מסגרת מגיע אליו. אבל עם שורת משימות **בראש** המסך חלון ממוקסם
+  // מתחיל ב-`rcWork.top`, כלומר מתחת לשורה: הסמן אינו יכול להגיע לקצה
+  // הפיזי בלי לצאת מהחלון, ובדיקה מולו לבדה לא הייתה מתממשת שם לעולם.
+  // בהצבה הרגילה (שורה בתחתית) שני הקצוות זהים, ולכן זה אינו מרחיב דבר.
+  bool approaching_top = false;
+  const HMONITOR monitor = ::MonitorFromPoint(cursor, MONITOR_DEFAULTTONEAREST);
+  MONITORINFO monitor_info{};
+  monitor_info.cbSize = sizeof(monitor_info);
+  if (monitor && ::GetMonitorInfoW(monitor, &monitor_info)) {
+    const UINT dpi = self ? ::GetDpiForWindow(self) : 96;
+    const int band =
+        ::MulDiv(kTopApproachLogicalHeight, dpi > 0 ? dpi : 96, 96);
+    approaching_top =
+        cursor.y - monitor_info.rcMonitor.top <= band ||
+        cursor.y - monitor_info.rcWork.top <= band;
+  }
+  info[flutter::EncodableValue("approachingTop")] =
+      flutter::EncodableValue(approaching_top);
 
   const auto& slots = WindowSlots();
   const auto it = slots.find(under);
