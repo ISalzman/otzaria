@@ -668,8 +668,46 @@ void main() {
       expect(find.text('הצמד לסרגל הניווט'), findsOneWidget);
       expect(find.text('הסתר מהממשק'), findsOneWidget);
       expect(find.text('השבת'), findsOneWidget);
+      expect(find.text('איפוס נתוני התוסף'), findsOneWidget);
       expect(find.text('מחק תוסף'), findsOneWidget);
     });
+
+    testWidgets(
+      '"איפוס נתוני התוסף" פותח דיאלוג אזהרה ושולח ResetPluginDataRequested רק אחרי אישור',
+      (tester) async {
+        final pluginBloc = _RecordingPluginSystemBloc(
+          PluginSystemLoaded([_pluginFor(id: 'a', name: 'תוסף א')]),
+        );
+        addTearDown(pluginBloc.close);
+
+        await tester.pumpWidget(
+          _wrap(pluginBloc: pluginBloc, settingsBloc: _FakeSettingsBloc()),
+        );
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.text('פעולות'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('איפוס נתוני התוסף'));
+        await tester.pumpAndSettle();
+
+        expect(find.text('איפוס נתוני התוסף'), findsOneWidget);
+        expect(
+          pluginBloc.recorded.whereType<ResetPluginDataRequested>(),
+          isEmpty,
+        );
+
+        await tester.tap(find.text('אפס'));
+        await tester.pumpAndSettle();
+
+        expect(
+          pluginBloc.recorded
+              .whereType<ResetPluginDataRequested>()
+              .single
+              .pluginId,
+          'a',
+        );
+      },
+    );
 
     testWidgets('לחיצה על "השבת" שולחת DisablePluginRequested', (tester) async {
       final pluginBloc = _RecordingPluginSystemBloc(

@@ -231,15 +231,38 @@ class PluginSystemDatabase {
       db.execute('DELETE FROM plugin_permission_grant WHERE plugin_id = ?', [
         pluginId,
       ]);
-      db.execute('DELETE FROM plugin_kv_store WHERE plugin_id = ?', [pluginId]);
-      db.execute('DELETE FROM plugin_published_record WHERE plugin_id = ?', [
-        pluginId,
-      ]);
+      deletePluginDataRows(db, pluginId);
       db.execute('COMMIT');
     } catch (_) {
       db.execute('ROLLBACK');
       rethrow;
     }
+  }
+
+  /// מוחק את כל הנתונים שהתוסף אגר (KV, רשומות שפורסמו כגון אירועי לוח, לוג),
+  /// בלי לגעת ברישום ההתקנה ובהרשאות שהמשתמש אישר.
+  Future<void> clearPluginData(String pluginId) async {
+    final db = await database;
+    db.execute('BEGIN TRANSACTION');
+    try {
+      deletePluginDataRows(db, pluginId);
+      db.execute('COMMIT');
+    } catch (_) {
+      db.execute('ROLLBACK');
+      rethrow;
+    }
+  }
+
+  /// שורות הנתונים של [pluginId] בלבד — משותף למחיקת תוסף ולאיפוס נתוניו.
+  @visibleForTesting
+  static void deletePluginDataRows(Database db, String pluginId) {
+    db.execute('DELETE FROM plugin_kv_store WHERE plugin_id = ?', [pluginId]);
+    db.execute('DELETE FROM plugin_published_record WHERE plugin_id = ?', [
+      pluginId,
+    ]);
+    db.execute('DELETE FROM plugin_runtime_log WHERE plugin_id = ?', [
+      pluginId,
+    ]);
   }
 
   Future<void> updatePluginPinState(String pluginId, bool pinned) async {

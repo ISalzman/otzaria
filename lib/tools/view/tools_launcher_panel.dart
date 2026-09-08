@@ -575,10 +575,17 @@ class _ToolsLauncherPanelState extends State<ToolsLauncherPanel> {
         ),
       if (plugin != null)
         ToolTileAction(
+          icon: FluentIcons.arrow_reset_24_regular,
+          label: 'איפוס נתוני התוסף',
+          isDestructive: true,
+          dividerBefore: true,
+          onTap: () => showResetPluginDataDialog(context, plugin),
+        ),
+      if (plugin != null)
+        ToolTileAction(
           icon: FluentIcons.delete_24_regular,
           label: 'מחק תוסף',
           isDestructive: true,
-          dividerBefore: true,
           onTap: () => showDeletePluginDialog(context, plugin),
         ),
     ];

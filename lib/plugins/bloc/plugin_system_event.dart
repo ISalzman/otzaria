@@ -110,6 +110,15 @@ class UninstallPluginRequested extends PluginSystemEvent {
   List<Object?> get props => [pluginId];
 }
 
+/// איפוס כל הנתונים שהתוסף אגר (KV, רשומות שפורסמו, התראות, קבצים) בלי להסירו.
+class ResetPluginDataRequested extends PluginSystemEvent {
+  final String pluginId;
+  const ResetPluginDataRequested(this.pluginId);
+
+  @override
+  List<Object?> get props => [pluginId];
+}
+
 class EnablePluginRequested extends PluginSystemEvent {
   final String pluginId;
   const EnablePluginRequested(this.pluginId);

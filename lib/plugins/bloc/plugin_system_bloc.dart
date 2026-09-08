@@ -27,6 +27,7 @@ import 'package:otzaria/shortcuts/shortcut_validator.dart';
 import 'package:otzaria/tabs/bloc/tabs_state.dart';
 import 'package:otzaria/tabs/models/pdf_tab.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
+import 'package:otzaria/tools/calendar/services/notification_service.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -79,6 +80,7 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
     on<ConfirmPluginInstall>(_onConfirmPluginInstall);
     on<CancelPluginInstall>(_onCancelPluginInstall);
     on<UninstallPluginRequested>(_onUninstallPluginRequested);
+    on<ResetPluginDataRequested>(_onResetPluginDataRequested);
     on<PinPluginRequested>(_onPinPluginRequested);
     on<UnpinPluginRequested>(_onUnpinPluginRequested);
     on<PinPluginToNavRailRequested>(_onPinPluginToNavRailRequested);
@@ -591,6 +593,48 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
       add(LoadPlugins());
     } catch (e) {
       UiSnack.showError(PluginMessages.uninstallPluginError(e));
+    }
+  }
+
+  Future<void> _onResetPluginDataRequested(
+    ResetPluginDataRequested event,
+    Emitter<PluginSystemState> emit,
+  ) async {
+    try {
+      final plugin = await repository.getPlugin(event.pluginId);
+      if (plugin == null) return;
+      _removeDeclarative(event.pluginId);
+      ContextMenuRegistry.instance.removeAll(event.pluginId);
+      PluginToolbarRegistry.instance.removeAll(event.pluginId);
+      PluginShortcutRegistry.instance.removeAll(event.pluginId);
+      PluginHighlightRegistry.instance.removePlugin(event.pluginId);
+      PluginFileServer.instance.revokeAllForPlugin(event.pluginId);
+      _removeSearchProviders(event.pluginId);
+      await _cancelPluginNotifications(event.pluginId);
+      await _installerService.resetPluginData(event.pluginId);
+      PluginRuntimeDispatcher.instance.invalidatePlugin(event.pluginId);
+      await PluginRuntimeDispatcher.instance.reloadPlugin(event.pluginId);
+      add(LoadPlugins());
+      UiSnack.show(PluginMessages.pluginDataReset(plugin.name));
+    } catch (e) {
+      UiSnack.showError(PluginMessages.resetPluginDataError(e));
+    }
+  }
+
+  /// מבטל את התראות המערכת שהתוסף תזמן — מזהיהן נשמרים ב-KV הפנימי של הגשר
+  /// (`_internal/notification_ids`), ונמחקים יחד עם שאר הנתונים מיד אחר כך.
+  Future<void> _cancelPluginNotifications(String pluginId) async {
+    final raw = await repository.getKV(
+      pluginId,
+      '_internal',
+      'notification_ids',
+    );
+    if (raw == null) return;
+    final notifications = NotificationService();
+    if (!notifications.isInitialized) return;
+    final ids = (jsonDecode(raw) as List).whereType<int>();
+    for (final id in ids) {
+      await notifications.cancelNotification(id);
     }
   }
 

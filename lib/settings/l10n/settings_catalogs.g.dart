@@ -65,6 +65,7 @@ const Map<String, Map<String, String>> kSettingsCatalogs = {
     'איפוס הגדרות לפי ספר': 'Reset per-sefer settings',
     'איפוס הגדרות?': 'Reset settings?',
     'איפוס כל ההתאמות הנוספות': 'Reset all additional adjustments',
+    'איפוס נתוני התוסף': 'Reset Plugin Data',
     'איפוס קיצורי מקשים': 'Reset Keyboard Shortcuts',
     'איפוס קיצורי מקשים?': 'Reset keyboard shortcuts?',
     'אירועים ותזכורות': 'Events and Reminders',

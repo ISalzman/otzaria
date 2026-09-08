@@ -281,13 +281,24 @@ class PluginInstallerService {
       if (installDir.existsSync()) {
         installDir.deleteSync(recursive: true);
       }
-      final dataPath = await AppPaths.getPluginDataPath(pluginId);
-      final cachePath = await AppPaths.getPluginCachePath(pluginId);
-      final dataDir = Directory(dataPath);
-      if (dataDir.existsSync()) dataDir.deleteSync(recursive: true);
-      final cacheDir = Directory(cachePath);
-      if (cacheDir.existsSync()) cacheDir.deleteSync(recursive: true);
+      await _deletePluginDataDirs(pluginId);
     }
+  }
+
+  /// מאפס את התוסף למצב שלאחר התקנה: מוחק את הנתונים שאגר במסד ואת תיקיות
+  /// ה-data וה-cache שלו. קבצי התוסף עצמו, ההרשאות והגדרות התצוגה נשארים.
+  Future<void> resetPluginData(String pluginId) async {
+    await _repository.clearPluginData(pluginId);
+    await _deletePluginDataDirs(pluginId);
+  }
+
+  Future<void> _deletePluginDataDirs(String pluginId) async {
+    final dataPath = await AppPaths.getPluginDataPath(pluginId);
+    final cachePath = await AppPaths.getPluginCachePath(pluginId);
+    final dataDir = Directory(dataPath);
+    if (dataDir.existsSync()) dataDir.deleteSync(recursive: true);
+    final cacheDir = Directory(cachePath);
+    if (cacheDir.existsSync()) cacheDir.deleteSync(recursive: true);
   }
 }
 

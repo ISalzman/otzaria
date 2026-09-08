@@ -1270,6 +1270,7 @@ void main() {
       expect(find.text('הצמד לסרגל הניווט'), findsOneWidget);
       expect(find.text('הסתר מהממשק'), findsOneWidget);
       expect(find.text('השבת'), findsOneWidget);
+      expect(find.text('איפוס נתוני התוסף'), findsOneWidget);
       expect(find.text('מחק תוסף'), findsOneWidget);
       expect(find.text('הזזה'), findsOneWidget);
     });
