@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/bookmarks/bloc/bookmark_bloc.dart';
 import 'package:otzaria/bookmarks/bloc/bookmark_state.dart';
 import 'package:otzaria/core/focus_repository.dart';
+import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
 import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/models/books.dart';
@@ -20,7 +21,9 @@ import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
+import 'package:otzaria/text_book/text_book_repository.dart';
 import 'package:otzaria/text_book/view/text_book_screen.dart';
+import 'package:otzaria/text_book/view/text_book_search_screen.dart';
 import 'package:otzaria/text_book/view/toc_navigator_screen.dart';
 import 'package:otzaria/text_book/view/widgets/nav_panel_tour_target.dart';
 import 'package:otzaria/tools/shamor_zachor/providers/shamor_zachor_data_provider.dart';
@@ -67,10 +70,21 @@ void main() {
   });
 
   /// מעלה את מסך הספר עם חלונית הניווט פתוחה, ומחזיר בקר להחלפת הטאב הפעיל.
-  Future<_ActiveTabController> pumpScreen(WidgetTester tester) async {
+  /// [tabSearchText] פותח את לשונית החיפוש מיד; `settle: false` עוצר אחרי
+  /// הפריים הראשון, לפני שבדיקת הכותרות החלופיות עדכנה את מספר הלשוניות.
+  Future<_ActiveTabController> pumpScreen(
+    WidgetTester tester, {
+    String tabSearchText = '',
+    bool settle = true,
+  }) async {
     final book = TextBook(title: 'ספר בדיקה');
     final bloc = _TestTextBookBloc(_loadedState(book));
-    final tab = TextBookTab(book: book, index: 0, blocOverride: bloc);
+    final tab = TextBookTab(
+      book: book,
+      index: 0,
+      searchText: tabSearchText,
+      blocOverride: bloc,
+    );
     final tabsBloc = _TestTabsBloc(TabsState(tabs: [tab], currentTabIndex: 0));
     final settingsBloc = _TestSettingsBloc(SettingsState.initial());
 
@@ -128,8 +142,10 @@ void main() {
       ),
     );
 
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 50));
+    if (settle) {
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+    }
 
     return _ActiveTabController(
       tester: tester,
@@ -151,6 +167,40 @@ void main() {
       tester.state(find.byType(TocViewer)),
       same(stateBeforeSwitch),
       reason: 'החלונית נבנתה מאפס — לכן החיפוש-בספר רץ מחדש בכל חזרה לטאב',
+    );
+  });
+
+  testWidgets('הקלדה בחיפוש-בספר שורדת את סיום בדיקת הכותרות החלופיות', (
+    tester,
+  ) async {
+    await pumpScreen(tester, tabSearchText: 'א', settle: false);
+
+    final searchView = find.byType(TextBookSearchView);
+    expect(searchView, findsOneWidget);
+    expect(
+      find.text('כותרות'),
+      findsOneWidget,
+      reason: 'הבדיקה עוד לא הסתיימה',
+    );
+    final stateBefore = tester.state<TextBookSearchViewState>(searchView);
+    stateBefore.searchTextController.text = 'ס';
+
+    // הבדיקה מסתיימת, לשונית הכותרות נעלמת ולשונית החיפוש זזה מקום אחד אחורה.
+    await tester.pump();
+    expect(find.text('כותרות'), findsNothing);
+
+    expect(
+      tester.state(searchView),
+      same(stateBefore),
+      reason:
+          'חלונית החיפוש נבנתה מאפס — האות שהוקלדה לפני כן אבדה (issue #1263)',
+    );
+    expect(
+      tester
+          .state<TextBookSearchViewState>(searchView)
+          .searchTextController
+          .text,
+      'ס',
     );
   });
 
@@ -217,6 +267,11 @@ class _TestTextBookBloc extends Bloc<TextBookEvent, TextBookState>
   _TestTextBookBloc(super.initialState) {
     on<TextBookEvent>((event, emit) {});
   }
+
+  @override
+  final TextBookRepository repository = TextBookRepository(
+    fileSystem: FileSystemData.instance,
+  );
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
