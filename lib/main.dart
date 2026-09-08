@@ -1142,12 +1142,21 @@ void _sendEarlyInstallAcks(List<String> args) {
     if (uri == null) continue;
     final reportContext = PluginStoreLinkParser.parseUri(uri)?.reportContext;
     if (reportContext != null) {
-      futures.add(PluginInstallReportService.acknowledge(reportContext));
+      futures.add(_acknowledgeAfterCerts(reportContext));
     }
   }
   if (futures.isNotEmpty) {
     _earlyInstallAckFuture = Future.wait(futures);
   }
+}
+
+/// ברשת מסוננת (נטפרי) ה-TLS ל-callback נכשל עד שתעודת ה-CA נטענת —
+/// האישור היה נבלע בשקט והחנות ראתה רק את האישור המאוחר מה-bloc.
+Future<void> _acknowledgeAfterCerts(PluginInstallReportContext context) async {
+  try {
+    await loadCerts();
+  } catch (_) {}
+  await PluginInstallReportService.acknowledge(context);
 }
 
 Future<void> _enqueueExternalActivationArgs(List<String> args) async {
@@ -1610,7 +1619,11 @@ Future<void> initHive() async {
   await TabsRepository.adoptOrphanWindowSessions();
 }
 
-Future<void> loadCerts() async {
+Future<void>? _loadCertsFuture;
+
+Future<void> loadCerts() => _loadCertsFuture ??= _loadCerts();
+
+Future<void> _loadCerts() async {
   final certs = ['assets/ca/netfree_cas.pem'];
   for (var cert in certs) {
     final certBytes = await rootBundle.load(cert);
