@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -106,7 +108,14 @@ class _LinkHoverPreviewContentState extends State<LinkHoverPreviewContent> {
   static const double _expandedScreenFraction = 0.6;
   static const double _expandedMaxHeight = 420;
 
+  /// שולי החלונית והמסך שמתחת לתוכן — התוכן הפרוש נעצר לפניהם.
+  static const double _expandedBottomMargin = 24;
+
   bool _expanded = false;
+
+  /// המקום הפנוי מתחת לתוכן ברגע הפרישה; מגביל את הגובה הפרוש, כדי שהחלונית
+  /// תגדל כלפי מטה עד שולי המסך ולא תקפוץ למעלה.
+  double? _spaceBelow;
 
   Link get link => widget.link;
   int? get maxContentLines => widget.maxContentLines;
@@ -121,11 +130,24 @@ class _LinkHoverPreviewContentState extends State<LinkHoverPreviewContent> {
         removePunctuation: widget.removePunctuation,
       );
 
-  double get _expandedHeight =>
-      (MediaQuery.sizeOf(context).height * _expandedScreenFraction).clamp(
-        0.0,
-        _expandedMaxHeight,
+  double get _expandedHeight {
+    final height = (MediaQuery.sizeOf(context).height * _expandedScreenFraction)
+        .clamp(0.0, _expandedMaxHeight);
+    final spaceBelow = _spaceBelow;
+    return spaceBelow == null ? height : math.min(height, spaceBelow);
+  }
+
+  void _expand(BuildContext contentContext) {
+    final box = contentContext.findRenderObject();
+    if (box is RenderBox && box.hasSize) {
+      final top = box.localToGlobal(Offset.zero).dy;
+      _spaceBelow = math.max(
+        MediaQuery.sizeOf(context).height - top - _expandedBottomMargin,
+        0,
       );
+    }
+    setState(() => _expanded = true);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -302,7 +324,7 @@ class _LinkHoverPreviewContentState extends State<LinkHoverPreviewContent> {
                             fontSize: fontSize,
                             fontFamily: settingsState.commentatorsFontFamily,
                             lineHeight: lineHeight,
-                            onPressed: () => setState(() => _expanded = true),
+                            onPressed: () => _expand(context),
                           ),
                         ),
                       ],
