@@ -135,6 +135,12 @@ dependency_overrides:
       url: https://github.com/Otzaria/flutter_inappwebview
       ref: master
       path: flutter_inappwebview_macos
+  # תיקוני העברת התמונה בין WPE ל-Flutter נמצאים ב-fork, ולא ב-pub.dev.
+  flutter_inappwebview_linux:
+    git:
+      url: https://github.com/Otzaria/flutter_inappwebview
+      ref: master
+      path: flutter_inappwebview_linux
   # הגרסה שב-pub.dev קוראת ל-setStatusBarColor שהוצא משימוש ב-Android 15.
   flutter_inappwebview_android:
     git:
