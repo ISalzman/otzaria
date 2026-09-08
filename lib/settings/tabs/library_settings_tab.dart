@@ -678,10 +678,16 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
               args: {'processed': processed, 'total': total},
             );
           } else if (indexingState is IndexingComplete &&
-              !indexingState.isClean) {
+              indexingState.blockingFailureCount > 0) {
             subtitleText = context.settingsText(
               'האינדוקס הושלם עם {count} בעיות; הפרטים נשמרו ביומן השגיאות',
-              args: {'count': indexingState.failureCount},
+              args: {'count': indexingState.blockingFailureCount},
+            );
+          } else if (indexingState is IndexingComplete &&
+              indexingState.warningCount > 0) {
+            subtitleText = context.settingsText(
+              'האינדוקס הושלם; ב-{count} ספרי PDF נשמטו עמודים בודדים מהחיפוש',
+              args: {'count': indexingState.warningCount},
             );
           } else if (indexingState is IndexingComplete) {
             subtitleText = context.settingsText('האינדקס מעודכן');

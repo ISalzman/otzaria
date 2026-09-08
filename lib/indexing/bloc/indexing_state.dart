@@ -66,6 +66,12 @@ class IndexingComplete extends IndexingState {
   bool get isClean => failures.isEmpty;
   int get failureCount => failures.length;
 
+  /// כשלים שמנעו אינדוקס של ספר; אזהרה (PDF שחלק מעמודיו נשמטו) אינה נספרת.
+  int get blockingFailureCount =>
+      failures.where((failure) => failure.preventedIndexing).length;
+
+  int get warningCount => failureCount - blockingFailureCount;
+
   @override
   List<Object?> get props => [failures];
 }

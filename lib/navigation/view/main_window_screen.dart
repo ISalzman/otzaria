@@ -2711,9 +2711,13 @@ class MainWindowScreenState extends State<MainWindowScreen>
                 cubit.remove(kIndexingWorkStatusId);
                 if (state is IndexingComplete && !state.isClean) {
                   UiSnack.show(
-                    LibraryMessages.indexingCompletedWithFailures(
-                      state.failureCount,
-                    ),
+                    state.blockingFailureCount > 0
+                        ? LibraryMessages.indexingCompletedWithFailures(
+                            state.blockingFailureCount,
+                          )
+                        : LibraryMessages.indexingCompletedWithWarnings(
+                            state.warningCount,
+                          ),
                     onTap: _openErrorLogFile,
                   );
                 }

@@ -44,6 +44,10 @@ abstract class LibraryMessages {
   static String indexingCompletedWithFailures(int count) =>
       'האינדוקס הסתיים עם $count בעיות. לחץ לפתיחת קובץ השגיאות.';
 
+  static String indexingCompletedWithWarnings(int count) =>
+      'האינדוקס הושלם. ב-$count ספרי PDF נשמטו עמודים בודדים מהחיפוש. '
+      'לחץ לפרטים.';
+
   static const String emptySearchQuery = 'נא להזין טקסט לחיפוש';
 
   static String categoryOrBookNotFound(List<String> names) =>

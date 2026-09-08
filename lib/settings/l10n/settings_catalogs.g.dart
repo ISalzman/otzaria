@@ -189,6 +189,7 @@ const Map<String, Map<String, String>> kSettingsCatalogs = {
     'דף התרומה:': 'Donation page:',
     'ה\'': 'Hashem (ה\')',
     'האינדוקס הושלם עם {count} בעיות; הפרטים נשמרו ביומן השגיאות': 'Indexing finished with {count} issues; details were saved to the error log',
+    'האינדוקס הושלם; ב-{count} ספרי PDF נשמטו עמודים בודדים מהחיפוש': 'Indexing finished; in {count} PDF books a few pages were left out of the search',
     'האינדוקס נעצר לפני שהושלם': 'Indexing stopped before it finished',
     'האינדקס לא מעודכן': 'The index is not up to date',
     'האינדקס מעודכן': 'The index is up to date',
