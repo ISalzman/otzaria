@@ -24,6 +24,7 @@ import 'package:otzaria/data/data_providers/library_provider_manager.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/pdf_book/utils/pdf_links_window.dart';
+import 'package:otzaria/pdf_book/utils/pdf_scroll_physics_provider.dart';
 import 'package:otzaria/text_book/text_book_repository.dart';
 import 'package:otzaria/text_book/view/book_source_dialog.dart';
 import 'package:otzaria/text_book/view/page_shape/utils/default_commentators.dart';
@@ -564,6 +565,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
 
   final PdfPaneToggleAnchor _paneToggleAnchor = PdfPaneToggleAnchor();
   bool _leftPaneUsesPushLayout = false;
+  final _scrollPhysicsProvider = StoppablePdfScrollPhysicsProvider();
   bool _rightPaneUsesPushLayout = false;
 
   /// מצב יד — גרירת עכבר גוללת את הדף במקום לסמן טקסט (issue #916).
@@ -810,6 +812,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         return;
       }
     }
+    _stopStableLayoutTrackingForUserNavigation();
     widget.tab.pdfViewerController.handlePointerSignalEvent(
       PointerScrollEvent(
         kind: PointerDeviceKind.trackpad,
@@ -1621,6 +1624,9 @@ class _PdfBookScreenState extends State<PdfBookScreen>
             }
           : null,
       onViewSizeChanged: (viewSize, oldViewSize, controller) {
+        // גלילת גלגלת שעדיין מאנימצת מחזיקה יעד בזום הישן — עוצרים לפני
+        // שהזום החדש מקבל ממנה translation שגוי (issue #1258).
+        _scrollPhysicsProvider.stop();
         _restoreViewportTopAnchor(controller, oldViewSize);
       },
       enableKeyboardNavigation: false,
@@ -1631,8 +1637,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       // לגלילת לוח מגע נאכפת ב-TrackpadAxisLock וב-TrackpadPanRecognizer
       // (issues #821, #969) ולא דרך PanAxis, שמקצץ לציר אחד גם אלכסונים.
       panAxis: PanAxis.free,
-      interactionDelegateProvider:
-          const PdfViewerScrollInteractionDelegateProviderPhysics(),
+      interactionDelegateProvider: _scrollPhysicsProvider,
       onDocumentLoadFinished: (documentRef, succeeded) {
         if (!mounted) return;
         if (!succeeded) {
@@ -1668,6 +1673,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
           : (layoutMode.isBookView ? 2 : 1),
       pageAnchor: PdfPageAnchor.top, // עיגון לראש הדף
       onInteractionStart: (_) {
+        _stopStableLayoutTrackingForUserNavigation();
         if (!(widget.tab.pinLeftPane.value ||
             (Settings.getValue<bool>('key-pin-sidebar') ?? false))) {
           _setLeftPaneVisibility(false);
@@ -1713,6 +1719,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                   event,
                   isControlPressed: HardwareKeyboard.instance.isControlPressed,
                 );
+                _stopStableLayoutTrackingForUserNavigation();
                 widget.tab.pdfViewerController.handlePointerSignalEvent(
                   adjusted,
                 );
@@ -2684,6 +2691,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   Future<void> _goToPageWithSpreadLock(int pageNumber) async {
     final controller = widget.tab.pdfViewerController;
     if (!controller.isReady) return;
+    _stopStableLayoutTrackingForUserNavigation();
     final totalPages = controller.pageCount;
     final safePage = pageNumber.clamp(1, totalPages);
 
@@ -3857,6 +3865,12 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     } else {
       _waitingForStableLayout = false;
     }
+  }
+
+  /// המשתמש ניווט או גלל — עמוד היעד של הפתיחה כבר לא רלוונטי, ובלי זה
+  /// הבדיקה הבאה הייתה מחזירה אותו לשם (issues #1255, #1258).
+  void _stopStableLayoutTrackingForUserNavigation() {
+    if (_waitingForStableLayout) _completeStableLayoutTracking();
   }
 
   void _cancelStableLayoutTracking() {

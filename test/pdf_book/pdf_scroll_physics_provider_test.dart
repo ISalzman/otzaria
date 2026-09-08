@@ -1,0 +1,82 @@
+import 'package:flutter/scheduler.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:otzaria/pdf_book/utils/pdf_scroll_physics_provider.dart';
+import 'package:pdfrx/pdfrx.dart';
+
+class _RecordingDelegate implements PdfViewerScrollInteractionDelegate {
+  int stops = 0;
+
+  @override
+  void init(PdfViewerController controller, TickerProvider vsync) {}
+
+  @override
+  void dispose() {}
+
+  @override
+  void stop() => stops++;
+
+  @override
+  void pan(Offset delta, PdfViewerLayoutMetrics layoutMetrics) {}
+
+  @override
+  void zoom(
+    double scale,
+    Offset focalPoint,
+    PdfViewerLayoutMetrics layoutMetrics,
+  ) {}
+}
+
+class _RecordingProvider extends PdfViewerScrollInteractionDelegateProvider {
+  final created = <_RecordingDelegate>[];
+
+  @override
+  PdfViewerScrollInteractionDelegate create() {
+    final delegate = _RecordingDelegate();
+    created.add(delegate);
+    return delegate;
+  }
+
+  @override
+  bool operator ==(Object other) => identical(this, other);
+
+  @override
+  int get hashCode => identityHashCode(this);
+}
+
+void main() {
+  group('StoppablePdfScrollPhysicsProvider', () {
+    test('stop לפני create אינו נופל', () {
+      final provider = StoppablePdfScrollPhysicsProvider(
+        inner: _RecordingProvider(),
+      );
+      expect(provider.stop, returnsNormally);
+    });
+
+    test('stop מועבר ל-delegate האחרון שנוצר', () {
+      final inner = _RecordingProvider();
+      final provider = StoppablePdfScrollPhysicsProvider(inner: inner);
+
+      provider.create();
+      provider.stop();
+      expect(inner.created.single.stops, 1);
+
+      // pdfrx יוצר delegate חדש בהחלפת provider — העצירה עוקבת אחרי החדש.
+      provider.create();
+      provider.stop();
+      expect(inner.created.first.stops, 1);
+      expect(inner.created.last.stops, 1);
+    });
+
+    test('ברירת המחדל עוטפת את ה-delegate הפיזיקלי של pdfrx', () {
+      final provider = StoppablePdfScrollPhysicsProvider();
+      expect(provider.create(), isA<PdfViewerScrollInteractionDelegate>());
+    });
+
+    test('שוויון לפי זהות — אותו מופע לא גורם ליצירת delegate חדש', () {
+      final a = StoppablePdfScrollPhysicsProvider();
+      final b = StoppablePdfScrollPhysicsProvider();
+      expect(a == a, isTrue);
+      expect(a == b, isFalse);
+    });
+  });
+}
