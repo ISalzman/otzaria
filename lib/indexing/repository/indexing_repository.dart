@@ -13,8 +13,6 @@ import 'package:otzaria/data/data_providers/tantivy_data_provider.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/data/data_providers/user_books_database_holder.dart';
 import 'package:otzaria/find_ref/repository/reference_books_cache.dart';
-import 'package:otzaria/core/app_paths.dart';
-import 'package:otzaria/indexing/services/index_merge_progress.dart';
 import 'package:otzaria/indexing/utils/book_facet_metadata_cache.dart';
 import 'package:otzaria/indexing/utils/pdf_extraction_prefetcher.dart';
 import 'package:otzaria/indexing/models/catalogue_order_resolver.dart';
@@ -257,15 +255,13 @@ class IndexingRepository {
   /// [library] The library containing books to index
   /// [onProgress] Callback function to report progress
   /// [onFinalizing] נקרא כשכל הספרים אונדקסו והמנוע ניגש לאחד את קבצי
-  /// האינדקס.
-  /// [onFinalizingProgress] מדווח את התקדמות האיחוד כשבר בין 0 ל-1.
+  /// האינדקס — שלב ארוך וללא התקדמות מדידה.
   /// מבצע אינדוקס ומחזיר תוצאה מפורטת, כולל ביטול וכשלים פר-ספר.
   Future<IndexingRunResult> indexAllBooks(
     Library library, {
     void Function()? onActualIndexingStarted,
     required void Function(int processed, int total) onProgress,
     void Function()? onFinalizing,
-    void Function(double fraction)? onFinalizingProgress,
     bool includePdfBooks = true,
   }) async {
     if (WindowRole.isSecondary) {
@@ -574,18 +570,7 @@ class IndexingRepository {
         debugPrint('💾 commit סופי: ${commitStopwatch.elapsedMilliseconds}ms');
         _stampCatalogueOrderAfterCommit();
         final optimizeStopwatch = Stopwatch()..start();
-        final mergeProgress = onFinalizingProgress == null
-            ? null
-            : IndexMergeProgress.start(
-                _tantivyDataProvider.activeIndexPath ??
-                    await AppPaths.getIndexPath(),
-                onFinalizingProgress,
-              );
-        try {
-          await optimizeIndexBestEffort(index.optimize);
-        } finally {
-          mergeProgress?.stop();
-        }
+        await optimizeIndexBestEffort(index.optimize);
         debugPrint('⚙️ optimize: ${optimizeStopwatch.elapsedMilliseconds}ms');
         debugPrint('⏱️ סה"כ אינדוקס: ${totalStopwatch.elapsed}');
       }

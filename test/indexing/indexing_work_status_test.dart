@@ -89,24 +89,6 @@ void main() {
       expect(item.actions, isEmpty);
     });
 
-    test('שלב האיחוד עם התקדמות: מד מוגדר ופירוט סיום ספרים', () {
-      final item = indexingWorkStatusItem(
-        const IndexingInProgress(
-          booksProcessed: 100,
-          totalBooks: 100,
-          isFinalizing: true,
-          finalizingProgress: 0.427,
-        ),
-        onTogglePause: () {},
-        onToggleEconomy: () {},
-      );
-
-      expect(item.message, 'מסיים ומאחד את קבצי האינדקס');
-      expect(item.detail, 'כל הספרים אונדקסו');
-      expect(item.progress, 0.427);
-      expect(item.actions, isEmpty);
-    });
-
     test('שלב הסריקה: הודעת בדיקה, התקדמות, ובלי לחצני השהיה/חיסכון', () {
       final item = indexingWorkStatusItem(
         const IndexingInProgress(
