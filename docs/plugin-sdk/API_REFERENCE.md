@@ -2113,6 +2113,7 @@ for (const plugin of data) {
     "version": "1.0.0",
     "enabled": true,
     "showInTools": true,
+    "sourceType": "packaged",
     "toolTabIconName": "book_24_regular"
   }
 ]
@@ -2127,7 +2128,15 @@ for (const plugin of data) {
 | `version` | `string` | גרסת התוסף. |
 | `enabled` | `boolean` | האם התוסף מופעל. |
 | `showInTools` | `boolean` | האם התוסף מוגדר להצגה באזור הכלים של אוצריא. זהו ערך ההגדרה של התוסף ואינו מציין האם התוסף פתוח כרגע. |
+| `sourceType` | `string` | מאיפה התוסף הותקן: `packaged` — מארכיון (חנות או קובץ), `development` — תוסף פיתוח שנטען מתיקייה, `localhost_dev` — תוסף פיתוח שנטען משרת פיתוח מקומי. **מ-0.9.98**; בגרסאות קודמות השדה חסר. |
 | `toolTabIconName` | `string` | שם אייקון ה-Fluent שבו התוסף משתמש באזור הכלים. אם שם האייקון שהוגדר בתוסף אינו אייקון Fluent מוכר (או שלא הוגדר), מוחזר `puzzle_piece_24_regular`. |
+
+**למה `sourceType` חשוב לתוסף שבודק עדכונים.** תוסף פיתוח נטען מתיקייה שהמפתח
+עורך, והגרסה שלו אינה באה מהחנות — אין שום משמעות להציע לו „עדכון”, וקל להתקין
+מעליו בטעות את הגרסה הארוזה. בדיקת העדכונים הפנימית של אוצריא מחריגה אותו
+(`PluginUpdateCheckService.eligiblePlugins` — `packaged` בלבד), וכך כדאי לעשות גם
+בתוסף: להשוות גרסאות רק ל-`sourceType === 'packaged'`, ולכל היותר לסמן תוסף פיתוח
+בתצוגה. **מ-0.9.98**
 
 **Fallback של האייקון:**
 

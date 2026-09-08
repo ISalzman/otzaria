@@ -5819,6 +5819,11 @@ class PluginBridgeAdapter {
                 'version': p.version,
                 'enabled': p.enabled,
                 'showInTools': p.showInTools,
+                // מאיפה התוסף הותקן. תוסף חנות שבודק עדכונים צריך את זה:
+                // בדיקת העדכונים הפנימית של אוצריא מחריגה תוספי פיתוח
+                // (PluginUpdateCheckService.eligiblePlugins), ובלי השדה הזה
+                // תוסף אינו יכול להחיל את אותו כלל.
+                'sourceType': p.sourceType,
                 'toolTabIconName':
                     pluginIconFromName(p.manifest.toolTabIconName) != null
                     ? p.manifest.toolTabIconName

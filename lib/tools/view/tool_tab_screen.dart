@@ -5,6 +5,7 @@ import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/core/focus_repository.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_bloc.dart';
+import 'package:otzaria/plugins/bloc/plugin_system_event.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_state.dart';
 import 'package:otzaria/plugins/bloc/plugin_updates_cubit.dart';
 import 'package:otzaria/plugins/services/plugin_runtime_dispatcher.dart';
@@ -77,6 +78,10 @@ class ToolTabScreenState extends State<ToolTabScreen>
 
   /// התוכן נבנה רק כשהטאב מוצג, כדי לא ליצור WebView מראש.
   bool _activated = false;
+
+  /// סריקת המניפסטים של תוספי הפיתוח נעשית פעם אחת לכל טאב — build רץ שוב
+  /// ושוב, ואין טעם לקרוא את הקבצים בכל פריים.
+  bool _devRescanRequested = false;
 
   /// הכלי שהוצג לאחרונה — ראה [resolveToolLookup].
   ToolCatalogEntry? _lastEntry;
@@ -232,13 +237,23 @@ class ToolTabScreenState extends State<ToolTabScreen>
   }
 
   /// בדיקת עדכונים עצלה בפתיחת טאב תוסף — הקוביט מתלכד וממטמן, כך שפתיחת
-  /// כמה טאבים גוררת לכל היותר קריאת רשת אחת לחלון זמן.
+  /// כמה טאבים גוררת לכל היותר קריאת רשת אחת לחלון זמן. באותה הזדמנות נסרקים
+  /// גם המניפסטים של תוספי הפיתוח: `manifest.json` שנערך כשהתוכנה הייתה סגורה
+  /// (או לפני שה-watcher עלה) משאיר גרסה תקועה ברשומה, ואחריה `plugin.listInstalled`
+  /// מדווח גרסה ישנה. פעם אחת לכל טאב, ובלי תוספי פיתוח זו שאילתה אחת ותו לא.
   void _requestUpdateCheck(PluginSystemState pluginState) {
     if (pluginState is! PluginSystemLoaded) return;
     final cubit = context.read<PluginUpdatesCubit>();
+    final pluginSystem = context.read<PluginSystemBloc>();
     final plugins = pluginState.plugins;
+    final needsDevRescan = !_devRescanRequested;
+    _devRescanRequested = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) cubit.ensureChecked(plugins);
+      if (!mounted) return;
+      cubit.ensureChecked(plugins);
+      if (needsDevRescan) {
+        pluginSystem.add(const RescanDevelopmentManifests());
+      }
     });
   }
 

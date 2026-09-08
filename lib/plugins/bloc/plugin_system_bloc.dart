@@ -29,6 +29,9 @@ import 'package:otzaria/tabs/models/pdf_tab.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
+import 'package:path/path.dart' as path;
+import 'package:otzaria/core/windowing/window_role.dart';
 import 'package:flutter/foundation.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/core/messages/plugin_messages.dart';
@@ -96,6 +99,7 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
     on<DetachDevelopmentPluginRequested>(_onDetachDevelopmentPluginRequested);
     on<ReloadDevelopmentPluginRequested>(_onReloadDevelopmentPluginRequested);
     on<DevelopmentPluginManifestChanged>(_onDevelopmentPluginManifestChanged);
+    on<RescanDevelopmentManifests>(_onRescanDevelopmentManifests);
     on<LoadLocalhostPluginRequested>(_onLoadLocalhostPluginRequested);
     on<ConfirmDevPluginInstall>(_onConfirmDevPluginInstall);
 
@@ -741,6 +745,40 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
   ) async {
     _removeSearchProviders(event.pluginId);
     PluginRuntimeDispatcher.instance.reloadPlugin(event.pluginId);
+  }
+
+  /// תוסף פיתוח שה-manifest שלו נערך כשהתוכנה הייתה סגורה — ה-watcher לא היה
+  /// שם כדי לרענן את הרשומה, והגרסה שנשמרה נשארת תקועה. כאן משווים את הגרסה
+  /// שבקובץ לזו שברשומה, ומעדכנים דרך אותו נתיב של ה-watcher.
+  ///
+  /// עלות בעלייה: שאילתה שכבר נעשית ל-`syncWatchers`, ואם אין תוספי פיתוח —
+  /// שום קריאת קבצים. הכשל בכל תוסף נבלע בנפרד: תיקייה שנעלמה או manifest
+  /// שנשבר באמצע עריכה אינם אמורים להפיל את הסריקה על השאר.
+  Future<void> _onRescanDevelopmentManifests(
+    RescanDevelopmentManifests event,
+    Emitter<PluginSystemState> emit,
+  ) async {
+    // הרשומה משותפת לכל החלונות; חלון משני היה כותב אותה שוב על אותם נתונים.
+    if (WindowRole.isSecondary) return;
+    final devPlugins = await repository.getDevelopmentPlugins();
+    for (final plugin in devPlugins) {
+      // localhost_dev נטען מ-HTTP (HMR) ואין לו תיקייה לקרוא ממנה.
+      if (plugin.isLocalhostDev) continue;
+      final devRootPath = plugin.devRootPath;
+      if (devRootPath == null) continue;
+      try {
+        final file = File(path.join(devRootPath, 'manifest.json'));
+        if (!await file.exists()) continue;
+        final json = jsonDecode(await file.readAsString());
+        final version = json is Map ? json['version'] : null;
+        if (version is! String || version == plugin.version) continue;
+        add(DevelopmentPluginManifestChanged(plugin.pluginId));
+      } catch (error) {
+        debugPrint(
+          'Plugin dev manifest rescan [${plugin.pluginId}]: $error',
+        );
+      }
+    }
   }
 
   Future<void> _onDevelopmentPluginManifestChanged(

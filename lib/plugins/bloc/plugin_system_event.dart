@@ -230,6 +230,15 @@ class DevelopmentPluginManifestChanged extends PluginSystemEvent {
   List<Object?> get props => [pluginId];
 }
 
+/// השוואה חד-פעמית של הגרסה הרשומה לתוספי פיתוח מול manifest.json שבתיקייה.
+/// ה-watcher (`PluginDevWatchService`) מרענן את הרשומה רק בזמן שהתוכנה רצה,
+/// ולכן bump שנעשה כשהיא הייתה סגורה נשאר תקוע — ו-`plugin.listInstalled`
+/// מדווח גרסה ישנה. מכאן העדכון נעשה דרך `DevelopmentPluginManifestChanged`,
+/// אותו נתיב בדיוק של ה-watcher.
+class RescanDevelopmentManifests extends PluginSystemEvent {
+  const RescanDevelopmentManifests();
+}
+
 class ConfirmDevPluginInstall extends PluginSystemEvent {
   final PluginManifest manifest;
   final String sourcePath;
