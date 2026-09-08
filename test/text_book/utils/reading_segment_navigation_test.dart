@@ -242,4 +242,15 @@ void main() {
       expect(closed, isTrue);
     });
   });
+
+  group('initialReadingAlignment', () {
+    test('פתיחה בפריט הראשון מיישרת לקצה — אין תוכן מעל קו העוגן', () {
+      expect(initialReadingAlignment(0), 0);
+    });
+
+    test('פתיחה בפריט אחר נשארת על קו העוגן', () {
+      expect(initialReadingAlignment(1), kReadingAnchorAlignment);
+      expect(initialReadingAlignment(120), kReadingAnchorAlignment);
+    });
+  });
 }
