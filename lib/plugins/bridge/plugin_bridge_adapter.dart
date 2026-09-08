@@ -3322,10 +3322,6 @@ class PluginBridgeAdapter {
           UiSnack.show(WindowMessages.printOnlyInMainWindow);
           return {'printed': false};
         }
-        final context = navigatorKey.currentContext;
-        if (context != null && !await verifySaferModePassword(context)) {
-          return {'printed': false};
-        }
         final printer = _dependencies.printPluginPage ?? _defaultPrintPage;
         final jobName = (args['jobName'] as String?)?.trim();
         final printLayout = _parsePdfLayout(args);
