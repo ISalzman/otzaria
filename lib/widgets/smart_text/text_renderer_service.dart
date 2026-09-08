@@ -77,15 +77,8 @@ class TextRendererService {
       processed = utils.removePunctuation(processed);
     }
 
-    // 3. החלפת שמות קדושים (אם נדרש)
-    if (settings.replaceHolyNames) {
-      processed = utils.replaceHolyNames(
-        processed,
-        style: settings.holyNameStyle,
-      );
-    }
-
-    // 4. הדגשת טקסט חיפוש (אם יש)
+    // 3. הדגשת טקסט חיפוש (אם יש) — לפני החלפת שם הוי"ה: תבנית ההדגשה
+    // מכירה את הכתיב שבשאילתה, ואחרי ההחלפה "יהוה" כבר לא נמצא בטקסט.
     if (settings.searchText.isNotEmpty) {
       processed = utils.highLight(
         processed,
@@ -100,6 +93,14 @@ class TextRendererService {
         isSearchResultLine: settings.isSearchResultLine,
         yellowBackground: settings.highlightYellowBackground,
         partialWordMatch: settings.partialWordHighlight,
+      );
+    }
+
+    // 4. החלפת שמות קדושים (אם נדרש)
+    if (settings.replaceHolyNames) {
+      processed = utils.replaceHolyNames(
+        processed,
+        style: settings.holyNameStyle,
       );
     }
 

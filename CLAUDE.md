@@ -913,6 +913,7 @@ dart format lib/file.dart    # Format ONLY files you modified
 | פתיחה בכרטיסייה חדשה בלחיצת גלגל (`MiddleClickOpen`) | `test/widgets/middle_click_open_test.dart` |
 | זיהוי קישור `<a>` תחת הסמן (תפריט הקשר / לחיצת גלגל) | `test/widgets/inline_link_targets_test.dart` |
 | Smart text render settings | `test/widgets/smart_text/render_settings_test.dart` |
+| הדגשת חיפוש כששם הוי"ה מוחלף (הדגשה לפני ההחלפה, issue #1248) | `test/widgets/smart_text/text_renderer_holy_name_highlight_test.dart` |
 | Smart text ↔ plugin section sync gate | `test/widgets/smart_text/smart_text_section_sync_gate_test.dart` |
 | קיבוע מדויק של גובה השורה (סימוני הערות, `<big>`) בשלושת מסלולי הרינדור | `test/widgets/smart_text/exact_line_height_test.dart` |
 | Work/indexing status overlays | `test/widgets/work_status_overlay_test.dart`, `…indexing_status_overlay_test.dart` |
