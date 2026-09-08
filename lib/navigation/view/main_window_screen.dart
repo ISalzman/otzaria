@@ -2518,7 +2518,6 @@ class MainWindowScreenState extends State<MainWindowScreen>
 
   @override
   Widget build(BuildContext context) {
-    StartupTimeline.instance.markOnce('mainScreenBuild');
     final Widget content = MultiBlocProvider(
       providers: [
         BlocProvider.value(value: _calendarCubit),

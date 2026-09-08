@@ -78,7 +78,9 @@ class StartupTimeline {
   }
 
   /// כמו [mark], אך רק בפעם הראשונה — לנקודות שחוזרות בכל build.
+  /// היציאה המוקדמת חוסכת סריקה של הרשימה בכל בנייה אחרי החשיפה.
   void markOnce(String name) {
+    if (_reported) return;
     if (_marks.any((mark) => mark.name == name)) return;
     mark(name);
   }
