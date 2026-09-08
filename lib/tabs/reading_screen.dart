@@ -6,6 +6,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/core/focus_repository.dart';
+import 'package:otzaria/core/windowing/tab_drag_preview.dart';
 import 'package:otzaria/history/bloc/history_bloc.dart';
 import 'package:otzaria/history/bloc/history_event.dart';
 import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
@@ -381,6 +382,11 @@ class _ReadingScreenState extends State<ReadingScreen>
           if (state.hasOpenTabs) {
             _ensurePageController(validIndex);
           }
+          // ⚠️ כאן ולא ב-`BlocListener`: הוא מאזין ל-`tabs.length`, וסגירת
+          // כרטיסיה יחד עם פתיחת אחרת משאירה את האורך זהה. ה-`buildWhen`
+          // שלמעלה כן משווה את הרשימה עצמה, ולכן הגריעה מתלווה בדיוק
+          // לרישום שנעשה בלולאת הילדים שלמטה.
+          TabContentBoundaries.instance.retainOnly(state.tabs);
           return Theme(
             data: Theme.of(context).copyWith(
               scaffoldBackgroundColor: readerBg,
@@ -448,9 +454,26 @@ class _ReadingScreenState extends State<ReadingScreen>
                                   key: ObjectKey(state.tabs[i]),
                                   child: TickerMode(
                                     enabled: i == validIndex,
-                                    child: _buildTabView(
-                                      state.tabs[i],
-                                      enableTourTargets: i == validIndex,
+                                    // גבול ציור פר-טאב — כך גרירת טאב שאינו
+                                    // המוצג מצלמת את **תוכנו** ולא את של
+                                    // הפעיל. ראו [TabContentBoundaries].
+                                    //
+                                    // ⚠️ ‎`PageView` כבר עוטף כל ילד בגבול
+                                    // ציור משלו (`addRepaintBoundaries`), אבל
+                                    // בלי מפתח — ובלי מפתח אין דרך להגיע
+                                    // לגבול של טאב מסוים מרצועת הכרטיסיות,
+                                    // שהיא תת-עץ אחר. הקינון הוא שכבת מכל
+                                    // ריקה, וזה מחיר זניח מול החלפת
+                                    // ה-`PageView` ב-`custom` רק כדי לכבות
+                                    // את העטיפה שלו.
+                                    child: RepaintBoundary(
+                                      key: TabContentBoundaries.instance.keyFor(
+                                        state.tabs[i],
+                                      ),
+                                      child: _buildTabView(
+                                        state.tabs[i],
+                                        enableTourTargets: i == validIndex,
+                                      ),
                                     ),
                                   ),
                                 ),

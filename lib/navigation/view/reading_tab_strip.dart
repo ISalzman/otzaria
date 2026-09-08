@@ -7,6 +7,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:otzaria/core/windowing/external_tab_drag.dart';
 import 'package:otzaria/core/windowing/tab_drag_preview.dart';
+import 'package:otzaria/navigation/view/tab_visuals.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/tabs/view/pane_drop_target.dart';
 
@@ -44,13 +45,6 @@ class ReadingTabStrip extends StatefulWidget {
 
   /// מידת כל כרטיסיה לאורך ציר הרצועה — רוחב באופקית, גובה באנכית.
   final List<double> widths;
-
-  /// הכרטיסיה הפעילה, או ‎-1 כשאין כזו.
-  ///
-  /// ⚠️ נדרש למוק הנגרר, לא לעיצוב: אזור התוכן מצייר רק את הכרטיסיה
-  /// הפעילה, ולכן רק היא רשאית לצרף את תוכנה למוק. ראו
-  /// `_DraggableTabState._buildPreview`.
-  final int activeTabIndex;
 
   /// ציר הרצועה. באנכית אין היפוך RTL: הכרטיסיה הראשונה תמיד למעלה.
   final Axis axis;
@@ -121,7 +115,6 @@ class ReadingTabStrip extends StatefulWidget {
     super.key,
     required this.tabs,
     required this.widths,
-    required this.activeTabIndex,
     required this.tabBuilder,
     required this.onReorder,
     required this.stripColor,
@@ -442,7 +435,6 @@ class _ReadingTabStripState extends State<ReadingTabStrip> {
                       _DraggableTab(
                         key: ObjectKey(widget.tabs[i]),
                         tab: widget.tabs[i],
-                        isActive: i == widget.activeTabIndex,
                         axis: widget.axis,
                         extent: widget.widths[i],
                         crossExtent: widget.crossExtent,
@@ -554,10 +546,6 @@ class _TabStripGeometry {
 /// כרטיסיה בודדת ברצועה, ניתנת לגרירה.
 class _DraggableTab extends StatefulWidget {
   final OpenedTab tab;
-
-  /// האם זו הכרטיסיה הפעילה — ראו [ReadingTabStrip.activeTabIndex].
-  final bool isActive;
-
   final Axis axis;
   final double extent;
   final double? crossExtent;
@@ -583,7 +571,6 @@ class _DraggableTab extends StatefulWidget {
   const _DraggableTab({
     super.key,
     required this.tab,
-    required this.isActive,
     required this.axis,
     required this.extent,
     required this.crossExtent,
@@ -689,10 +676,6 @@ class _DraggableTabState extends State<_DraggableTab> {
     // ⚠️ מודיעים **מיד**, ובלי להמתין לצילום: התצוגה הנייטיבית מתחילה עם
     // שרטוט GDI כדי שלא יהיה רגע ריק, והתמונה מגיעה בקריאה שנייה.
     widget.onDragStarted?.call(_cancelDrag);
-    // ⚠️ אזור התוכן מצייר את הכרטיסיה **הפעילה**, וגרירה במכוון אינה בוחרת
-    // כרטיסיה. צילומו בגרירת כרטיסיה אחרת הציג את תוכן הפעילה כאילו הוא
-    // שלה; בלי צילום המוק נופל לראש הכרטיסיה לבדו, וזה נכון.
-    if (!widget.isActive) return;
     _previewPending = true;
     unawaited(_finishPreview());
   }
@@ -705,6 +688,44 @@ class _DraggableTabState extends State<_DraggableTab> {
       _previewPending = false;
       if (!_dragging) _setContentImage(null);
     }
+  }
+
+  /// גוף המוק של הכרטיסיה הנגררת: הצילום שלה, או מוק שממלא את מקומו.
+  ///
+  /// ⚠️ הצילום הוא של **הכרטיסיה עצמה** ולא של אזור התוכן. אזור התוכן
+  /// מצייר את הכרטיסיה הפעילה, וגרירה במכוון אינה בוחרת כרטיסיה — כלומר
+  /// צילומו בגרירת כרטיסיה אחרת הציג ספר זר תחת הכרטיסיה שנגררה.
+  ///
+  /// ⚠️ כרטיסיה שאינה על המסך **כן** מצטלמת: היא נשארת בעץ בדלי
+  /// ה-keep-alive של ה-`PageView` עם שכבת הציור האחרונה שלה. ראו
+  /// [TabContentBoundaries]. רק לכרטיסיה שלא נפתחה מעולם אין תת-עץ, ושם
+  /// המוק מצויר מחדש עם שם הספר.
+  Future<ui.Image?> _captureContent(double ratio) async {
+    final key = TabContentBoundaries.instance.maybeKeyFor(widget.tab);
+    final captured = key == null ? null : await captureBoundary(key, ratio);
+    if (captured != null) return captured;
+    if (!mounted) return null;
+
+    // ⚠️ המידה נלקחת מאזור התוכן ולא מהחלון: אזור התוכן צר ממנו בסרגל
+    // הניווט ובעמודת הכרטיסיות, ומוק ברוחב החלון היה יוצא רחב מדי בדיוק
+    // באותה מידה.
+    final contentBox =
+        windowContentBoundaryKey.currentContext?.findRenderObject()
+            as RenderBox?;
+    final size = contentBox != null && contentBox.hasSize
+        ? contentBox.size
+        : null;
+    if (size == null || size.isEmpty) return null;
+
+    return composeTabContentPlaceholder(
+      title: widget.tab.title,
+      icon: tabTypeIconData(widget.tab),
+      background: widget.stripColor,
+      foreground: Theme.of(context).colorScheme.onSurface,
+      logicalSize: size,
+      captureRatio: ratio,
+      rtl: Directionality.of(context) == TextDirection.rtl,
+    );
   }
 
   /// מצלם את הכרטיסיה ואת התוכן שלה, ומרכיב מהם מוק של החלון.
@@ -724,7 +745,7 @@ class _DraggableTabState extends State<_DraggableTab> {
     final logical = view.physicalSize / dpr;
     final ratio = previewCaptureRatio(logical, dpr);
 
-    final content = await captureBoundary(windowContentBoundaryKey, ratio);
+    final content = await _captureContent(ratio);
     if (!mounted) {
       content?.dispose();
       return;

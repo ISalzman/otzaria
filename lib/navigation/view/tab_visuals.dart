@@ -49,6 +49,27 @@ Widget? buildTabTypeIcon(
   return null;
 }
 
+/// אותו אייקון כ-[buildTabTypeIcon], כ-[IconData] ולא כווידג'ט.
+///
+/// ⚠️ נדרש למי שמצייר על `Canvas` ולא בונה עץ וידג'טים — מוק הגרירה של
+/// כרטיסיה שאין מה לצלם בה (`composeTabContentPlaceholder`). שם האייקון
+/// מצויר כגליף בגופן, וגליף דורש `codePoint` ו-`fontFamily`.
+///
+/// ⚠️ **תמיד מחזיר אייקון**, בשונה מ-[buildTabTypeIcon] שמחזיר `null`
+/// לכרטיסיית טקסט: מוק בלי אייקון הוא מלבן ריק עם כותרת תלויה באוויר.
+///
+/// ⚠️ כרטיסיית תוסף מקבלת אייקון כללי ולא את האייקון שהתוסף הצהיר עליו.
+/// [buildToolTabLeadingIcon] יכול להחזיר גם **תמונה** מהתוסף, ולא רק
+/// גליף, ולתמונה אין `codePoint`. זה מוק גרירה של רגע אחד, והנאמנות הזו
+/// אינה שווה מסלול ציור שני.
+IconData tabTypeIconData(OpenedTab tab) {
+  if (tab is PdfBookTab) return FluentIcons.document_pdf_16_regular;
+  if (tab is SearchingTab) return FluentIcons.search_24_regular;
+  if (tab is CombinedTab) return FluentIcons.split_horizontal_24_regular;
+  if (tab is ToolTab) return FluentIcons.toolbox_24_regular;
+  return FluentIcons.document_24_regular;
+}
+
 /// אייקון ברירת מחדל לכרטיסיה שאין לה אייקון סוג משלה.
 Widget buildTabFallbackIcon(
   BuildContext context, {

@@ -105,7 +105,6 @@ class _VerticalReadingTabStripState extends State<VerticalReadingTabStrip> {
           scrollable: true,
           crossExtent: widget.width,
           tabs: state.tabs,
-          activeTabIndex: state.currentTabIndex,
           widths: [for (final _ in state.tabs) kVerticalTabHeight],
           requireLongPressToDrag: !isDesktop,
           onReorder: (tab, newIndex) =>

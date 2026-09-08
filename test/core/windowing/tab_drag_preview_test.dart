@@ -156,4 +156,137 @@ void main() {
       preview.image.dispose();
     });
   });
+
+  group('composeTabContentPlaceholder', () {
+    // המוק לכרטיסיה שלא נפתחה מעולם: אין לה תת-עץ, ולכן אין מה לצלם.
+    // ⚠️ בלי המוק הזה הגרירה נופלת לראש הכרטיסיה לבדו — וזה מה שהמשתמש
+    // דחה: "אני לא מעוניין שיוצג רק ראש הכרטיסייה אלא שיוצג החלון".
+
+    const background = Color(0xFFF2EBE0);
+    const foreground = Color(0xFF000000);
+    const icon = IconData(0xe000, fontFamily: 'MaterialIcons');
+
+    Future<ui.Image> build({
+      String title = 'בראשית',
+      Size logicalSize = const Size(400, 300),
+      double captureRatio = 1,
+      bool rtl = true,
+    }) async {
+      final image = await composeTabContentPlaceholder(
+        title: title,
+        icon: icon,
+        background: background,
+        foreground: foreground,
+        logicalSize: logicalSize,
+        captureRatio: captureRatio,
+        rtl: rtl,
+      );
+      expect(image, isNotNull);
+      return image!;
+    }
+
+    test('בגודל אזור התוכן, מוכפל ביחס הצילום', () async {
+      final image = await build(
+        logicalSize: const Size(400, 300),
+        captureRatio: 1.5,
+      );
+      expect(image.width, 600);
+      expect(image.height, 450);
+      image.dispose();
+    });
+
+    test('הרקע הוא רקע הקריאה, ולא שקיפות', () async {
+      // ⚠️ אטימות אינה קוסמטיקה: `StretchBlt` שבצד הנייטיבי אינו יודע
+      // אלפא, ומוק שקוף היה מגיע לשם כמלבן שחור.
+      final image = await build();
+      final data = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
+      final bytes = data!.buffer.asUint8List();
+      // הפינה — רחוק מהאייקון ומהכותרת שבמרכז.
+      expect(bytes[0], (background.r * 255).round());
+      expect(bytes[1], (background.g * 255).round());
+      expect(bytes[2], (background.b * 255).round());
+      expect(bytes[3], 255, reason: 'אטום');
+      image.dispose();
+    });
+
+    test('גודל אפס אינו מייצר תמונה', () async {
+      final image = await composeTabContentPlaceholder(
+        title: 'בראשית',
+        icon: icon,
+        background: background,
+        foreground: foreground,
+        logicalSize: Size.zero,
+        captureRatio: 1,
+        rtl: true,
+      );
+      expect(image, isNull);
+    });
+
+    test('כותרת ארוכה אינה גולשת ואינה מפילה את הציור', () async {
+      // ⚠️ שם ספר ארוך הוא הרגיל ולא הקצה ("שולחן ערוך אורח חיים עם באר
+      // הגולה ובאר היטב"). התקרה על מספר השורות היא מה שמונע ממנו לכסות
+      // את המוק כולו.
+      final image = await build(
+        title:
+            'שולחן ערוך אורח חיים עם באר הגולה ובאר היטב ומשנה ברורה '
+            'ושער הציון והוספות מרובות מאוד מאוד',
+        logicalSize: const Size(300, 200),
+      );
+      expect(image.width, 300);
+      expect(image.height, 200);
+      image.dispose();
+    });
+  });
+
+  group('TabContentBoundaries', () {
+    setUp(TabContentBoundaries.instance.debugClear);
+
+    test('מפתח יציב לאותה כרטיסיה, ושונה בין כרטיסיות', () {
+      final registry = TabContentBoundaries.instance;
+      final first = Object();
+      final second = Object();
+
+      expect(registry.keyFor(first), same(registry.keyFor(first)));
+      expect(registry.keyFor(second), isNot(same(registry.keyFor(first))));
+    });
+
+    test('maybeKeyFor אינו רושם מפתח חדש', () {
+      // ⚠️ מסלול הצילום קורא ל-`maybeKeyFor`, והוא נקרא גם לחלונית של
+      // כרטיסיה מפוצלת — שאינה יושבת ב-`PageView` בכלל. רישום משם היה
+      // מדליף מפתח שלעולם לא ייכנס לעץ ולא ייגרע ממנו.
+      final registry = TabContentBoundaries.instance;
+      final tab = Object();
+
+      expect(registry.maybeKeyFor(tab), isNull);
+      registry.retainOnly(const []);
+      expect(registry.maybeKeyFor(tab), isNull);
+    });
+
+    test('retainOnly גורע כרטיסיה שנסגרה', () {
+      final registry = TabContentBoundaries.instance;
+      final kept = Object();
+      final closed = Object();
+      final keptKey = registry.keyFor(kept);
+      registry.keyFor(closed);
+
+      registry.retainOnly([kept]);
+
+      expect(registry.maybeKeyFor(kept), same(keptKey));
+      expect(registry.maybeKeyFor(closed), isNull);
+    });
+
+    test('הזהות היא מה שמפריד, ולא השוויון', () {
+      // שני ערכים שווים-ולא-זהים הם שתי כרטיסיות שונות של אותו ספר, וכל
+      // אחת צריכה גבול משלה.
+      final registry = TabContentBoundaries.instance;
+      final first = [1, 2, 3];
+      final second = [1, 2, 3];
+
+      expect(registry.keyFor(first), isNot(same(registry.keyFor(second))));
+
+      registry.retainOnly([first]);
+      expect(registry.maybeKeyFor(first), isNotNull);
+      expect(registry.maybeKeyFor(second), isNull);
+    });
+  });
 }
