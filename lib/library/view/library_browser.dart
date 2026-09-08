@@ -2042,6 +2042,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
     String? pathLine,
     VoidCallback? onDoubleTap,
     FocusNode? focusNode,
+    Widget? trailing,
   }) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
@@ -2111,6 +2112,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
                   ],
                 ),
               ),
+              if (trailing != null) ...[const SizedBox(width: 8), trailing],
             ],
           ),
         ),
@@ -2136,6 +2138,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
     required VoidCallback onTap,
     required VoidCallback onDoubleTap,
     FocusNode? focusNode,
+    VoidCallback? onBookDeleted,
   }) {
     const double iconBoxSize = 26.0;
     const double iconSize = 14.0;
@@ -2173,6 +2176,10 @@ class _LibraryBrowserState extends State<LibraryBrowser>
       onTap: onTap,
       onDoubleTap: onDoubleTap,
       focusNode: focusNode,
+      // מוחרג ממסלול הפוקוס — חיצים/Tab עוצרים רק על השורה, כמו בכרטיס הרשת.
+      trailing: ExcludeFocusTraversal(
+        child: BookActionsMenuButton(book: book, onBookDeleted: onBookDeleted),
+      ),
     );
   }
 
@@ -2295,6 +2302,11 @@ class _LibraryBrowserState extends State<LibraryBrowser>
                 },
                 onDoubleTap: () =>
                     _openBookInReader(book, book is PdfBook ? 1 : 0),
+                onBookDeleted: () {
+                  if (ctx.mounted) {
+                    ctx.read<LibraryBloc>().add(RefreshLibrary());
+                  }
+                },
               ),
             );
           },
