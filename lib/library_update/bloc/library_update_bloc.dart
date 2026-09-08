@@ -254,7 +254,7 @@ class LibraryUpdateBloc extends Bloc<LibraryUpdateEvent, LibraryUpdateState> {
       return LibraryUpdateState(
         status: LibraryUpdateStatus.error,
         message: message,
-        errorMessage: error.toString(),
+        errorMessage: _errorDetail(error),
         isCheckFailure: true,
       );
     }
@@ -357,7 +357,7 @@ class LibraryUpdateBloc extends Bloc<LibraryUpdateEvent, LibraryUpdateState> {
           hasUpdate: partial?.hasDatabaseChanges ?? false,
           changedBookIds: partial?.changedBookIds ?? const {},
           requiresFullIndexRefresh: requiresFullIndexRefresh,
-          errorMessage: applyError.toString(),
+          errorMessage: _errorDetail(applyError),
         ),
       );
     } finally {
@@ -437,7 +437,7 @@ class LibraryUpdateBloc extends Bloc<LibraryUpdateEvent, LibraryUpdateState> {
           requiresFullIndexRefresh:
               dbReplaced || state.requiresFullIndexRefresh,
           plan: dbReplaced ? plan : null,
-          errorMessage: e.toString(),
+          errorMessage: _errorDetail(e),
         ),
       );
     } finally {
@@ -659,7 +659,16 @@ class LibraryUpdateBloc extends Bloc<LibraryUpdateEvent, LibraryUpdateState> {
     return ltrIsolate('${(bytes / (1 << 10)).toStringAsFixed(0)}KB');
   }
 
-  // ה-UI מציג שגיאת עדכון גנרית בלבד; שומרים את הפרטים ל-errors.txt לאבחון.
+  /// פרט הכשל לחיווי. חריגות ה-updater נושאות הודעה עברית; קטיעת רשת גולמית
+  /// ממופה לטקסט קצר. הפרטים המלאים נרשמים ל-errors.txt ב-[_logUpdateError].
+  String _errorDetail(Object error) {
+    if (error is PatchDownloadException) return error.message;
+    if (PatchDownloader.isTransientNetworkError(error)) {
+      return LibraryMessages.updateNetworkInterrupted;
+    }
+    return error.toString();
+  }
+
   void _logUpdateError(String stage, Object e, StackTrace st) {
     debugPrint('[LibraryUpdate] ERROR in $stage: $e\n$st');
     try {
