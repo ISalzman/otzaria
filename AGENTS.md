@@ -114,6 +114,113 @@ lib/
 ```
 
 
+## Startup Path (MANDATORY)
+
+**The rule: nothing runs during startup unless it must run before the first frame.**
+
+Every `await` added to `main()` is paid by every user on every launch, forever. Startup
+regressions are also the hardest bugs in this app to diagnose: they reproduce only on the
+reporter's machine, and the blocking call is usually invisible from Dart. Issues #343, #989 and
+#1192 were three instances of the same mistake.
+
+### Why Windows startup is different
+
+On Windows the Dart **UI isolate runs on the platform thread**. A synchronous native call — COM /
+WinRT, a registry write, `Process.run`, a plugin's `initialize()` — blocks that thread, and with
+it **every Dart frame and every Dart timer**. In #1192 a notification-plugin init that costs ~50ms
+on a dev machine blocked for **30 seconds** inside one COM call on a reporter's machine.
+
+Two consequences that are easy to get wrong:
+
+- **A `Future.timeout` does not protect you.** The timer that would fire it is queued on the same
+  blocked thread. You cannot defend against synchronous native work with a Dart timeout — you can
+  only avoid making the call.
+- **A slow machine is not a slower version of yours.** Filtering agents, antivirus, managed
+  profiles and roaming registry hives change the *shape* of the cost, not just its size: process
+  spawn becomes ~1s each (#989), a registry subtree becomes unwritable, an OS service stops
+  answering. Never conclude "it's fast" from your own box.
+
+### Before adding anything to `main()` / `AppBootstrap`
+
+Answer all three, in this order:
+
+| Question | If the answer is… |
+|---|---|
+| Is it required to paint the first frame? | No → run it after reveal (below) |
+| Do the call sites already initialize on demand? | Yes → **delete it** — that is the whole fix |
+| Can it be skipped based on stored state? | Yes → gate on that state and run only when needed |
+
+#1192 answered all three: the notification plugin was initialized eagerly, every call site already
+did `if (!isInitialized) await init()`, and the one genuine need — restoring already-scheduled
+alerts — applies only when alerts are actually stored. The fix deleted the call rather than
+speeding it up.
+
+### Running work after the window is revealed
+
+Deferred work lives in a `_runDeferredX()` function in `main.dart`, launched with `unawaited(...)`,
+and waits for the reveal with a timeout so it still runs if the reveal never lands:
+
+```dart
+Future<void> _runDeferredThing() async {
+  // פר-תהליך: חלון משני היה מריץ את זה שוב על אותם משאבים.
+  if (WindowRole.isSecondary) return;
+  try {
+    await _mainWindowRevealedCompleter.future.timeout(const Duration(seconds: 20));
+  } on TimeoutException {
+    // ממשיכים בכל זאת — אחרת המשימה לא תרוץ כלל.
+  }
+  try {
+    await doTheThing();
+  } catch (error, stackTrace) {
+    _logNonFatalInitializationError('Thing', error, stackTrace);
+  }
+}
+```
+
+Three parts, all mandatory:
+
+1. **`WindowRole.isSecondary` guard** for anything per-process or per-machine (registry, system
+   notifications, update checks, error-report flush). Without it every extra window repeats it.
+2. **Reveal gate with a timeout** — never an unguarded `await` on the completer.
+3. **Non-fatal failure** — a startup step must never abort the boot. It logs through
+   `_logNonFatalInitializationError` and returns.
+
+### Forbidden on the startup path
+
+| Never | Instead |
+|---|---|
+| Synchronous COM / WinRT / FFI on the main isolate | Defer past reveal, or don't call it |
+| `Process.run` in a loop (`reg.exe`, `which`, …) | Use the direct API (#989: 10 spawns blew every timeout) |
+| A network call without a timeout | Explicit timeout on every request (#343) |
+| Heavy CPU on the main isolate (parsing, scanning, hashing) | `compute` / `Isolate.run` |
+| Sync file I/O over a directory tree | Async, off the reveal path, memoized |
+| A failure that propagates out of an init step | `_logNonFatalInitializationError` |
+
+**Cosmetic extras are best-effort, and must say so.** A step that only improves polish — a shell
+icon, an Office trusted-protocol key, a cache warm-up — swallows its own failures per item, so one
+denied write does not abort the rest and does not reach the error log. Registering a real handler
+is not cosmetic; marking it trusted is.
+
+### Instrumentation
+
+`StartupTimeline` (`lib/core/startup_timeline.dart`) records phases and marks and writes a
+`=== Slow startup` record to `errors.txt` only when reveal exceeded its threshold. It carries a
+**deliberately small permanent skeleton** — the bootstrap phases, `reveal:*`, `mainScreenInit`,
+`bootstrapDone`/`bootstrapReady` and the stall detector.
+
+- Wrap a new heavy startup step in `StartupTimeline.instance.phase('name', ...)` — that is the
+  skeleton growing correctly.
+- **Never put a mark inside `build()` or a per-frame callback.** Marks added while chasing a
+  specific report are temporary: remove them in the same PR that fixes the cause.
+- A `stall:<ms>` mark means the isolate stopped answering — the blocker is synchronous, and if no
+  Dart mark brackets it, it is **native**.
+
+When Dart-side marks show nothing, use the native stall detector in
+`windows/runner/startup_watchdog.cpp`. It suspends the main thread, unwinds it without dbghelp, and
+appends `=== Startup stall` with module+RVA frames to `errors.txt`. It stops itself at reveal and
+is silent on a healthy launch. That is how #1192 was found after three rounds of Dart instrumentation
+missed it.
+
 ## MANDATORY UI Components
 
 ### 1. Icons - `otzaria_icons` FIRST, `fluentui_system_icons` for the rest
@@ -951,6 +1058,7 @@ if (Platform.isAndroid || Platform.isIOS) {
 16. **Minimal comments** - Few comments, max 2 lines each, for the first-time reader only (explain *why* / prevent regressions) — never document history. Fix violating comments you encounter
 17. **Settings screen text** - Every user-visible string under `lib/settings/` goes through `context.settingsText('<Hebrew>')`, with the Hebrew as the key and the English in `settings_en.arb`; run `dart run tool/generate_settings_l10n.dart` after any change
 18. **Guided tour text** - Same rule for `lib/tour/`: every step title/body and live-tip title/description needs a `settings_en.arb` entry, and a step's `body` stays a literal (variables go in as placeholders)
+19. **Startup path** - Nothing runs before the first frame unless it must. Anything else goes in a `_runDeferred*` function gated on `WindowRole.isSecondary`, awaiting the reveal completer with a timeout, and failing non-fatally. Never make a synchronous native/COM/registry/process call on the main isolate — a `Future.timeout` cannot save you from it
 
 ### Common Mistakes to Avoid
 - Fixing a bug by adding code instead of finding and removing the root cause
@@ -988,6 +1096,10 @@ if (Platform.isAndroid || Platform.isIOS) {
 - Opening a dialog from settings without `settingsDialogBuilder` — it inherits neither language nor direction
 - Passing a variable to `settingsText` without a case in `settings_variable_labels_test.dart` — the validator only sees literals
 - Adding too many comments, long comments (over 2 lines), or comments that document history ("used to be X", "changed in commit Y") instead of explaining *why* for a first-time reader
+- Adding an `await` to `main()` or `AppBootstrap` for work the first frame does not need
+- Wrapping a synchronous native call in `Future.timeout` and believing it is now bounded — the timer is queued on the same blocked thread
+- Letting a cosmetic startup step (a shell key, an icon, a warm-up) throw and reach the error log
+- Leaving `StartupTimeline` marks added to chase one report, or putting a mark inside `build()`
 
 ---
 
