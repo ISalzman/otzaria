@@ -329,11 +329,6 @@ class IndexingRepository {
 
     try {
       await _setDbReadBoost(true);
-      // מצב bulk: בלי מיזוגי-רקע של סגמנטים בזמן הבנייה — ה-optimize בסוף
-      // ממזג הכול ממילא, והמיזוגים תוך-כדי רק גוזלים CPU מהאינדוקס עצמו
-      // (נמדד כ-~0.2ms למסמך של האטה בקריאות המנוע).
-      final engineForBulk = await _tantivyDataProvider.engine;
-      await engineForBulk.setBulkIndexing(enabled: true);
 
       final catalogueOrder = buildCatalogueOrderResolver(library);
       await Future.wait([
@@ -505,10 +500,8 @@ class IndexingRepository {
           }
 
           processedBooks++;
-          // כל commit יוצר סגמנט לכל thread של המנוע, וכולם ממוזגים
-          // בסוף ב-optimize סדרתי אחד — כך שסף נמוך מייקר את הסיום פי
-          // כמה. ה-commit הוא רק נקודת שמירה להתאוששות: קריסה מאבדת את
-          // הספרים שאונדקסו מאז האחרון, ולכן הסף חוסם גם מלמעלה.
+          // ה-commit הוא נקודת שמירה להתאוששות (קריסה מאבדת את הספרים שאונדקסו
+          // מאז האחרון), אך סף נמוך עולה בזמן commit ובסגמנטים קטנים.
           if (indexedSinceCommit >= 200) {
             commitStopwatch
               ..reset()
@@ -599,15 +592,6 @@ class IndexingRepository {
     } finally {
       prefetcher.dispose();
       await _setDbReadBoost(false);
-      // החזרת מדיניות המיזוג הרגילה — גם בביטול/שגיאה, כדי שאינדוקס
-      // אינקרמנטלי עתידי ימשיך למזג כרגיל. best-effort: כשל כאן לא
-      // מסכן את האינדקס (שכבר עבר commit).
-      try {
-        final engine = await _tantivyDataProvider.engine;
-        await engine.setBulkIndexing(enabled: false);
-      } catch (e) {
-        debugPrint('⚠️ כיבוי מצב bulk נכשל: $e');
-      }
       _tantivyDataProvider.isIndexing.value = false;
     }
     return cancelled
