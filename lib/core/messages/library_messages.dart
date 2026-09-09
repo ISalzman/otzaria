@@ -93,6 +93,9 @@ abstract class LibraryMessages {
   static const String updateDiskSpaceError =
       'אין מספיק מקום פנוי בדיסק לעדכון הספרייה';
 
+  static const String updateNetworkInterrupted =
+      'החיבור לרשת נקטע במהלך ההורדה';
+
   static const String deltaApplyFailed = 'החלת עדכון הדלתא נכשלה';
 
   static const String deltaResultMismatch =

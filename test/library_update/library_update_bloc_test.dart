@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:bloc_test/bloc_test.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -76,6 +77,24 @@ class _DiskFullOnFullDownloadService extends _FakeService {
     throw const LibraryUpdateDiskSpaceException(
       'אין מספיק מקום פנוי בכונן: נדרש ~7.5GB, פנוי 2.0GB',
     );
+  }
+}
+
+/// הורדה מלאה שנופלת על קטיעת רשת — [error] הוא החריגה שתיזרק.
+class _NetworkFailingFullDownloadService extends _FakeService {
+  _NetworkFailingFullDownloadService(super.plan, this.error);
+
+  final Object error;
+
+  @override
+  Future<void> applyFullDownload(
+    LibraryUpdatePlan plan, {
+    LibraryUpdateProgressCallback? onProgress,
+    FullDbReplacedCallback? onDbReplaced,
+    bool Function()? isCancelled,
+  }) async {
+    fullCalled = true;
+    throw error;
   }
 }
 
@@ -1022,6 +1041,67 @@ void main() {
               LibraryMessages.updateDiskSpaceError,
             )
             .having((s) => s.errorMessage, 'errorMessage', contains('7.5GB')),
+      ],
+    );
+
+    blocTest<LibraryUpdateBloc, LibraryUpdateState>(
+      'קטיעת רשת בהורדה מלאה → פרט הכשל הוא ההודעה העברית של ה-updater',
+      build: () => _bloc(
+        _NetworkFailingFullDownloadService(
+          fullPlan,
+          const PatchNetworkException(
+            SocketException('Connection closed before full header'),
+          ),
+        ),
+      ),
+      seed: () => LibraryUpdateState(
+        status: LibraryUpdateStatus.needsFullConfirmation,
+        plan: fullPlan,
+      ),
+      act: (b) => b.add(const ConfirmFullDownload()),
+      expect: () => [
+        isA<LibraryUpdateState>().having(
+          (s) => s.status,
+          'status',
+          LibraryUpdateStatus.downloading,
+        ),
+        isA<LibraryUpdateState>()
+            .having((s) => s.status, 'status', LibraryUpdateStatus.error)
+            .having((s) => s.message, 'message', 'שגיאה בהורדה המלאה')
+            .having(
+              (s) => s.errorMessage,
+              'errorMessage',
+              'החיבור לרשת נקטע במהלך ההורדה',
+            ),
+      ],
+    );
+
+    blocTest<LibraryUpdateBloc, LibraryUpdateState>(
+      'SocketException גולמית בהורדה מלאה → טקסט עברי קצר, לא toString',
+      build: () => _bloc(
+        _NetworkFailingFullDownloadService(
+          fullPlan,
+          const SocketException('Connection reset by peer'),
+        ),
+      ),
+      seed: () => LibraryUpdateState(
+        status: LibraryUpdateStatus.needsFullConfirmation,
+        plan: fullPlan,
+      ),
+      act: (b) => b.add(const ConfirmFullDownload()),
+      expect: () => [
+        isA<LibraryUpdateState>().having(
+          (s) => s.status,
+          'status',
+          LibraryUpdateStatus.downloading,
+        ),
+        isA<LibraryUpdateState>()
+            .having((s) => s.status, 'status', LibraryUpdateStatus.error)
+            .having(
+              (s) => s.errorMessage,
+              'errorMessage',
+              LibraryMessages.updateNetworkInterrupted,
+            ),
       ],
     );
 
