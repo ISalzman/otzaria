@@ -90,7 +90,8 @@ class ReadingTabStrip extends StatefulWidget {
   ///
   /// ⚠️ שני קולבקים ולא אחד: הצילום אסינכרוני, ותצוגת הגרירה חייבת
   /// להתחיל מיד. הבעלות על התמונה עוברת למי שמקבל אותה.
-  final void Function(OpenedTab tab, TabWindowPreview preview)? onTabSnapshot;
+  final void Function(OpenedTab tab, TabWindowPreview preview, int generation)?
+  onTabSnapshot;
 
   /// נקרא בסיום הגרירה בכל מסלול — הצלחה, ביטול, או שחרור בחוץ.
   ///
@@ -103,11 +104,7 @@ class ReadingTabStrip extends StatefulWidget {
   /// את הנגררת לצדה באזור הקריאה בלי לוותר על הגרירה.
   final void Function(OpenedTab tab)? onSpringOpen;
 
-  /// נקרא כשהסמן **יצא** מהרצועה באמצע גרירה.
-  ///
-  /// ⚠️ זה מה שמפריד סידור כרטיסיות מהוצאת כרטיסיה, ולא גאומטריית המסך:
-  /// סידור אינו יוצא מהרצועה לעולם. ראו
-  /// `CrossWindowTabDrag.notePointerLeftStrip`.
+  /// נקרא ביציאה מהרצועה, להבחנה בין סידור מקומי להוצאת כרטיסיה.
   final VoidCallback? onDragLeftStrip;
 
   /// נקרא כשכרטיסיה שוחררה מחוץ לכל יעד הפלה.
@@ -410,9 +407,7 @@ class _ReadingTabStripState extends State<ReadingTabStrip> {
         _cancelSpring();
         _stopAutoScroll();
         if (_insertIndex != null) setState(() => _insertIndex = null);
-        // ⚠️ **הסימן שהמחווה אינה סידור.** סידור כרטיסיות אינו יוצא
-        // מהרצועה, ולכן היציאה עצמה היא מה שמתיר את המסירה המוקדמת
-        // ל-Windows. ראו [ReadingTabStrip.onDragLeftStrip].
+        // יציאה מהרצועה מאפשרת מסירה מוקדמת ל-Windows.
         widget.onDragLeftStrip?.call();
       },
       onAcceptWithDetails: (details) => _completeReorder(details.data),
@@ -460,9 +455,10 @@ class _ReadingTabStripState extends State<ReadingTabStrip> {
                               ),
                         onTabSnapshot: widget.onTabSnapshot == null
                             ? null
-                            : (preview) => widget.onTabSnapshot!(
+                            : (preview, generation) => widget.onTabSnapshot!(
                                 widget.tabs[i],
                                 preview,
+                                generation,
                               ),
                         onDroppedOutside: widget.onDroppedOutside == null
                             ? null
@@ -573,7 +569,7 @@ class _DraggableTab extends StatefulWidget {
   ///
   /// ⚠️ שני קולבקים ולא אחד: הצילום אסינכרוני, ותצוגת הגרירה חייבת להתחיל
   /// מיד. הבעלות על התמונה עוברת למי שמקבל אותה.
-  final void Function(TabWindowPreview preview)? onTabSnapshot;
+  final void Function(TabWindowPreview preview, int generation)? onTabSnapshot;
   final VoidCallback onDragFinished;
 
   /// נקרא כשהכרטיסיה שוחררה מחוץ לכל יעד הפלה — ייתכן מחוץ לחלון כולו.
@@ -676,6 +672,7 @@ class _DraggableTabState extends State<_DraggableTab> {
   /// מי שמסיים אחרון משחרר: אם ההרכבה עוד רצה, הסיום מדלג והיא תשחרר.
   bool _dragging = false;
   bool _previewPending = false;
+  int _dragGeneration = 0;
 
   void _handleDragFinished() {
     _dragging = false;
@@ -685,42 +682,36 @@ class _DraggableTabState extends State<_DraggableTab> {
 
   void _handleDragStarted() {
     _dragging = true;
+    _setContentImage(null);
     // ⚠️ מודיעים **מיד**, ובלי להמתין לצילום: התצוגה הנייטיבית מתחילה עם
     // שרטוט GDI כדי שלא יהיה רגע ריק, והתמונה מגיעה בקריאה שנייה.
     widget.onDragStarted?.call(_cancelDrag);
     _previewPending = true;
-    unawaited(_finishPreview());
+    final generation = ++_dragGeneration;
+    unawaited(_finishPreview(generation));
   }
 
   /// עוטף את [_buildPreview] ומשחרר את הצילום אם הגרירה הסתיימה בינתיים.
-  Future<void> _finishPreview() async {
+  Future<void> _finishPreview(int generation) async {
     try {
-      await _buildPreview();
+      await _buildPreview(generation);
     } finally {
-      _previewPending = false;
-      if (!_dragging) _setContentImage(null);
+      if (generation == _dragGeneration) {
+        _previewPending = false;
+        if (!_dragging) _setContentImage(null);
+      }
     }
   }
 
-  /// גוף המוק של הכרטיסיה הנגררת: הצילום שלה, או מוק שממלא את מקומו.
-  ///
-  /// ⚠️ הצילום הוא של **הכרטיסיה עצמה** ולא של אזור התוכן. אזור התוכן
-  /// מצייר את הכרטיסיה הפעילה, וגרירה במכוון אינה בוחרת כרטיסיה — כלומר
-  /// צילומו בגרירת כרטיסיה אחרת הציג ספר זר תחת הכרטיסיה שנגררה.
-  ///
-  /// ⚠️ כרטיסיה שאינה על המסך **כן** מצטלמת: היא נשארת בעץ בדלי
-  /// ה-keep-alive של ה-`PageView` עם שכבת הציור האחרונה שלה. ראו
-  /// [TabContentBoundaries]. רק לכרטיסיה שלא נפתחה מעולם אין תת-עץ, ושם
-  /// המוק מצויר מחדש עם שם הספר.
+  /// מצלם את הכרטיסיה הנגררת, או מצייר מוק אם אין לה גבול ציור זמין.
+  /// אזור התוכן אינו מקור צילום: הוא מציג תמיד את הכרטיסיה הפעילה.
   Future<ui.Image?> _captureContent(double ratio) async {
     final key = TabContentBoundaries.instance.maybeKeyFor(widget.tab);
     final captured = key == null ? null : await captureBoundary(key, ratio);
     if (captured != null) return captured;
     if (!mounted) return null;
 
-    // ⚠️ המידה נלקחת מאזור התוכן ולא מהחלון: אזור התוכן צר ממנו בסרגל
-    // הניווט ובעמודת הכרטיסיות, ומוק ברוחב החלון היה יוצא רחב מדי בדיוק
-    // באותה מידה.
+    // המוק נמדד לפי אזור התוכן, ולא לפי החלון הרחב ממנו.
     final contentBox =
         windowContentBoundaryKey.currentContext?.findRenderObject()
             as RenderBox?;
@@ -751,14 +742,14 @@ class _DraggableTabState extends State<_DraggableTab> {
   /// * המוק המלא — לתצוגה הנייטיבית שמחוץ לחלון, בגודל החלון שייפתח.
   /// * צילום התוכן לבדו — לתצוגה המוקטנת שבתוך החלון, שם ראש הכרטיסיה
   ///   מוצג כווידג'ט אמיתי ולא כתמונה.
-  Future<void> _buildPreview() async {
+  Future<void> _buildPreview(int generation) async {
     final view = View.of(context);
     final dpr = view.devicePixelRatio;
     final logical = view.physicalSize / dpr;
     final ratio = previewCaptureRatio(logical, dpr);
 
     final content = await _captureContent(ratio);
-    if (!mounted) {
+    if (!mounted || generation != _dragGeneration) {
       content?.dispose();
       return;
     }
@@ -768,11 +759,11 @@ class _DraggableTabState extends State<_DraggableTab> {
     if (onSnapshot == null) return;
     // ⚠️ הגרירה כבר הסתיימה — אין למי להציג את המוק. ההרכבה היא צילום
     // שני, מיזוג ותמונה של ~4.8MB, וגרירה קצרה שילמה את כולם על לא כלום.
-    if (!_dragging) return;
+    if (!_dragging || generation != _dragGeneration) return;
 
     final tabHead = await _captureTab(ratio);
     if (tabHead == null) return;
-    if (!mounted || content == null) {
+    if (!mounted || content == null || generation != _dragGeneration) {
       tabHead.dispose();
       return;
     }
@@ -787,18 +778,12 @@ class _DraggableTabState extends State<_DraggableTab> {
     );
     tabHead.dispose();
     if (preview == null) return;
-    // ⚠️ `_dragging` נבדק **שוב** כאן, ולא רק לפני ההרכבה.
-    //
-    // ההרכבה היא צילום שני ותמונה של ~4.8MB, ובגרירה קצרה היא מסתיימת
-    // אחרי השחרור — ואם בינתיים התחילה גרירה **חדשה**, המוק הזה היה
-    // נשלח לנייטיב בשמה: תמונה של כרטיסיה אחרת, בגודל יעד אחר, ו-
-    // `_snapshotSent` נדלק על סמכה. מאז שהמסירה המוקדמת מותנית בדגל
-    // הזה, טעות כזו אינה קוסמטית אלא מוסרת גרירה עם תמונה שקרית.
-    if (!mounted || !_dragging) {
+    // מונע ממוק מאוחר להישלח לגרירה שכבר הסתיימה או הוחלפה.
+    if (!mounted || !_dragging || generation != _dragGeneration) {
       preview.image.dispose();
       return;
     }
-    onSnapshot(preview);
+    onSnapshot(preview, generation);
   }
 
   @override

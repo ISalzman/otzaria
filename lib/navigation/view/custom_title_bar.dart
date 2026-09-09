@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
+
 import 'package:otzaria/core/windowing/app_window_scope.dart';
 import 'package:otzaria/theme/app_tokens.dart';
 import 'package:flutter/foundation.dart';
@@ -133,9 +134,7 @@ final ButtonStyle _kIconButtonStyle = IconButton.styleFrom(
   minimumSize: const Size(32, 32),
   padding: EdgeInsets.zero,
   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-  shape: RoundedRectangleBorder(
-    borderRadius: AppTokens.borderRadiusAll,
-  ),
+  shape: RoundedRectangleBorder(borderRadius: AppTokens.borderRadiusAll),
 );
 
 class _CustomTitleBarState extends State<CustomTitleBar> {
@@ -297,9 +296,7 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
                         // כפתורי פעולה (היסטוריה וכו') - תמיד מוצגים
                         SizedBox(
                           height: 40,
-                          child: Center(
-                            child: _buildActionButtons(context),
-                          ),
+                          child: Center(child: _buildActionButtons(context)),
                         ),
 
                         // תוכן הכותרת (טאבים או כותרת רגילה)
@@ -335,9 +332,7 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
                                       // נלקח לפני ה-await: אחריו ה-context
                                       // עלול כבר לא להיות מותקן.
                                       final window =
-                                          AppWindowScope.controllerOf(
-                                            context,
-                                          );
+                                          AppWindowScope.controllerOf(context);
                                       await FullscreenHelper.toggleFullscreen(
                                         context,
                                         false,
@@ -353,18 +348,15 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
                                     // סגירה מנומסת — עוברת דרך ה-handshake
                                     // של onWindowClose ולא הורגת מיד.
                                     onPressed: () =>
-                                        AppWindowScope.controllerOf(
-                                          context,
-                                        ).close(),
+                                        AppWindowScope.controllerOf(context)
+                                            .close(),
                                   ),
                                 if (!settingsState.isFullscreen)
                                   SizedBox(
                                     width: _kWindowCaptionButtonsWidth,
                                     height: 50,
                                     child: WindowCaption(
-                                      brightness: Theme.of(
-                                        context,
-                                      ).brightness,
+                                      brightness: Theme.of(context).brightness,
                                       backgroundColor: Colors.transparent,
                                     ),
                                   ),
@@ -382,10 +374,7 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
 
             return Column(
               mainAxisSize: MainAxisSize.min,
-              children: [
-                topBar,
-                _buildNarrowTabsRow(context),
-              ],
+              children: [topBar, _buildNarrowTabsRow(context)],
             );
           },
         );
@@ -409,9 +398,7 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
       width: _kAppBarControlsWidth,
       child: Stack(
         children: [
-          const DragToMoveArea(
-            child: SizedBox.expand(),
-          ),
+          const DragToMoveArea(child: SizedBox.expand()),
           Center(
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -643,7 +630,8 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
           cancelDrag: cancelDrag,
         );
       },
-      onTabSnapshot: (_, snapshot) => _crossWindowDrag.applySnapshot(snapshot),
+      onTabSnapshot: (_, snapshot, generation) =>
+          _crossWindowDrag.applySnapshot(snapshot, generation),
       onDragFinishedAnywhere: _crossWindowDrag.end,
       onDragLeftStrip: _crossWindowDrag.notePointerLeftStrip,
       onDroppedOutside: MultiWindowService.isSupported
@@ -702,19 +690,15 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
             _EmptyAreaDoubleTapRecognizer:
                 GestureRecognizerFactoryWithHandlers<
                   _EmptyAreaDoubleTapRecognizer
-                >(
-                  () => _EmptyAreaDoubleTapRecognizer(debugOwner: this),
-                  (recognizer) {
-                    recognizer.isPointerOnTab = (position) =>
-                        _hitTestTab(context, position);
-                    recognizer.onDoubleTap = _onTabsAreaDoubleTap;
-                  },
-                ),
+                >(() => _EmptyAreaDoubleTapRecognizer(debugOwner: this), (
+                  recognizer,
+                ) {
+                  recognizer.isPointerOnTab = (position) =>
+                      _hitTestTab(context, position);
+                  recognizer.onDoubleTap = _onTabsAreaDoubleTap;
+                }),
           },
-          child: KeyedSubtree(
-            key: tourReadingTabsTargetKey,
-            child: tabStrip,
-          ),
+          child: KeyedSubtree(key: tourReadingTabsTargetKey, child: tabStrip),
         ),
       ),
     );
@@ -758,17 +742,11 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
   // --- Helper Methods ---
 
   void _showHistoryDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) => const HistoryDialog(),
-    );
+    showDialog(context: context, builder: (context) => const HistoryDialog());
   }
 
   void _showBookmarksDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) => const BookmarksDialog(),
-    );
+    showDialog(context: context, builder: (context) => const BookmarksDialog());
   }
 
   void _showSaveWorkspaceDialog(BuildContext context) {
@@ -1503,13 +1481,7 @@ class _CaptionActionButtonState extends State<_CaptionActionButton> {
             minHeight: 32,
           ),
           decoration: BoxDecoration(color: bgColor),
-          child: Center(
-            child: Icon(
-              widget.icon,
-              size: 16,
-              color: iconColor,
-            ),
-          ),
+          child: Center(child: Icon(widget.icon, size: 16, color: iconColor)),
         ),
       ),
     );

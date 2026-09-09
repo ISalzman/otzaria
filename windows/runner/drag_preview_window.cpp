@@ -299,6 +299,12 @@ void MoveToCursor() {
   Compose(&pt);
 }
 
+void MovePreviewTo(POINT pt) {
+  if (!g_window) return;
+  ::SetWindowPos(g_window, nullptr, pt.x, pt.y, 0, 0,
+                 SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+}
+
 LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wparam,
                          LPARAM lparam) {
   switch (message) {
@@ -329,7 +335,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wparam,
       if (should_show != visible) {
         ::ShowWindow(hwnd, should_show ? SW_SHOWNOACTIVATE : SW_HIDE);
       }
-      if (should_show) Compose(&pt);
+      if (should_show) MovePreviewTo(pt);
       return 0;
     }
     case WM_DESTROY:
@@ -504,17 +510,7 @@ SystemDragResult DragWithSystem() {
   int expected_h = 0;
   PreviewSize(&expected_w, &expected_h);
 
-  // ⚠️ מיקום אל הסמן **לפני** המסירה, ובלי תנאי.
-  //
-  // מעל חלון המקור התצוגה מוסתרת, וטיימר המעקב מדלג על `Compose` — כלומר
-  // היא נשארת חונה במקום שבו הגרירה התחילה. כשההצמדה נמסרת מתוך החלון
-  // (השתהות בקצה העליון של הצג) זה המצב הרגיל, ובלי השורה הזו נשברו שני
-  // דברים: התצוגה הופיעה קפואה במרחק מהסמן, ו-`WM_NCLBUTTONDOWN` קיבע
-  // את ההיסט הזה לכל אורך הגרירה — כך שגם `out.rect` בשחרור בלי הצמדה
-  // הצביע על הפינה הישנה, והחלון נפתח רחוק ממקום השחרור.
-  //
-  // בלי תנאי כי במסלול היציאה מהחלון התצוגה כבר עוקבת אחרי הסמן, ושם זו
-  // אותה נקודה בדיוק — אותו קוד לשני המסלולים, ולא שניים שנפרדים בשקט.
+  // המעקב אינו מרנדר מעל חלון המקור; יש לעדכן מיקום לפני מסירת הגרירה.
   Compose(&cursor);
 
   g_system_dragging.store(true);

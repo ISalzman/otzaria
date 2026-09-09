@@ -89,6 +89,7 @@ void main() {
         targetWidth: 1100,
         targetHeight: 760,
       ),
+      1,
     );
     // השליחה אסינכרונית, ו-`_snapshotSent` נדלק רק בסופה.
     await Future<void>.delayed(const Duration(milliseconds: 40));
@@ -198,9 +199,7 @@ void main() {
 
   test('הכרטיסיה האחרונה אינה יוצאת לחלון חדש', () async {
     // גרירתה החוצה הייתה משאירה חלון ריק ופותחת חדש — תזוזה בלי תועלת.
-    tabsBloc.emitState(
-      TabsState(tabs: [firstTab()], currentTabIndex: 0),
-    );
+    tabsBloc.emitState(TabsState(tabs: [firstTab()], currentTabIndex: 0));
     runner.cursorTarget = (slot: null, isSelf: false, isShellTray: false);
 
     await drag.handleDroppedOutside(firstTab(), tabsBloc);
@@ -487,6 +486,24 @@ void main() {
       expect(runner.systemDragCalls, 0);
       expect(tabsBloc.events, isEmpty);
     });
+
+    test('תשובת מיקום מגרירה קודמת אינה מוסרת את הגרירה הבאה', () async {
+      final gate = Completer<void>();
+      runner.cursorTarget = (slot: null, isSelf: false, isShellTray: false);
+      runner.cursorGate = gate;
+
+      drag.begin(firstTab(), colors, tabsBloc: tabsBloc);
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      expect(runner.cursorQueries, greaterThan(0));
+
+      drag.end();
+      runner.cursorTarget = (slot: 1, isSelf: true, isShellTray: false);
+      drag.begin(firstTab(), colors, tabsBloc: tabsBloc);
+      gate.complete();
+      await Future<void>.delayed(const Duration(milliseconds: 40));
+
+      expect(runner.systemDragCalls, 0);
+    });
   });
 
   group('צילום הכרטיסיה', () {
@@ -515,6 +532,7 @@ void main() {
           targetWidth: 1100,
           targetHeight: 760,
         ),
+        1,
       );
       await Future<void>.delayed(const Duration(milliseconds: 50));
 
@@ -534,6 +552,7 @@ void main() {
           targetWidth: 1100,
           targetHeight: 760,
         ),
+        1,
       );
       await Future<void>.delayed(const Duration(milliseconds: 260));
       gate.complete();
@@ -547,6 +566,54 @@ void main() {
             'צילום שמגיע אחרי `dragOutToSystem` אינו מורכב, ומזייף '
             'את חישוב ה-snapped',
       );
+    });
+
+    test('מוק מגרירה קודמת נדחה אחרי שגרירה חדשה התחילה', () async {
+      drag.begin(firstTab(), colors, tabsBloc: tabsBloc);
+      drag.end();
+      drag.begin(firstTab(), colors, tabsBloc: tabsBloc);
+
+      drag.applySnapshot(
+        TabWindowPreview(
+          image: await opaqueImage(),
+          targetWidth: 1100,
+          targetHeight: 760,
+        ),
+        1,
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 40));
+
+      expect(runner.setImageCalls, 0);
+    });
+
+    test('שליחת מוק ישן אינה מאשרת מסירה של גרירה חדשה', () async {
+      final gate = Completer<void>();
+      runner.cursorTarget = (slot: 1, isSelf: true, isShellTray: false);
+      runner.cursorY = 200;
+      runner.imageGate = gate;
+
+      drag.begin(firstTab(), colors, tabsBloc: tabsBloc);
+      drag.applySnapshot(
+        TabWindowPreview(
+          image: await opaqueImage(),
+          targetWidth: 1100,
+          targetHeight: 760,
+        ),
+        1,
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 40));
+      expect(runner.setImageCalls, 1);
+
+      drag.end();
+      drag.begin(firstTab(), colors, tabsBloc: tabsBloc);
+      drag.notePointerLeftStrip();
+      gate.complete();
+      await Future<void>.delayed(const Duration(milliseconds: 40));
+      runner.cursorY = 0;
+      runner.approachingTop = true;
+      await Future<void>.delayed(const Duration(milliseconds: 160));
+
+      expect(runner.systemDragCalls, 0);
     });
   });
 
@@ -851,10 +918,7 @@ void main() {
 
     setUp(() {
       tabsBloc.emitState(
-        TabsState(
-          tabs: [_UnserializableTab(), firstTab()],
-          currentTabIndex: 0,
-        ),
+        TabsState(tabs: [_UnserializableTab(), firstTab()], currentTabIndex: 0),
       );
       runner.cursorTarget = (slot: null, isSelf: false, isShellTray: false);
     });
@@ -914,9 +978,11 @@ class _FakeRunner {
 
   /// כמה פעימות של המעקב יצאו לנייטיב — מודד שהלולאה נעצרה.
   int cursorQueries = 0;
+  Completer<void>? cursorGate;
 
   /// כמה פעמים נשלח צילום הכרטיסיה, והאם הוא הגיע **אחרי** המסירה למערכת.
   int setImageCalls = 0;
+  Completer<void>? imageGate;
   bool imageArrivedAfterHandOff = false;
   Map<Object?, Object?>? lastOpenArgs;
 
@@ -932,14 +998,7 @@ class _FakeRunner {
   /// המסלול היה מסתיים באותה מיקרו-משימה — כלומר "לא נפתח חלון בזמן
   /// הגרירה" היה עובר גם אם כן נפתח.
   Completer<void>? systemDragGate;
-  ({
-    bool ran,
-    bool snapped,
-    int left,
-    int top,
-    int width,
-    int height,
-  })
+  ({bool ran, bool snapped, int left, int top, int width, int height})
   systemDragResult = (
     ran: true,
     snapped: false,
@@ -960,18 +1019,25 @@ class _FakeRunner {
           switch (call.method) {
             case 'windowAtCursor':
               cursorQueries++;
+              final target = cursorTarget;
+              final isApproachingTop = approachingTop;
+              final minTravel = minUpwardTravel;
+              final x = cursorX;
+              final y = cursorY;
+              await cursorGate?.future;
               return {
-                'slot': cursorTarget.slot,
-                'isSelf': cursorTarget.isSelf,
-                'isShellTray': cursorTarget.isShellTray,
-                'approachingTop': approachingTop,
-                'minUpwardTravel': minUpwardTravel,
-                'x': cursorX,
-                'y': cursorY,
+                'slot': target.slot,
+                'isSelf': target.isSelf,
+                'isShellTray': target.isShellTray,
+                'approachingTop': isApproachingTop,
+                'minUpwardTravel': minTravel,
+                'x': x,
+                'y': y,
               };
             case 'setTabDragImage':
               setImageCalls++;
               if (systemDragCalls > 0) imageArrivedAfterHandOff = true;
+              await imageGate?.future;
               return null;
             case 'dragOutToSystem':
               systemDragCalls++;

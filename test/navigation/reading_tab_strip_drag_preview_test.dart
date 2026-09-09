@@ -72,7 +72,7 @@ void main() {
                   tabs: tabs,
                   widths: [for (final _ in tabs) tabWidth],
                   onReorder: (_, _) {},
-                  onTabSnapshot: onSnapshot,
+                  onTabSnapshot: (tab, preview, _) => onSnapshot(tab, preview),
                   tabBuilder: (tab, index, width) => SizedBox(
                     width: width,
                     child: ColoredBox(

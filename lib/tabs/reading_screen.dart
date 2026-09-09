@@ -382,10 +382,7 @@ class _ReadingScreenState extends State<ReadingScreen>
           if (state.hasOpenTabs) {
             _ensurePageController(validIndex);
           }
-          // ⚠️ כאן ולא ב-`BlocListener`: הוא מאזין ל-`tabs.length`, וסגירת
-          // כרטיסיה יחד עם פתיחת אחרת משאירה את האורך זהה. ה-`buildWhen`
-          // שלמעלה כן משווה את הרשימה עצמה, ולכן הגריעה מתלווה בדיוק
-          // לרישום שנעשה בלולאת הילדים שלמטה.
+          // שינוי כרטיסיות באותו אורך אינו מגיע ל-BlocListener.
           TabContentBoundaries.instance.retainOnly(state.tabs);
           return Theme(
             data: Theme.of(context).copyWith(
@@ -454,18 +451,8 @@ class _ReadingScreenState extends State<ReadingScreen>
                                   key: ObjectKey(state.tabs[i]),
                                   child: TickerMode(
                                     enabled: i == validIndex,
-                                    // גבול ציור פר-טאב — כך גרירת טאב שאינו
-                                    // המוצג מצלמת את **תוכנו** ולא את של
-                                    // הפעיל. ראו [TabContentBoundaries].
-                                    //
-                                    // ⚠️ ‎`PageView` כבר עוטף כל ילד בגבול
-                                    // ציור משלו (`addRepaintBoundaries`), אבל
-                                    // בלי מפתח — ובלי מפתח אין דרך להגיע
-                                    // לגבול של טאב מסוים מרצועת הכרטיסיות,
-                                    // שהיא תת-עץ אחר. הקינון הוא שכבת מכל
-                                    // ריקה, וזה מחיר זניח מול החלפת
-                                    // ה-`PageView` ב-`custom` רק כדי לכבות
-                                    // את העטיפה שלו.
+                                    // המפתח מאפשר לצלם את הכרטיסיה הנגררת,
+                                    // גם כשהיא אינה הפעילה.
                                     child: RepaintBoundary(
                                       key: TabContentBoundaries.instance.keyFor(
                                         state.tabs[i],
