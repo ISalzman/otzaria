@@ -577,6 +577,33 @@ void main() {
       expect(_CountingPane.initCount['ב'], 1);
     });
 
+    testWidgets('גרירת מפריד אינה קוראת שוב ל-paneBuilder', (tester) async {
+      final calls = <String, int>{};
+      Widget paneBuilder(OpenedTab pane) {
+        calls.update(pane.title, (count) => count + 1, ifAbsent: () => 1);
+        return _CountingPane(pane.title, key: ValueKey(pane));
+      }
+
+      final root = CombinedTab(
+        rightTab: _LeafTab('א'),
+        leftTab: _LeafTab('ב'),
+      );
+      await tester.pumpWidget(_host(root, paneBuilder: paneBuilder));
+
+      expect(calls['א'], 1);
+      expect(calls['ב'], 1);
+
+      await tester.drag(
+        find.byType(MouseRegion).last,
+        const Offset(-60, 0),
+        warnIfMissed: false,
+      );
+      await tester.pumpAndSettle();
+
+      expect(calls['א'], 1);
+      expect(calls['ב'], 1);
+    });
+
     testWidgets('החלפת טאב מפוצל באחר בונה את החלוניות החדשות בלבד', (
       tester,
     ) async {

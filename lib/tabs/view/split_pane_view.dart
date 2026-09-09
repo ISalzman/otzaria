@@ -80,13 +80,17 @@ class SplitPaneView extends StatelessWidget {
     OpenedTab pane,
     Widget Function(OpenedTab pane) paneBuilder,
   ) {
+    // _SplitNode בונה את החלוניות פעם אחת לפני ה-ValueListenableBuilder, כדי
+    // שגרירת המפריד תפרוס אותן מחדש בלי לבנות את תצוגות הספרים. ה-child חייב
+    // להישאר מחוץ ל-LayoutBuilder, שנקרא מחדש בכל שינוי רוחב.
+    final child = paneBuilder(pane);
     return ClipRect(
       child: KeyedSubtree(
         key: GlobalObjectKey(pane),
         child: LayoutBuilder(
           builder: (context, constraints) => NavPanelPaneWidthScope(
             width: constraints.maxWidth,
-            child: paneBuilder(pane),
+            child: child,
           ),
         ),
       ),

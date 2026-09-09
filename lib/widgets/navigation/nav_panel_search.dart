@@ -239,7 +239,8 @@ class NavPanelPaneWidthScope extends InheritedWidget {
 
   @override
   bool updateShouldNotify(NavPanelPaneWidthScope oldWidget) =>
-      oldWidget.width != width;
+      (oldWidget.width >= kNavPanelSearchHoistMinWidth) !=
+      (width >= kNavPanelSearchHoistMinWidth);
 }
 
 /// מסמן את אינדקס הלשונית שבתוכה יושב התוכן — כדי שהפרסום יגיע לסרגל רק
