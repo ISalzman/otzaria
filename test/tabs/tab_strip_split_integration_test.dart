@@ -61,7 +61,6 @@ void main() {
                       child: ReadingTabStrip(
                         stripColor: const Color(0xFFF2EBE0),
                         tabs: state.tabs,
-                        activeTabIndex: state.currentTabIndex,
                         widths: [for (final _ in state.tabs) tabWidth],
                         onReorder: (tab, index) =>
                             bloc.add(MoveTab(tab, index)),

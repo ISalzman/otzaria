@@ -105,7 +105,6 @@ class _VerticalReadingTabStripState extends State<VerticalReadingTabStrip> {
           scrollable: true,
           crossExtent: widget.width,
           tabs: state.tabs,
-          activeTabIndex: state.currentTabIndex,
           widths: [for (final _ in state.tabs) kVerticalTabHeight],
           requireLongPressToDrag: !isDesktop,
           onReorder: (tab, newIndex) =>
@@ -123,9 +122,10 @@ class _VerticalReadingTabStripState extends State<VerticalReadingTabStrip> {
             tabsBloc: context.read<TabsBloc>(),
             cancelDrag: cancelDrag,
           ),
-          onTabSnapshot: (_, snapshot) =>
-              _crossWindowDrag.applySnapshot(snapshot),
+          onTabSnapshot: (_, snapshot, generation) =>
+              _crossWindowDrag.applySnapshot(snapshot, generation),
           onDragFinishedAnywhere: _crossWindowDrag.end,
+          onDragLeftStrip: _crossWindowDrag.notePointerLeftStrip,
           onDroppedOutside: MultiWindowService.isSupported
               ? (tab) => _crossWindowDrag.handleDroppedOutside(
                   tab,

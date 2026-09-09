@@ -299,6 +299,12 @@ void MoveToCursor() {
   Compose(&pt);
 }
 
+void MovePreviewTo(POINT pt) {
+  if (!g_window) return;
+  ::SetWindowPos(g_window, nullptr, pt.x, pt.y, 0, 0,
+                 SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+}
+
 LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wparam,
                          LPARAM lparam) {
   switch (message) {
@@ -329,7 +335,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wparam,
       if (should_show != visible) {
         ::ShowWindow(hwnd, should_show ? SW_SHOWNOACTIVATE : SW_HIDE);
       }
-      if (should_show) Compose(&pt);
+      if (should_show) MovePreviewTo(pt);
       return 0;
     }
     case WM_DESTROY:
@@ -503,6 +509,9 @@ SystemDragResult DragWithSystem() {
   int expected_w = 0;
   int expected_h = 0;
   PreviewSize(&expected_w, &expected_h);
+
+  // המעקב אינו מרנדר מעל חלון המקור; יש לעדכן מיקום לפני מסירת הגרירה.
+  Compose(&cursor);
 
   g_system_dragging.store(true);
   ::KillTimer(g_window, kFollowTimerId);
