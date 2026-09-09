@@ -27,8 +27,9 @@ Future<void> main() async {
         // אסור שיישאר <sup>: HtmlWidget מממש אותו כ-WidgetSpan, ומנוע Flutter
         // משבץ placeholders בפסקת RTL בסדר ויזואלי הפוך — המספרים מתחלפים.
         expect(out, isNot(contains('<sup')));
-        expect(out, contains('¹'));
-        expect(out, contains('²'));
+        expect(out, contains('<span class="footnote-marker-number">'));
+        expect(out, contains('1'));
+        expect(out, contains('2'));
       },
     );
 
@@ -41,17 +42,18 @@ Future<void> main() async {
       final out = TextRendererService.processText(line, settings);
 
       final digits = RegExp(
-        '[¹²³]',
+        '[123]',
       ).allMatches(out).map((m) => m.group(0)).toList();
-      expect(digits, ['¹', '²', '³']);
+      expect(digits, ['1', '2', '3']);
     });
 
-    test('סימון דו-ספרתי מומר במלואו', () {
+    test('סימון דו-ספרתי נשמר במלואו', () {
       const line = 'מילה<sup class="footnote-marker">14</sup> עוד';
 
       final out = TextRendererService.processText(line, settings);
 
-      expect(out, contains('¹⁴'));
+      expect(out, contains('<span class="footnote-marker-number">'));
+      expect(out, contains('14'));
     });
 
     test('תוכן הסימון עטוף בסימני בידוד דו-כיווניים (LRI/PDI)', () {
@@ -59,7 +61,7 @@ Future<void> main() async {
 
       final out = TextRendererService.processText(line, settings);
 
-      expect(out, contains('\u2066⁷\u2069'));
+      expect(out, contains('\u20667\u2069'));
     });
 
     test('סימון אות עברית נפלט כ-span מעוצב (אין ספרות-עיליות לעברית)', () {
@@ -71,7 +73,7 @@ Future<void> main() async {
       expect(out, contains('<span class="footnote-marker-number">'));
     });
 
-    test('sup מספרי חשוף (בלי class) מומר אף הוא לספרות-עיליות', () {
+    test('sup מספרי חשוף (בלי class) נפלט אף הוא כ-raised-sup', () {
       // חלק מספרי ההערות-inline מקודדים מרקרים כ-<sup>1</sup> ללא class,
       // והם חשופים לאותו באג היפוך — מקבלים את אותו טיפול.
       const line = 'שורה<sup>1</sup> המשך<sup>2</sup> סוף';
@@ -79,8 +81,9 @@ Future<void> main() async {
       final out = TextRendererService.processText(line, settings);
 
       expect(out, isNot(contains('<sup')));
-      expect(out, contains('¹'));
-      expect(out, contains('²'));
+      expect(out, contains('class="raised-sup"'));
+      expect(out, contains('1'));
+      expect(out, contains('2'));
     });
 
     // sup חשוף היה נשאר `<sup>` ונרנדר ב-WidgetSpan של fwfh — מה שהפך את סדר
