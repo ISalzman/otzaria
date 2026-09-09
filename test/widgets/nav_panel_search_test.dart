@@ -6,6 +6,8 @@ import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/widgets/navigation/app_top_bar.dart';
 import 'package:otzaria/widgets/lists/nav_tree_tile.dart';
+import 'package:otzaria/tabs/models/tab.dart';
+import 'package:otzaria/tabs/view/split_pane_view.dart';
 import 'package:otzaria/widgets/navigation/nav_panel_search.dart';
 import 'package:otzaria/widgets/navigation/nav_side_panel.dart';
 import 'package:otzaria/widgets/text/otzaria_search_field.dart';
@@ -353,6 +355,70 @@ void main() {
       tester.getSize(find.byType(NavPanelSearchBar)).width,
       300 - AppTopBar.horizontalPadding(false),
     );
+  });
+
+  // issue #1268 — בתצוגה מפוצלת החלון רחב אך החלונית צרה: השדה "הורם" לסרגל
+  // צר מדי ונעלם (עלה על כפתור ההגדרות). ההחלטה חייבת להיות לפי רוחב החלונית.
+  group('הרמת השדה לפי רוחב החלונית ולא לפי רוחב החלון (issue #1268)', () {
+    testWidgets('חלונית צרה בתוך חלון רחב — אין הרמה', (tester) async {
+      tester.view.physicalSize = const Size(1200, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      bool? canHoist;
+      await tester.pumpWidget(
+        wrap(
+          Row(
+            children: [
+              SizedBox(
+                width: 300,
+                child: NavPanelPaneWidthScope(
+                  width: 300,
+                  child: Builder(
+                    builder: (context) {
+                      canHoist = NavPanelSearch.canHoist(context);
+                      return const SizedBox.shrink();
+                    },
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+
+      expect(canHoist, isFalse);
+    });
+
+    testWidgets('כל חלונית ב-SplitPaneView מקבלת את רוחבה', (tester) async {
+      tester.view.physicalSize = const Size(1200, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      double? paneWidth;
+      await tester.pumpWidget(
+        wrap(
+          Row(
+            children: [
+              SizedBox(
+                width: 320,
+                child: SplitPaneView.buildPane(
+                  _FakePane('א'),
+                  (_) => Builder(
+                    builder: (context) {
+                      paneWidth = NavPanelPaneWidthScope.maybeOf(context);
+                      return const SizedBox.shrink();
+                    },
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+
+      expect(paneWidth, 320);
+    });
   });
 
   testWidgets('מחוץ לחלונית ניווט אין הגבהה — הלשונית מציירת שדה מקומי', (
@@ -751,4 +817,12 @@ void main() {
     expect(tester.binding.focusManager.primaryFocus, beforeFocus);
     expect(find.text('אבג'), findsOneWidget);
   });
+}
+
+class _FakePane extends OpenedTab {
+  _FakePane(super.title);
+  @override
+  OpenedTab clone() => this;
+  @override
+  Map<String, dynamic> toJson() => {'type': '_FakePane', 'title': title};
 }
