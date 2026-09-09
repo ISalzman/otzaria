@@ -14,12 +14,24 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
   final SettingsRepository _repository;
   final Future<void> Function(String fontFamily) _ensureFontLoaded;
 
+  /// [initialSettings] — תמונת ההגדרות השמורות ([SettingsRepository.readSettings]);
+  /// בלעדיה המסך הראשון נבנה מברירות מחדל וקופץ אחרי LoadSettings (issue #1280).
   SettingsBloc({
-    required this._repository,
+    required SettingsRepository repository,
+    Map<String, dynamic>? initialSettings,
     @visibleForTesting
     Future<void> Function(String fontFamily)? ensureFontLoaded,
-  }) : _ensureFontLoaded = ensureFontLoaded ?? AppFonts.ensureFontLoaded,
-       super(SettingsState.initial()) {
+  }) : _repository = repository,
+       _ensureFontLoaded = ensureFontLoaded ?? AppFonts.ensureFontLoaded,
+       super(
+         initialSettings == null
+             ? SettingsState.initial()
+             : _stateFromSettings(
+                 initialSettings,
+                 protectedModePasswordSet: repository
+                     .hasProtectedModePassword(),
+               ),
+       ) {
     on<LoadSettings>(_onLoadSettings);
     on<UpdateDarkMode>(_onUpdateDarkMode);
     on<UpdateFollowSystemTheme>(_onUpdateFollowSystemTheme);
@@ -92,74 +104,9 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     final settings = await _repository.loadSettings();
 
     emit(
-      SettingsState(
-        isDarkMode: settings['isDarkMode'],
-        followSystemTheme: settings['followSystemTheme'] ?? false,
-        seedColor: settings['seedColor'],
-        darkSeedColor: settings['darkSeedColor'],
-        textMaxWidth: settings['textMaxWidth'],
-        fontSize: settings['fontSize'],
-        fontFamily: settings['fontFamily'],
-        commentatorsFontFamily: settings['commentatorsFontFamily'],
-        fontBold: settings['fontBold'] ?? false,
-        commentatorsFontBold: settings['commentatorsFontBold'] ?? false,
-        commentatorsFontSize: settings['commentatorsFontSize'],
-        lineHeight: settings['lineHeight'],
-        showOtzarHachochma: settings['showOtzarHachochma'],
-        showHebrewBooks: settings['showHebrewBooks'],
-        showExternalBooks: settings['showExternalBooks'],
-        autoUpdateIndex: settings['autoUpdateIndex'],
-        textDisplayPolicy: settings['textDisplayPolicy'] as TextDisplayPolicy?,
-        defaultContinuousReadingMode:
-            settings['defaultContinuousReadingMode'] ?? false,
-        defaultSidebarOpen: settings['defaultSidebarOpen'],
-        defaultCommentaryOpen: settings['defaultCommentaryOpen'],
-        pinSidebar: settings['pinSidebar'],
-        sidebarWidth: settings['sidebarWidth'],
-        facetFilteringWidth: settings['facetFilteringWidth'],
-        externalResultsFirst: settings['externalResultsFirst'] ?? false,
-        commentaryPaneWidth: settings['commentaryPaneWidth'],
-        copyWithHeaders: settings['copyWithHeaders'],
-        copyHeaderFormat: settings['copyHeaderFormat'],
-        isFullscreen: settings['isFullscreen'],
-        libraryViewMode: settings['libraryViewMode'],
-        libraryShowPreview: settings['libraryShowPreview'],
-        searchShowPreview: settings['searchShowPreview'] ?? true,
-        shortcuts: Map<String, String>.unmodifiable(
-          Map<String, String>.from(settings['shortcuts'] as Map),
-        ),
-        enablePerBookSettings: settings['enablePerBookSettings'],
-        pdfBookViewByDefault: settings['pdfBookViewByDefault'] ?? false,
-        talmudBavliOpenFormat: settings['talmudBavliOpenFormat'] ?? 'text',
-        isOfflineMode: settings['isOfflineMode'] ?? false,
-        softwareAndBookUpdatesEnabled:
-            settings['softwareAndBookUpdatesEnabled'] ?? true,
-        enableHtmlLinks: settings['enableHtmlLinks'] ?? true,
-        personalNotesCollapsedByDefault:
-            settings['personalNotesCollapsedByDefault'] ?? true,
-        compactMenuMode: settings['compactMenuMode'] ?? false,
-        readingTabsPlacement:
-            settings['readingTabsPlacement'] ??
-            SettingsRepository.readingTabsPlacementTop,
-        readingTabsColumnWidth:
-            settings['readingTabsColumnWidth'] ??
-            SettingsRepository.defaultReadingTabsColumnWidth,
-        readingTabsColumnCollapsed:
-            settings['readingTabsColumnCollapsed'] ?? false,
-        mergeUserBooksIntoLibrary:
-            settings['mergeUserBooksIntoLibrary'] ?? false,
-        protectedModeEnabled: settings['protectedModeEnabled'] ?? false,
+      _stateFromSettings(
+        settings,
         protectedModePasswordSet: _repository.hasProtectedModePassword(),
-        hiddenBuiltInToolIds:
-            (settings['hiddenBuiltInToolIds'] as Set<String>?) ?? <String>{},
-        builtInToolsPinnedToNavRail:
-            (settings['builtInToolsPinnedToNavRail'] as Set<String>?) ??
-            <String>{},
-        builtInToolsOrder:
-            (settings['builtInToolsOrder'] as List<String>?) ?? <String>[],
-        settingsLanguageCode:
-            (settings['settingsLanguageCode'] as String?) ??
-            kDefaultSettingsLanguageCode,
       ),
     );
 
@@ -171,6 +118,80 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     // גופן מערכת מתאפס ל-fallback אחרי הפעלה מחדש (issue #849).
     await _ensureFontLoaded(
       settings['pageShapeBottomFont'] as String? ?? AppFonts.defaultFont,
+    );
+  }
+
+  static SettingsState _stateFromSettings(
+    Map<String, dynamic> settings, {
+    required bool protectedModePasswordSet,
+  }) {
+    return SettingsState(
+      isDarkMode: settings['isDarkMode'],
+      followSystemTheme: settings['followSystemTheme'] ?? false,
+      seedColor: settings['seedColor'],
+      darkSeedColor: settings['darkSeedColor'],
+      textMaxWidth: settings['textMaxWidth'],
+      fontSize: settings['fontSize'],
+      fontFamily: settings['fontFamily'],
+      commentatorsFontFamily: settings['commentatorsFontFamily'],
+      fontBold: settings['fontBold'] ?? false,
+      commentatorsFontBold: settings['commentatorsFontBold'] ?? false,
+      commentatorsFontSize: settings['commentatorsFontSize'],
+      lineHeight: settings['lineHeight'],
+      showOtzarHachochma: settings['showOtzarHachochma'],
+      showHebrewBooks: settings['showHebrewBooks'],
+      showExternalBooks: settings['showExternalBooks'],
+      autoUpdateIndex: settings['autoUpdateIndex'],
+      textDisplayPolicy: settings['textDisplayPolicy'] as TextDisplayPolicy?,
+      defaultContinuousReadingMode:
+          settings['defaultContinuousReadingMode'] ?? false,
+      defaultSidebarOpen: settings['defaultSidebarOpen'],
+      defaultCommentaryOpen: settings['defaultCommentaryOpen'],
+      pinSidebar: settings['pinSidebar'],
+      sidebarWidth: settings['sidebarWidth'],
+      facetFilteringWidth: settings['facetFilteringWidth'],
+      externalResultsFirst: settings['externalResultsFirst'] ?? false,
+      commentaryPaneWidth: settings['commentaryPaneWidth'],
+      copyWithHeaders: settings['copyWithHeaders'],
+      copyHeaderFormat: settings['copyHeaderFormat'],
+      isFullscreen: settings['isFullscreen'],
+      libraryViewMode: settings['libraryViewMode'],
+      libraryShowPreview: settings['libraryShowPreview'],
+      searchShowPreview: settings['searchShowPreview'] ?? true,
+      shortcuts: Map<String, String>.unmodifiable(
+        Map<String, String>.from(settings['shortcuts'] as Map),
+      ),
+      enablePerBookSettings: settings['enablePerBookSettings'],
+      pdfBookViewByDefault: settings['pdfBookViewByDefault'] ?? false,
+      talmudBavliOpenFormat: settings['talmudBavliOpenFormat'] ?? 'text',
+      isOfflineMode: settings['isOfflineMode'] ?? false,
+      softwareAndBookUpdatesEnabled:
+          settings['softwareAndBookUpdatesEnabled'] ?? true,
+      enableHtmlLinks: settings['enableHtmlLinks'] ?? true,
+      personalNotesCollapsedByDefault:
+          settings['personalNotesCollapsedByDefault'] ?? true,
+      compactMenuMode: settings['compactMenuMode'] ?? false,
+      readingTabsPlacement:
+          settings['readingTabsPlacement'] ??
+          SettingsRepository.readingTabsPlacementTop,
+      readingTabsColumnWidth:
+          settings['readingTabsColumnWidth'] ??
+          SettingsRepository.defaultReadingTabsColumnWidth,
+      readingTabsColumnCollapsed:
+          settings['readingTabsColumnCollapsed'] ?? false,
+      mergeUserBooksIntoLibrary: settings['mergeUserBooksIntoLibrary'] ?? false,
+      protectedModeEnabled: settings['protectedModeEnabled'] ?? false,
+      protectedModePasswordSet: protectedModePasswordSet,
+      hiddenBuiltInToolIds:
+          (settings['hiddenBuiltInToolIds'] as Set<String>?) ?? <String>{},
+      builtInToolsPinnedToNavRail:
+          (settings['builtInToolsPinnedToNavRail'] as Set<String>?) ??
+          <String>{},
+      builtInToolsOrder:
+          (settings['builtInToolsOrder'] as List<String>?) ?? <String>[],
+      settingsLanguageCode:
+          (settings['settingsLanguageCode'] as String?) ??
+          kDefaultSettingsLanguageCode,
     );
   }
 

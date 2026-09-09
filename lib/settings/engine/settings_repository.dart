@@ -288,7 +288,12 @@ class SettingsRepository {
     // Initialize default settings to disk if needed
     await _initializeDefaultsIfNeeded();
     await removeUnrecognizedShortcuts();
+    return readSettings();
+  }
 
+  /// קריאה סינכרונית של ההגדרות השמורות — למצב ההתחלתי של ה-bloc, כדי
+  /// שהמסך הראשון לא ייבנה מברירות מחדל ויקפוץ אחרי הטעינה (issue #1280).
+  Map<String, dynamic> readSettings() {
     return {
       'isDarkMode': _settings.getValue<bool>(keyDarkMode, defaultValue: false),
       'followSystemTheme': _settings.getValue<bool>(
@@ -426,7 +431,7 @@ class SettingsRepository {
         keySearchShowPreview,
         defaultValue: true,
       ),
-      'shortcuts': await getShortcuts(),
+      'shortcuts': readShortcuts(),
       'enablePerBookSettings': _settings.getValue<bool>(
         keyEnablePerBookSettings,
         defaultValue: false,
@@ -995,7 +1000,9 @@ class SettingsRepository {
     await _settings.setValue(keyCalendarIcsSubscriptions, value);
   }
 
-  Future<Map<String, String>> getShortcuts() async {
+  Future<Map<String, String>> getShortcuts() async => readShortcuts();
+
+  Map<String, String> readShortcuts() {
     // Start with the default shortcuts
     final shortcuts = Map<String, String>.from(
       ShortcutValidator.defaultShortcuts,

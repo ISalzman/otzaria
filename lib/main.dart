@@ -1346,9 +1346,10 @@ class _AppBootstrapState extends State<AppBootstrap> {
           BlocProvider<SettingsBloc>(
             create: (_) => StartupTimeline.instance.phaseSync(
               'settingsBloc',
-              () =>
-                  SettingsBloc(repository: settingsRepository)
-                    ..add(LoadSettings()),
+              () => SettingsBloc(
+                repository: settingsRepository,
+                initialSettings: settingsRepository.readSettings(),
+              )..add(LoadSettings()),
             ),
           ),
           BlocProvider<LibraryBloc>(

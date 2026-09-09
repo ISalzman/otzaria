@@ -9,6 +9,7 @@ import 'package:mockito/mockito.dart';
 import 'package:otzaria/core/app_paths.dart';
 import 'package:otzaria/settings/engine/settings_bloc.dart';
 import 'package:otzaria/settings/engine/settings_event.dart';
+import 'package:otzaria/settings/engine/settings_repository.dart';
 import 'package:otzaria/settings/engine/settings_state.dart';
 import 'package:otzaria/settings/services/per_book_settings_service.dart';
 import '../helpers/memory_settings_cache.dart';
@@ -30,49 +31,49 @@ void main() {
       settingsBloc.close();
     });
 
+    final mockSettings = {
+      'isDarkMode': true,
+      'followSystemTheme': false,
+      'seedColor': Colors.blue,
+      'darkSeedColor': const Color(0xFFCE93D8),
+      'textMaxWidth': 800.0,
+      'fontSize': 18.0,
+      'fontFamily': 'Rubik',
+      'commentatorsFontFamily': 'NotoRashiHebrew',
+      // issue #849 — נטען בעליית התוכנה כדי שגופן מערכת לא יתאפס ל-fallback.
+      'pageShapeBottomFont': 'NotoSerifHebrew',
+      'commentatorsFontSize': 22.0,
+      'lineHeight': 1.5,
+      'showOtzarHachochma': true,
+      'showHebrewBooks': true,
+      'showExternalBooks': true,
+      'autoUpdateIndex': false,
+      'defaultContinuousReadingMode': true,
+      'defaultSidebarOpen': true,
+      'defaultCommentaryOpen': true,
+      'pinSidebar': true,
+      'sidebarWidth': 300.0,
+      'facetFilteringWidth': 235.0,
+      'commentaryPaneWidth': 400.0,
+      'copyWithHeaders': 'none',
+      'copyHeaderFormat': 'same_line_after_brackets',
+      'isFullscreen': false,
+      'libraryViewMode': 'grid',
+      'libraryShowPreview': true,
+      'searchShowPreview': true,
+      'enablePerBookSettings': true,
+      'pdfBookViewByDefault': false,
+      'shortcuts': <String, String>{},
+      'isOfflineMode': false,
+      'softwareAndBookUpdatesEnabled': true,
+      'personalNotesCollapsedByDefault': true,
+    };
+
     test('initial state is correct', () {
       expect(settingsBloc.state, equals(SettingsState.initial()));
     });
 
     group('LoadSettings', () {
-      final mockSettings = {
-        'isDarkMode': true,
-        'followSystemTheme': false,
-        'seedColor': Colors.blue,
-        'darkSeedColor': const Color(0xFFCE93D8),
-        'textMaxWidth': 800.0,
-        'fontSize': 18.0,
-        'fontFamily': 'Rubik',
-        'commentatorsFontFamily': 'NotoRashiHebrew',
-        // issue #849 — נטען בעליית התוכנה כדי שגופן מערכת לא יתאפס ל-fallback.
-        'pageShapeBottomFont': 'NotoSerifHebrew',
-        'commentatorsFontSize': 22.0,
-        'lineHeight': 1.5,
-        'showOtzarHachochma': true,
-        'showHebrewBooks': true,
-        'showExternalBooks': true,
-        'autoUpdateIndex': false,
-        'defaultContinuousReadingMode': true,
-        'defaultSidebarOpen': true,
-        'defaultCommentaryOpen': true,
-        'pinSidebar': true,
-        'sidebarWidth': 300.0,
-        'facetFilteringWidth': 235.0,
-        'commentaryPaneWidth': 400.0,
-        'copyWithHeaders': 'none',
-        'copyHeaderFormat': 'same_line_after_brackets',
-        'isFullscreen': false,
-        'libraryViewMode': 'grid',
-        'libraryShowPreview': true,
-        'searchShowPreview': true,
-        'enablePerBookSettings': true,
-        'pdfBookViewByDefault': false,
-        'shortcuts': <String, String>{},
-        'isOfflineMode': false,
-        'softwareAndBookUpdatesEnabled': true,
-        'personalNotesCollapsedByDefault': true,
-      };
-
       blocTest<SettingsBloc, SettingsState>(
         'emits updated state when LoadSettings is added',
         build: () {
@@ -670,6 +671,33 @@ void main() {
           expect(overrideJson?['commentatorsBelow'], isTrue);
         },
       );
+    });
+    // issue #1280 — הטאבים נצבעו למעלה ורק אחרי הטעינה קפצו הצידה: המצב
+    // ההתחלתי נבנה מברירות המחדל ולא מההגדרות השמורות.
+    group('מצב התחלתי מההגדרות השמורות (issue #1280)', () {
+      test('מיקום הטאבים בצד נכון כבר במצב ההתחלתי, בלי LoadSettings', () {
+        when(mockRepository.hasProtectedModePassword()).thenReturn(false);
+        final bloc = SettingsBloc(
+          repository: mockRepository,
+          initialSettings: {
+            ...mockSettings,
+            'readingTabsPlacement': SettingsRepository.readingTabsPlacementSide,
+          },
+        );
+        addTearDown(bloc.close);
+
+        expect(
+          bloc.state.readingTabsPlacement,
+          SettingsRepository.readingTabsPlacementSide,
+        );
+      });
+
+      test('בלי הגדרות התחלתיות המצב הוא ברירת המחדל', () {
+        expect(
+          settingsBloc.state.readingTabsPlacement,
+          SettingsRepository.readingTabsPlacementTop,
+        );
+      });
     });
   });
 }
