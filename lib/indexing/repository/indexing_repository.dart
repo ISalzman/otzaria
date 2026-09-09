@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:isolate';
 import 'package:flutter/foundation.dart' hide Category;
 import 'package:otzaria/core/messages/library_messages.dart';
 import 'package:otzaria/core/messages/window_messages.dart';
@@ -1157,6 +1158,82 @@ class IndexingRepository {
       c == 0x2E || // .
       c == 0x2D; // -
 
+  /// מעל הסף הזה (בייטים או תווים) עבודת ה-data URI מפסיקה לרוץ ברצף על
+  /// ה-thread שמצייר פריימים. נמדד על ספר מצויר (226MiB): סריקה + פענוח +
+  /// בנייה מחדש = 1.4 שניות. מתחת לסף הכול יחד הוא מילישניות בודדות.
+  static const int _dataUriOffFrameThreshold = 1 << 20;
+
+  /// מנת הסריקה. נמדד 0.72ms/MiB, ולכן 4MiB ≈ 4.4ms — בתוך תקציב פריים גם
+  /// ב-120Hz, בלי לפרק את הסריקה ליותר מדי סבבי event loop.
+  static const int _dataUriScanChunk = 4 << 20;
+
+  /// זהה ל-[bytesContainDataUriScheme] + [stripDataUrisForIndex], בלי לחסום
+  /// פריים בספר גדול: הסריקה נפרסת למנות על ה-thread הקורא, ורק כשנמצא
+  /// `data:` הפענוח והבנייה מחדש עוברים ל-isolate. [bytes] נשמר רק כשהוא
+  /// נקי; אחרת [text] מחזיק את המקור המנוקה.
+  ///
+  /// הסריקה רצה **פעם אחת**, וכאן — תוצאתה היא שמכריעה אם צריך isolate
+  /// בכלל. גרסה שסרקה כאן וגם שוב בתוך ה-isolate הכפילה את החסימה.
+  @visibleForTesting
+  static Future<({Uint8List? bytes, String? text})> cleanDataUrisOffFrame(
+    Uint8List bytes,
+  ) async {
+    if (bytes.length < _dataUriOffFrameThreshold) {
+      final cleaned = _cleanDataUris(bytes);
+      return (bytes: cleaned == null ? bytes : null, text: cleaned);
+    }
+    if (!await _containsDataUriInChunks(bytes)) {
+      return (bytes: bytes, text: null);
+    }
+    // מעבירים בעלות על הבתים במקום ללכוד Uint8List ב-closure: שליחת רשימה
+    // mutable ל-isolate מעתיקה אותה, ובספר מצויר גדול מוסיפה עותק שלם לשיא
+    // הזיכרון. אחרי הסריקה החיובית אין עוד צורך להחזיק במסלול ה-bytes.
+    final transferable = TransferableTypedData.fromList([bytes]);
+    return (
+      bytes: null,
+      text: await Isolate.run(
+        () => _stripTransferredDataUrisForIndex(transferable),
+      ),
+    );
+  }
+
+  static String _stripTransferredDataUrisForIndex(
+    TransferableTypedData transferable,
+  ) => stripDataUrisForIndex(
+    utf8.decode(transferable.materialize().asUint8List(), allowMalformed: true),
+  );
+
+  /// המנות חופפות ב-4 בייטים — בלי החפיפה `data:` שיושב על תפר בין מנות
+  /// נעלם, וספר מצויר נחשב נקי.
+  static Future<bool> _containsDataUriInChunks(Uint8List bytes) async {
+    const overlap = 4; // 'data:'.length - 1
+    for (var start = 0; start < bytes.length; start += _dataUriScanChunk) {
+      var end = start + _dataUriScanChunk + overlap;
+      if (end > bytes.length) end = bytes.length;
+      if (bytesContainDataUriScheme(Uint8List.sublistView(bytes, start, end))) {
+        return true;
+      }
+      await Future<void>.delayed(Duration.zero);
+    }
+    return false;
+  }
+
+  static String? _cleanDataUris(Uint8List bytes) =>
+      bytesContainDataUriScheme(bytes)
+      ? stripDataUrisForIndex(utf8.decode(bytes, allowMalformed: true))
+      : null;
+
+  /// [stripDataUrisForIndex] בלי לחסום פריים בספר גדול. כאן, בשונה ממסלול
+  /// ה-bytes, גם הסריקה עוברת ל-isolate: מחרוזת אינה מועתקת בהעברה (נמדד
+  /// 0ms על 20M תווים), ולכן בדיקה מקדימה כאן רק הייתה מכפילה את החסימה.
+  @visibleForTesting
+  static Future<String> stripDataUrisOffFrame(String text) {
+    if (text.length < _dataUriOffFrameThreshold) {
+      return Future.value(stripDataUrisForIndex(text));
+    }
+    return Isolate.run(() => stripDataUrisForIndex(text));
+  }
+
   /// מקור הספר בדיוק כפי שנמסר למנוע באינדוקס: bytes גולמיים מה-DB כשאפשר
   /// (בלי פענוח/קידוד על ה-UI isolate), וירידה לטקסט מפוענח ומנוקה רק
   /// כשחייבים (תמונות מוטמעות, פורמט מומר, ספר בלי categoryId). משותף
@@ -1176,9 +1253,14 @@ class IndexingRepository {
       );
       // ניקוי תמונות מוטמעות חייב לרוץ בשני הצדדים — אחרת חתימת האינדוקס
       // לעולם לא תתאים לאימות ו-reconcile יאנדקס את הספר מחדש בכל ריצה.
-      if (bytes != null && bytesContainDataUriScheme(bytes)) {
-        text = stripDataUrisForIndex(utf8.decode(bytes, allowMalformed: true));
+      if (bytes != null) {
+        // כשהמקור מצויר, cleanDataUrisOffFrame מעביר אותו ל-isolate. מאפסים
+        // את ההפניה המקומית לפני ה-await; במקרה הנקי היא מוחזרת בתוצאה.
+        final rawBytes = bytes;
         bytes = null;
+        final cleaned = await cleanDataUrisOffFrame(rawBytes);
+        bytes = cleaned.bytes;
+        text = cleaned.text;
       }
     }
     if ((bytes == null || bytes.isEmpty) && (text == null || text.isEmpty)) {
@@ -1211,7 +1293,7 @@ class IndexingRepository {
     }
 
     // עקבי עם מסלול האינדוקס — טביעת האצבע מחושבת על הטקסט המנוקה.
-    return stripDataUrisForIndex(text);
+    return stripDataUrisOffFrame(text);
   }
 
   /// טוען את טקסט הספר לאינדוקס, בלי להטמיע תמונות כשהממיר תומך בכך.
@@ -1230,7 +1312,7 @@ class IndexingRepository {
         return convertDocumentForIndex(file, book.title, format);
       }
     }
-    return stripDataUrisForIndex(await book.text);
+    return stripDataUrisOffFrame(await book.text);
   }
 
   /// ממדי ה-facet הנוספים של הספר (מחבר/תקופה/ספר-יסוד) — משותף לכל
