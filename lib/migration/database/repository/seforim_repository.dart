@@ -2961,17 +2961,46 @@ extension BookAcronymRepository on SeforimRepository {
 
     // Fallback שטוח — רק כשההיררכי לא מצא דבר. מאפשר לציטוט להגיע לכותרת
     // עמוקה בלי שמות הביניים ("דף לו" תחת ספר→פרשה→דף ב"הזוהר המתורגם",
-    // "סימן ה" תחת בית יוסף→אורח חיים). ספרים עם alt_toc ("ספר הזהר") כבר
-    // חושפים דפים שם, ולכן טוקן בודד או ציטוט-דף אינם נופלים אליו — אחרת
-    // "לו" היה מציף בכותרות-משנה ("פרק לו"/"סימן לו"). ציטוט רב-מילים
-    // ("סימן ה") חייב להתאים לכותרת אחת במלואו ואינו מציף (issue #1200).
+    // "סימן ה" תחת בית יוסף→אורח חיים).
     final altCache = await _buildAltTocCacheForBook(bookId, bookTitle);
-    if (altCache.all.isNotEmpty &&
-        (queryTokens.length == 1 || parseDafCitation(queryTokens) != null)) {
-      return const [];
+    if (altCache.all.isNotEmpty) {
+      // בספר עם מבני כותרות חלופיים, טוקן בודד או ציטוט דף כבר מטופלים
+      // ב-AltToc. שאר הציטוטים יכולים לדלג על חלק ביניים, אך כולם חייבים
+      // להתאים לכותרת היעד עצמה כדי שלא יוחזרו תתי-כותרות של קטע אחר.
+      if (queryTokens.length == 1 ||
+          _isDafCitationForAltTocFallback(queryTokens)) {
+        return const [];
+      }
+      return _searchTocFlat(
+        cache,
+        queryTokens,
+        requireAllTokensInOwnHeading: true,
+      ).map((e) => e.toMap()).toList();
     }
 
     return _searchTocFlat(cache, queryTokens).map((e) => e.toMap()).toList();
+  }
+
+  /// [parseDafCitation] מקבל בכוונה כל רצף קצר של אותיות עבריות, כדי לתמוך
+  /// בציוני דף מקוצרים. כאן צריך להבחין בו ממילות מבנה קצרות כמו "פרק א" —
+  /// אחרת הן היו נחסמות מה-fallback של issue #1200.
+  bool _isDafCitationForAltTocFallback(List<String> tokens) {
+    if (parseDafCitation(tokens) == null) return false;
+    if (tokens.contains('דף') || tokens.contains('עמוד')) return true;
+    if (tokens.length != 2 || (tokens.last != 'א' && tokens.last != 'ב')) {
+      return false;
+    }
+
+    const structureTokens = {
+      'פרק',
+      'חלק',
+      'משנה',
+      'הלכה',
+      'סעיף',
+      'סימן',
+      'סק',
+    };
+    return !structureTokens.contains(tokens.first);
   }
 
   /// מחזיר את שורות המפרשים הגולמיות עבור תוצאת איתור מקורות, מוכנות לעיבוד
@@ -3309,18 +3338,25 @@ extension BookAcronymRepository on SeforimRepository {
 
   /// חיפוש **שטוח** על ה-TOC הרגיל — מבנה זהה ל-[_searchAltTocFlat], אך מחשב
   /// את טוקני הנתיב מתוך ה-reference (ה-TOC הרגיל אינו שומר `pathTokens`).
-  /// משמש כ-fallback בלבד (ראה [getTocEntriesForReference]); ההגנה מפני הצפה
-  /// זהה: הטוקן האחרון חייב להופיע בעלה עצמו, וכל הטוקנים בנתיב המלא.
+  /// משמש כ-fallback בלבד (ראה [getTocEntriesForReference]). במצב הרגיל
+  /// הטוקן האחרון חייב להופיע בעלה וכל הטוקנים בנתיב המלא; במצב
+  /// [requireAllTokensInOwnHeading] כל הטוקנים חייבים להיות בעלה עצמו.
   List<_CachedTocEntry> _searchTocFlat(
     _TocBookCache cache,
-    List<String> tokens,
-  ) {
+    List<String> tokens, {
+    bool requireAllTokensInOwnHeading = false,
+  }) {
     if (tokens.isEmpty) return const [];
 
     final cite = parseDafCitation(tokens);
     final lastAlts = hebrewTokenAlternatives(tokens.last);
 
     return cache.all.where((e) {
+      if (requireAllTokensInOwnHeading) {
+        return tokens.every(
+          (token) => hebrewTokenAlternatives(token).any(e.ownTokens.contains),
+        );
+      }
       if (cite != null) {
         final m = matchDafCitation(e.ownTokens, cite);
         if (m != null) return m; // ערך "דף" — התאמה מיקומית מכריעה
