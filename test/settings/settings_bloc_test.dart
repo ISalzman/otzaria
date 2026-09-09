@@ -9,6 +9,7 @@ import 'package:mockito/mockito.dart';
 import 'package:otzaria/core/app_paths.dart';
 import 'package:otzaria/settings/engine/settings_bloc.dart';
 import 'package:otzaria/settings/engine/settings_event.dart';
+import 'package:otzaria/settings/engine/settings_repository.dart';
 import 'package:otzaria/settings/engine/settings_state.dart';
 import 'package:otzaria/settings/services/per_book_settings_service.dart';
 import '../helpers/memory_settings_cache.dart';
@@ -670,6 +671,33 @@ void main() {
           expect(overrideJson?['commentatorsBelow'], isTrue);
         },
       );
+    });
+    // issue #1280 — הטאבים נצבעו למעלה ורק אחרי הטעינה קפצו הצידה: המצב
+    // ההתחלתי נבנה מברירות המחדל ולא מההגדרות השמורות.
+    group('מצב התחלתי מההגדרות השמורות (issue #1280)', () {
+      test('מיקום הטאבים בצד נכון כבר במצב ההתחלתי, בלי LoadSettings', () {
+        when(mockRepository.hasProtectedModePassword()).thenReturn(false);
+        final bloc = SettingsBloc(
+          repository: mockRepository,
+          initialSettings: {
+            'shortcuts': <String, String>{},
+            'readingTabsPlacement': SettingsRepository.readingTabsPlacementSide,
+          },
+        );
+        addTearDown(bloc.close);
+
+        expect(
+          bloc.state.readingTabsPlacement,
+          SettingsRepository.readingTabsPlacementSide,
+        );
+      });
+
+      test('בלי הגדרות התחלתיות המצב הוא ברירת המחדל', () {
+        expect(
+          settingsBloc.state.readingTabsPlacement,
+          SettingsRepository.readingTabsPlacementTop,
+        );
+      });
     });
   });
 }
