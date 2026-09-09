@@ -22,6 +22,18 @@ String _snippetAroundMatch(
   required int lowerBound,
   required int upperBound,
 }) {
+  // גבול שמותיר ליד ההופעה רק שבר מילה קוטם את התוצאה ל"אחכם!" — צד כזה
+  // מקבל את ההקשר המלא גם אם הוא חופף לשכנה (issue #1229).
+  if (!_hasNeighborWord(line.substring(lowerBound, match.start), ' ')) {
+    lowerBound = 0;
+  }
+  if (!_hasNeighborWord(
+    line.substring(match.end, upperBound),
+    ' ',
+    before: false,
+  )) {
+    upperBound = line.length;
+  }
   var start = match.start - _snippetContextChars;
   var end = match.end + _snippetContextChars;
   if (start <= lowerBound) {
@@ -37,6 +49,12 @@ String _snippetAroundMatch(
     end = space == -1 || space > upperBound ? upperBound : space;
   }
   return line.substring(start, end).trim();
+}
+
+/// האם בקטע שבין הגבול להופעה יש מילה שלמה המופרדת ממנה ברווח.
+bool _hasNeighborWord(String side, String separator, {bool before = true}) {
+  if (side.trim().isEmpty) return false;
+  return before ? side.endsWith(separator) : side.startsWith(separator);
 }
 
 final RegExp _whitespaceRun = RegExp(r'\s+');
