@@ -80,6 +80,8 @@ class _AltTocSidebarViewState extends State<AltTocSidebarView>
   final Map<int, Map<int, List<AltTocEntry>>> _structureChildren = {};
   // StructureID -> (ChildID -> ParentID)
   final Map<int, Map<int, int>> _structureParents = {};
+  // StructureID -> entries in document order, cached for search and active entry.
+  final Map<int, List<AltTocEntry>> _flattenedEntries = {};
 
   // Expanded state
   // StructureID -> bool
@@ -87,9 +89,10 @@ class _AltTocSidebarViewState extends State<AltTocSidebarView>
   // EntryID -> bool
   final Map<int, bool> _entryExpanded = {};
 
-  // Active entry
-  int? _activeEntryId;
-  int? _lastScrolledEntryId;
+  // Active entry and scroll state are scoped to a structure: a line may belong
+  // to several alternative structures at once.
+  final Map<int, int> _activeEntryIds = {};
+  final Map<int, int> _lastScrolledEntryIds = {};
 
   // מעקב פתיחת הפאנל: גלילה מחדש למיקום הפעיל רק במעבר סגור→פתוח.
   bool _wasLeftPaneShown = false;
@@ -101,10 +104,15 @@ class _AltTocSidebarViewState extends State<AltTocSidebarView>
   final Map<int, Future<void>> _loadingFutures = {};
 
   bool _isLoading = true;
+  late bool _hasDibburimEntries;
 
   @override
   void initState() {
     super.initState();
+    _hasDibburimEntries = hasDibburimEntries(
+      widget.tableOfContents,
+      widget.dibburim,
+    );
     _loadStructures();
   }
 
@@ -116,8 +124,20 @@ class _AltTocSidebarViewState extends State<AltTocSidebarView>
       return;
     }
     _structureRoots.remove(kDibburimStructureId);
+    _structureChildren.remove(kDibburimStructureId);
+    _structureParents.remove(kDibburimStructureId);
+    _flattenedEntries.remove(kDibburimStructureId);
+    _structureExpanded.remove(kDibburimStructureId);
+    _activeEntryIds.remove(kDibburimStructureId);
+    _lastScrolledEntryIds.remove(kDibburimStructureId);
     _structures.removeWhere((s) => s.id == kDibburimStructureId);
-    if (widget.dibburim.isNotEmpty) _structures.add(dibburimStructure);
+    _hasDibburimEntries = hasDibburimEntries(
+      widget.tableOfContents,
+      widget.dibburim,
+    );
+    if (_hasDibburimEntries) {
+      _structures.add(dibburimStructure);
+    }
   }
 
   @override
@@ -193,6 +213,8 @@ class _AltTocSidebarViewState extends State<AltTocSidebarView>
   }
 
   List<AltTocEntry> _flattenEntries(int structureId) {
+    final cached = _flattenedEntries[structureId];
+    if (cached != null) return cached;
     final result = <AltTocEntry>[];
     void visit(AltTocEntry entry) {
       result.add(entry);
@@ -205,7 +227,7 @@ class _AltTocSidebarViewState extends State<AltTocSidebarView>
     for (final root in _structureRoots[structureId] ?? []) {
       visit(root);
     }
-    return result;
+    return _flattenedEntries[structureId] = result;
   }
 
   List<({int structureId, AltTocEntry entry})> _getMatchingEntries(
@@ -237,7 +259,7 @@ class _AltTocSidebarViewState extends State<AltTocSidebarView>
         setState(() {
           _structures = [
             ...structures,
-            if (widget.dibburim.isNotEmpty) dibburimStructure,
+            if (_hasDibburimEntries) dibburimStructure,
           ];
           _isLoading = false;
 
@@ -307,6 +329,7 @@ class _AltTocSidebarViewState extends State<AltTocSidebarView>
     _structureRoots[structureId] = [];
     _structureChildren[structureId] = {};
     _structureParents[structureId] = {};
+    _flattenedEntries.remove(structureId);
 
     for (var entry in entries) {
       if (entry.parentId == null) {
@@ -358,6 +381,7 @@ class _AltTocSidebarViewState extends State<AltTocSidebarView>
         structureId,
       );
     }
+    if (_structureExpanded[structureId] != true) return null;
     await _loadEntriesForStructure(structureId);
     return activeDibburimEntryId(_flattenEntries(structureId), lineIndex);
   }
@@ -376,44 +400,61 @@ class _AltTocSidebarViewState extends State<AltTocSidebarView>
   }
 
   Future<void> _findAndHighlightEntry(int lineIndex) async {
+    final matches = <({int structureId, int entryId})>[];
     for (final structure in _structures) {
       var resolvedId = await _entryIdForLine(lineIndex, structure.id);
 
       // הדיבורים אינם נפתחים מעצמם: מבנה מכווץ מדולג, ובמבנה פתוח מסומן
       // האב הגלוי בלבד עד שהמשתמש פותח את החץ.
       if (resolvedId != null && structure.id == kDibburimStructureId) {
-        if (_structureExpanded[structure.id] != true) continue;
         resolvedId = _visibleAncestor(structure.id, resolvedId);
       }
 
       if (resolvedId != null) {
-        final entryId = resolvedId;
-        if (mounted && entryId != _activeEntryId) {
-          setState(() {
-            // Ensure loaded
-            if (!_structureRoots.containsKey(structure.id)) {
-              _structureExpanded[structure.id] = true;
-              _loadEntriesForStructure(structure.id).then((_) {
-                if (mounted) _expandParents(structure.id, entryId);
-              });
-            } else {
-              _structureExpanded[structure.id] = true;
-              _expandParents(structure.id, entryId);
+        matches.add((structureId: structure.id, entryId: resolvedId));
+      }
+    }
+    if (!mounted || matches.isEmpty) return;
+
+    final changed = matches
+        .where((match) => _activeEntryIds[match.structureId] != match.entryId)
+        .toList();
+    if (changed.isEmpty) return;
+
+    setState(() {
+      for (final match in changed) {
+        _activeEntryIds[match.structureId] = match.entryId;
+      }
+
+      // שומרים את התנהגות המבנים הקיימים: רק המבנה הראשון המתאים נפתח
+      // אוטומטית. דיבורי-המתחיל נשארים מכווצים עד בחירת המשתמש.
+      final databaseMatch = matches.firstWhere(
+        (match) => match.structureId != kDibburimStructureId,
+        orElse: () => (structureId: kDibburimStructureId, entryId: 0),
+      );
+      if (databaseMatch.structureId != kDibburimStructureId) {
+        if (!_structureRoots.containsKey(databaseMatch.structureId)) {
+          _structureExpanded[databaseMatch.structureId] = true;
+          _loadEntriesForStructure(databaseMatch.structureId).then((_) {
+            if (mounted) {
+              _expandParents(databaseMatch.structureId, databaseMatch.entryId);
             }
-
-            _activeEntryId = entryId;
           });
-
-          if (_activeEntryId != _lastScrolledEntryId) {
-            _scrollToActiveItem(entryId);
-          }
+        } else {
+          _structureExpanded[databaseMatch.structureId] = true;
+          _expandParents(databaseMatch.structureId, databaseMatch.entryId);
         }
-        return;
+      }
+    });
+
+    for (final match in changed) {
+      if (_lastScrolledEntryIds[match.structureId] != match.entryId) {
+        _scrollToActiveItem(match.structureId, match.entryId);
       }
     }
   }
 
-  void _scrollToActiveItem(int entryId) {
+  void _scrollToActiveItem(int structureId, int entryId) {
     SchedulerBinding.instance.addPostFrameCallback((_) {
       if (!mounted || _isManuallyScrolling) return;
 
@@ -451,7 +492,7 @@ class _AltTocSidebarViewState extends State<AltTocSidebarView>
           curve: Curves.easeInOut,
         );
 
-        _lastScrolledEntryId = entryId;
+        _lastScrolledEntryIds[structureId] = entryId;
       } catch (e) {
         debugPrint('Error scrolling to active item: $e');
       }
@@ -539,7 +580,7 @@ class _AltTocSidebarViewState extends State<AltTocSidebarView>
 
   void _handleEntryTap(int structureId, AltTocEntry entry) {
     _isManuallyScrolling = false;
-    _lastScrolledEntryId = null;
+    _lastScrolledEntryIds.remove(structureId);
 
     // Always navigate on text tap, as requested
     _handleLeafClick(structureId, entry);
@@ -680,7 +721,7 @@ class _AltTocSidebarViewState extends State<AltTocSidebarView>
                       if (justOpened) {
                         // פתיחת הפאנל: גלילה מיידית למיקום הפעיל (ה-guard
                         // עלול לחסום אחרת אם נשבש ברקע בזמן שהפאנל היה סגור).
-                        _lastScrolledEntryId = null;
+                        _lastScrolledEntryIds.clear();
                         _findAndHighlightEntry(index);
                       } else {
                         // Debounce to prevent rapid updates during fast scrolling
@@ -749,7 +790,7 @@ class _AltTocSidebarViewState extends State<AltTocSidebarView>
           // בזמן דפדוף בחיצים הסימון הוא של תוצאת הדפדוף, לא של המיקום הפעיל.
           final isSelected = _highlightedMatchPos != null
               ? _highlightedMatchPos == index - 1
-              : entry.id == _activeEntryId;
+              : entry.id == _activeEntryIds[structureId];
           return NavTreeGroupCard(
             isGroupStart: index == 1,
             isGroupEnd: index == matches.length,
@@ -768,6 +809,10 @@ class _AltTocSidebarViewState extends State<AltTocSidebarView>
   Widget _buildStructureItem(AltTocStructure structure) {
     final isExpanded = _structureExpanded[structure.id] ?? false;
     final roots = _structureRoots[structure.id] ?? [];
+    final hasChildren =
+        roots.isNotEmpty ||
+        (structure.id == kDibburimStructureId &&
+            _hasDibburimEntries);
 
     return Column(
       children: [
@@ -779,7 +824,7 @@ class _AltTocSidebarViewState extends State<AltTocSidebarView>
             title: structure.heTitle ?? structure.title ?? structure.key,
             level: 0,
             isExpanded: isExpanded,
-            hasChildren: roots.isNotEmpty,
+            hasChildren: hasChildren,
             onTap: () => _handleStructureTap(structure),
             onToggleExpand: () => _toggleStructure(structure),
           ),
@@ -804,7 +849,7 @@ class _AltTocSidebarViewState extends State<AltTocSidebarView>
     final children = _structureChildren[structureId]?[entry.id];
     final hasChildren = children != null && children.isNotEmpty;
     final isExpanded = _entryExpanded[entry.id] ?? false;
-    final isSelected = entry.id == _activeEntryId;
+    final isSelected = entry.id == _activeEntryIds[structureId];
     // רמת המבנה היא 0, ולכן ערכי ה-TOC מוזחים רמה אחת פנימה.
     final level = entry.level + 1;
 

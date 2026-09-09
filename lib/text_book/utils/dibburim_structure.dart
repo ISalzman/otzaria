@@ -166,14 +166,42 @@ List<AltTocEntry> buildDibburimEntries(
   return result;
 }
 
+/// האם לפחות דיבור אחד יכול להופיע במבנה המסונתז.
+///
+/// דיבור בלי כותרת קודמת, או על אותה שורה של כותרת, מושמט בבנייה ולכן אינו
+/// מצדיק הצגת לשונית ריקה.
+bool hasDibburimEntries(List<TocEntry> toc, Map<int, String> dibburim) {
+  if (toc.isEmpty || dibburim.isEmpty) return false;
+
+  final headingIndexes = <int>{};
+  var firstHeadingIndex = toc.first.index;
+  void collect(List<TocEntry> entries) {
+    for (final entry in entries) {
+      headingIndexes.add(entry.index);
+      if (entry.index < firstHeadingIndex) firstHeadingIndex = entry.index;
+      collect(entry.children);
+    }
+  }
+
+  collect(toc);
+  return dibburim.keys.any(
+    (lineIndex) =>
+        lineIndex > firstHeadingIndex && !headingIndexes.contains(lineIndex),
+  );
+}
+
 /// מזהה הערך במבנה המסונתז ששורת התחלתו היא האחרונה שאינה אחרי [lineIndex],
 /// או null כשהשורה קודמת לכל הערכים. [entries] הן פלט [buildDibburimEntries].
 int? activeDibburimEntryId(List<AltTocEntry> entries, int lineIndex) {
-  int? best;
-  for (final entry in entries) {
-    final start = dibburimLineIndex(entry.id);
-    if (start > lineIndex) continue;
-    if (best == null || start > dibburimLineIndex(best)) best = entry.id;
+  var low = 0;
+  var high = entries.length;
+  while (low < high) {
+    final middle = low + (high - low) ~/ 2;
+    if (dibburimLineIndex(entries[middle].id) <= lineIndex) {
+      low = middle + 1;
+    } else {
+      high = middle;
+    }
   }
-  return best;
+  return low == 0 ? null : entries[low - 1].id;
 }

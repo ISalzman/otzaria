@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:otzaria/migration/models/alt_toc_entry.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/text_book/utils/dibburim_structure.dart';
 
@@ -176,6 +177,20 @@ void main() {
     });
   });
 
+  group('hasDibburimEntries', () {
+    test('אין מבנה כשה-TOC ריק או שכל הדיבורים לפני הכותרת הראשונה', () {
+      expect(hasDibburimEntries(const [], {2: 'ד"ה'}), isFalse);
+      expect(
+        hasDibburimEntries([_e('כותרת', 3, 1)], {1: 'ד"ה', 3: 'ד"ה ב'}),
+        isFalse,
+      );
+    });
+
+    test('דיבור שאחרי כותרת ואינו על שורתה מצדיק מבנה', () {
+      expect(hasDibburimEntries(_toc(), {5: 'ד"ה'}), isTrue);
+    });
+  });
+
   group('activeDibburimEntryId', () {
     final entries = buildDibburimEntries(_toc(), {5: 'א', 7: 'ב', 20: 'ג'});
 
@@ -190,6 +205,23 @@ void main() {
 
     test('שורה לפני הערך הראשון — אין ערך פעיל', () {
       expect(activeDibburimEntryId(entries, 1), isNull);
+    });
+
+    test('עץ גדול מחזיר את הערך האחרון שאינו אחרי השורה', () {
+      final largeEntries = List.generate(
+        20000,
+        (index) => AltTocEntry(
+          id: dibburimEntryId(index * 2),
+          structureId: kDibburimStructureId,
+          textId: 0,
+          level: 0,
+        ),
+      );
+
+      expect(
+        activeDibburimEntryId(largeEntries, 33333),
+        dibburimEntryId(33332),
+      );
     });
   });
 }

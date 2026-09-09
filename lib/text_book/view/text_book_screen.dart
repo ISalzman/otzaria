@@ -947,15 +947,37 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   /// בודק אם ללשונית 'כותרות' יש תוכן: מבנים חלופיים במסד או דיבורי-מתחיל.
   Future<void> _checkAltTitles() async {
     try {
+      final textBookBloc = context.read<TextBookBloc>();
       final structures = await DatabaseLibraryProvider.instance
           .getAlternativeStructuresForBook(widget.tab.book.title);
       final dibburim = await loadDibburimForBook(widget.tab.book);
 
       if (!mounted) return;
 
-      if (dibburim.isNotEmpty) setState(() => _dibburim = dibburim);
+      final currentState = textBookBloc.state;
+      final TextBookLoaded state;
+      if (currentState is TextBookLoaded) {
+        state = currentState;
+      } else {
+        state = await textBookBloc.stream
+            .where((state) => state is TextBookLoaded)
+            .map((state) => state as TextBookLoaded)
+            .first;
+        if (!mounted) return;
+      }
+      final usableDibburim =
+          hasDibburimEntries(
+            state.tableOfContents,
+            dibburim,
+          )
+          ? dibburim
+          : const <int, String>{};
 
-      final hasAltTitles = structures.isNotEmpty || dibburim.isNotEmpty;
+      if (usableDibburim.isNotEmpty) {
+        setState(() => _dibburim = usableDibburim);
+      }
+
+      final hasAltTitles = structures.isNotEmpty || usableDibburim.isNotEmpty;
       if (hasAltTitles != _hasAltTitles) {
         setState(() {
           _hasAltTitles = hasAltTitles;
