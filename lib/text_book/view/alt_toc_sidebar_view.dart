@@ -20,6 +20,7 @@ import 'package:otzaria/tabs/bloc/tabs_event.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
+import 'package:otzaria/text_book/utils/dibburim_structure.dart';
 import 'package:otzaria/text_book/utils/reading_segment_navigation.dart';
 import 'package:otzaria/widgets/navigation/nav_panel_search.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
@@ -33,12 +34,19 @@ class AltTocSidebarView extends StatefulWidget {
   /// פוקוס אוטומטי בפתיחת הפאנל ובמעבר ללשונית 'כותרות'.
   final FocusNode? focusNode;
 
+  /// דיבורי-המתחיל של הספר (`lineIndex` → טקסט). כשאינם ריקים נוסף מבנה
+  /// מסונתז "דיבורי המתחיל" שבו הם עלים תחת כותרות [tableOfContents].
+  final Map<int, String> dibburim;
+  final List<TocEntry> tableOfContents;
+
   const AltTocSidebarView({
     super.key,
     required this.book,
     required this.closeLeftPaneCallback,
     required this.scrollController,
     this.focusNode,
+    this.dibburim = const {},
+    this.tableOfContents = const [],
   });
 
   @override
@@ -98,6 +106,18 @@ class _AltTocSidebarViewState extends State<AltTocSidebarView>
   void initState() {
     super.initState();
     _loadStructures();
+  }
+
+  @override
+  void didUpdateWidget(covariant AltTocSidebarView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (identical(oldWidget.dibburim, widget.dibburim) &&
+        identical(oldWidget.tableOfContents, widget.tableOfContents)) {
+      return;
+    }
+    _structureRoots.remove(kDibburimStructureId);
+    _structures.removeWhere((s) => s.id == kDibburimStructureId);
+    if (widget.dibburim.isNotEmpty) _structures.add(dibburimStructure);
   }
 
   @override
@@ -215,12 +235,16 @@ class _AltTocSidebarViewState extends State<AltTocSidebarView>
           .getAlternativeStructuresForBook(widget.book.title);
       if (mounted) {
         setState(() {
-          _structures = structures;
+          _structures = [
+            ...structures,
+            if (widget.dibburim.isNotEmpty) dibburimStructure,
+          ];
           _isLoading = false;
 
-          // If only one structure, expand it by default
-          if (structures.length == 1) {
-            _toggleStructure(structures.first);
+          // מבנה יחיד נפתח כברירת מחדל; הדיבורים נשארים מכווצים עד לחיצה.
+          if (_structures.length == 1 &&
+              _structures.single.id != kDibburimStructureId) {
+            _toggleStructure(_structures.first);
           }
         });
 
@@ -258,8 +282,11 @@ class _AltTocSidebarViewState extends State<AltTocSidebarView>
 
   Future<void> _doLoadEntries(int structureId) async {
     try {
-      final entries = await DatabaseLibraryProvider.instance
-          .getAllAlternativeEntries(structureId);
+      final entries = structureId == kDibburimStructureId
+          ? buildDibburimEntries(widget.tableOfContents, widget.dibburim)
+          : await DatabaseLibraryProvider.instance.getAllAlternativeEntries(
+              structureId,
+            );
 
       if (mounted) {
         setState(() {
@@ -303,6 +330,7 @@ class _AltTocSidebarViewState extends State<AltTocSidebarView>
         _loadEntriesForStructure(structure.id);
       }
     });
+    _updateActiveItemFromBloc();
   }
 
   void _updateActiveItemFromBloc() {
@@ -322,12 +350,44 @@ class _AltTocSidebarViewState extends State<AltTocSidebarView>
     }
   }
 
+  Future<int?> _entryIdForLine(int lineIndex, int structureId) async {
+    if (structureId != kDibburimStructureId) {
+      return DatabaseLibraryProvider.instance.getAltTocEntryForLine(
+        widget.book.title,
+        lineIndex,
+        structureId,
+      );
+    }
+    await _loadEntriesForStructure(structureId);
+    return activeDibburimEntryId(_flattenEntries(structureId), lineIndex);
+  }
+
+  /// האב הגלוי הגבוה ביותר של [entryId]: הערך עצמו כשכל אבותיו פתוחים.
+  int _visibleAncestor(int structureId, int entryId) {
+    final parents = _structureParents[structureId] ?? const {};
+    var visible = entryId;
+    var current = entryId;
+    while (parents.containsKey(current)) {
+      final parent = parents[current]!;
+      if (_entryExpanded[parent] != true) visible = parent;
+      current = parent;
+    }
+    return visible;
+  }
+
   Future<void> _findAndHighlightEntry(int lineIndex) async {
     for (final structure in _structures) {
-      final entryId = await DatabaseLibraryProvider.instance
-          .getAltTocEntryForLine(widget.book.title, lineIndex, structure.id);
+      var resolvedId = await _entryIdForLine(lineIndex, structure.id);
 
-      if (entryId != null) {
+      // הדיבורים אינם נפתחים מעצמם: מבנה מכווץ מדולג, ובמבנה פתוח מסומן
+      // האב הגלוי בלבד עד שהמשתמש פותח את החץ.
+      if (resolvedId != null && structure.id == kDibburimStructureId) {
+        if (_structureExpanded[structure.id] != true) continue;
+        resolvedId = _visibleAncestor(structure.id, resolvedId);
+      }
+
+      if (resolvedId != null) {
+        final entryId = resolvedId;
         if (mounted && entryId != _activeEntryId) {
           setState(() {
             // Ensure loaded
@@ -417,40 +477,45 @@ class _AltTocSidebarViewState extends State<AltTocSidebarView>
     setState(() {
       _entryExpanded[entryId] = !(_entryExpanded[entryId] ?? false);
     });
+    // בדיבורים הסימון עוקב אחרי הרמה הגלויה, ולכן מחושב מחדש אחרי פתיחה/כיווץ.
+    _updateActiveItemFromBloc();
+  }
+
+  /// גלילת הספר הפתוח לשורה [lineIndex].
+  void _scrollToLine(int lineIndex) {
+    final state = context.read<TextBookBloc>().state;
+    if (state is! TextBookLoaded) {
+      return;
+    }
+    final navigation = scrollToSourceLine(
+      scrollController: widget.scrollController,
+      scrollOffsetController: state.scrollOffsetController,
+      positionsListener: state.positionsListener,
+      segments: state.readingSegments,
+      lineIndex: lineIndex,
+      viewportExtent: context.size?.height ?? MediaQuery.sizeOf(context).height,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
+    );
+
+    if (Platform.isAndroid) {
+      unawaited(
+        closePaneAfterNavigation(
+          navigation: navigation,
+          closePane: () {
+            if (mounted) widget.closeLeftPaneCallback();
+          },
+        ),
+      );
+    } else {
+      unawaited(navigation);
+    }
   }
 
   void _openLink(Link link) {
     if (link.path2 == widget.book.title) {
       // Ensure index is at least 0 to prevent RangeError
-      final index = (link.index2 - 1).clamp(0, double.maxFinite).toInt();
-      final state = context.read<TextBookBloc>().state;
-      if (state is! TextBookLoaded) {
-        return;
-      }
-      final navigation = scrollToSourceLine(
-        scrollController: widget.scrollController,
-        scrollOffsetController: state.scrollOffsetController,
-        positionsListener: state.positionsListener,
-        segments: state.readingSegments,
-        lineIndex: index,
-        viewportExtent:
-            context.size?.height ?? MediaQuery.sizeOf(context).height,
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeInOut,
-      );
-
-      if (Platform.isAndroid) {
-        unawaited(
-          closePaneAfterNavigation(
-            navigation: navigation,
-            closePane: () {
-              if (mounted) widget.closeLeftPaneCallback();
-            },
-          ),
-        );
-      } else {
-        unawaited(navigation);
-      }
+      _scrollToLine((link.index2 - 1).clamp(0, double.maxFinite).toInt());
     } else {
       context.read<TabsBloc>().add(
         OpenOrFocusTab(
@@ -481,6 +546,10 @@ class _AltTocSidebarViewState extends State<AltTocSidebarView>
   }
 
   void _handleLeafClick(int structureId, AltTocEntry entry) async {
+    if (structureId == kDibburimStructureId) {
+      _scrollToLine(dibburimLineIndex(entry.id));
+      return;
+    }
     try {
       // 1. Try to get links for this entry
       var links = await DatabaseLibraryProvider.instance.getLinksForAltTocEntry(
@@ -746,9 +815,7 @@ class _AltTocSidebarViewState extends State<AltTocSidebarView>
       isExpanded: isExpanded,
       hasChildren: hasChildren,
       onTap: () => _handleEntryTap(structureId, entry),
-      onToggleExpand: hasChildren
-          ? () => _toggleEntryExpanded(entry.id)
-          : null,
+      onToggleExpand: hasChildren ? () => _toggleEntryExpanded(entry.id) : null,
     );
 
     return Column(

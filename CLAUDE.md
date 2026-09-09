@@ -808,7 +808,7 @@ dart format lib/file.dart    # Format ONLY files you modified
 | קאש שורות הספר לחיפוש (שחרור בטאב רקע) | `test/text_book/view/text_book_search_content_cache_test.dart` |
 | TOC navigator UI | `test/text_book/view/toc_navigator_screen_test.dart` |
 | TOC navigator internals | `test/text_book/view/toc_navigator_internals_test.dart` |
-| דיבורי-המתחיל כתתי-כותרות בניווט (שזירה בעץ מועתק, הכותרת הנוכחית נשארת ברמת הכותרת) | `test/text_book/view/toc_dibburim_attach_test.dart`, `test/text_book/view/toc_navigator_dibburim_test.dart` |
+| דיבורי-המתחיל כמבנה מסונתז בלשונית 'כותרות' (בניית הערכים, קיצור מילים, הערך הפעיל) | `test/text_book/utils/dibburim_structure_test.dart`, `test/text_book/view/alt_toc_sidebar_dibburim_test.dart` |
 | Combined view helpers (shouldShow…) | `test/text_book/view/combined_view/combined_book_screen_test.dart` |
 | TabbedCommentaryPanel tab switching / onTabChanged | `test/text_book/view/tabbed_commentary_panel_test.dart` |
 | Page shape commentary selection | `test/text_book/view/page_shape_commentary_selection_test.dart` |
