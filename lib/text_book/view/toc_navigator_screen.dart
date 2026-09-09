@@ -676,13 +676,9 @@ class _TocViewerState extends State<TocViewer>
                           onNotification: (notification) {
                             if (notification is ScrollStartNotification &&
                                 notification.dragDetails != null) {
-                              setState(() {
-                                _isManuallyScrolling = true;
-                              });
+                              _isManuallyScrolling = true;
                             } else if (notification is ScrollEndNotification) {
-                              setState(() {
-                                _isManuallyScrolling = false;
-                              });
+                              _isManuallyScrolling = false;
                             }
                             return false;
                           },

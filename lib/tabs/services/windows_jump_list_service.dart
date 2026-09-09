@@ -2,7 +2,6 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
-import 'package:otzaria/core/startup_timeline.dart';
 import 'package:otzaria/core/windowing/window_role.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 
@@ -56,13 +55,11 @@ class WindowsJumpListService {
         _queuedTitles = null;
         _sendingTitles = pending;
         try {
-          // ה-handler הנייטיבי רץ סינכרונית על ה-UI thread; משך הקריאה נמדד
-          // בציר הזמן של העלייה כי CommitList עלול לחסום את Dart (issue #1192).
-          StartupTimeline.instance.markOnce('jumpList:invoke');
+          // ⚠️ ה-handler הנייטיבי (CommitList) רץ סינכרונית על ה-UI thread,
+          // ולכן Shell איטי חוסם גם את Dart.
           final ok = await _channel.invokeMethod<bool>('updateTabs', {
             'titles': pending,
           });
-          StartupTimeline.instance.markOnce('jumpList:done');
           // מעדכנים את הזיכרון רק בהצלחה — אחרת אותה רשימה תישלח שוב בשינוי
           // הבא במקום להיתקע על מצב שלא נכתב בפועל.
           if (ok == true) {

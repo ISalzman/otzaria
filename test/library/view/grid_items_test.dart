@@ -649,4 +649,48 @@ void main() {
       expect(tester.takeException(), isNull);
     });
   });
+
+  // תפריט "אפשרויות נוספות" משותף לכרטיס הרשת ולשורת העץ (issue #1256).
+  group('BookActionsMenuButton', () {
+    Widget buildMenu(Book book) => MaterialApp(
+      home: Material(
+        child: Center(
+          child: BookActionsMenuButton(book: book, onBookDeleted: () {}),
+        ),
+      ),
+    );
+
+    testWidgets('מציג את התפריט ואת פעולת המחיקה לספר "עותק עצמאי"', (
+      tester,
+    ) async {
+      FileSystemData.instance = _FakeFileSystemData(canDelete: true);
+      final book = TextBook(
+        title: 'ספר עצמאי',
+        categoryId: 3,
+        isUserBook: true,
+      );
+
+      await tester.pumpWidget(buildMenu(book));
+      await tester.pumpAndSettle();
+
+      expect(find.byIcon(FluentIcons.more_vertical_24_regular), findsOneWidget);
+      await tester.tap(find.byIcon(FluentIcons.more_vertical_24_regular));
+      await tester.pumpAndSettle();
+      expect(find.text('מחק מהספרייה'), findsOneWidget);
+    });
+
+    testWidgets('נעלם כשאין פעולה זמינה', (tester) async {
+      FileSystemData.instance = _FakeFileSystemData(canDelete: false);
+      final book = TextBook(
+        title: 'ספר מקובץ',
+        categoryId: 4,
+        isUserBook: true,
+      );
+
+      await tester.pumpWidget(buildMenu(book));
+      await tester.pumpAndSettle();
+
+      expect(find.byIcon(FluentIcons.more_vertical_24_regular), findsNothing);
+    });
+  });
 }

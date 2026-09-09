@@ -906,6 +906,32 @@ void main() {
       expect(provider.indexedFilePaths, isEmpty);
     });
 
+    test('מסכת PDF מצורפת אינה נכנסת למסלול האינדוקס המלא', () async {
+      final engine = _RecordingSearchEngine();
+      final provider = _RecordingTantivyDataProvider(engine);
+      final library = Library(categories: []);
+      final bundledPdf = PdfBook(
+        title: 'ברכות',
+        path: r'C:\library\תלמוד בבלי\ברכות.pdf',
+        externalLibraryId: DatabaseConstants.talmudBavliPdfExternalLibraryId(
+          'ברכות',
+        ),
+      );
+      library.books.add(bundledPdf);
+      final repository = _FakeExtractionRepository(provider);
+
+      final result = await repository.indexAllBooks(
+        library,
+        onProgress: (_, _) {},
+      );
+
+      expect(result.completed, isTrue);
+      expect(result.totalBooks, 0);
+      expect(repository.extractedTitles, isEmpty);
+      expect(engine.addedPdfTitles, isEmpty);
+      expect(provider.indexedFilePaths, isEmpty);
+    });
+
     test('אחרי commit מוצלח מושלם חותם הסדר הקטלוגי שנכשל באתחול', () async {
       // רגרסיה: חותם שלא נכתב באתחול הותיר את האינדקס המלא "ישן" בהפעלה
       // הבאה, והמשתמש נדרש למחוק ולבנות הכול מחדש.
@@ -1931,6 +1957,78 @@ void main() {
         link: 'https://example.com',
       );
       expect(IndexingRepository.isIndexableBook(external), isFalse);
+    });
+
+    test('מסכת PDF מצורפת מוחרגת — הטקסט המלא שלה כבר באינדקס', () {
+      final bundled = PdfBook(
+        title: 'ברכות',
+        path: r'C:\library\תלמוד בבלי\ברכות.pdf',
+        externalLibraryId: DatabaseConstants.talmudBavliPdfExternalLibraryId(
+          'ברכות',
+        ),
+      );
+      expect(IndexingRepository.isIndexableBook(bundled), isFalse);
+    });
+
+    test('PDF אישי נשאר אינדוקסיבילי גם בתיקייה בשם "תלמוד בבלי"', () {
+      final personal = PdfBook(
+        title: 'ברכות',
+        path: r'C:\personal\תלמוד בבלי\ברכות.pdf',
+        isUserBook: true,
+      );
+      expect(IndexingRepository.isIndexableBook(personal), isTrue);
+
+      final downloaded = PdfBook(
+        title: 'ספר שהורד',
+        path: r'C:\library\hbS45.pdf',
+        externalLibraryId: 'hebrewbooks:12345',
+      );
+      expect(IndexingRepository.isIndexableBook(downloaded), isTrue);
+    });
+  });
+
+  group('IndexingRepository.extractPageTextsWithRetry', () {
+    test('עמוד שחרג מה-timeout מנוסה שוב בסוף ונשמר במקומו', () async {
+      final attempts = <int>[];
+      final result = await IndexingRepository.extractPageTextsWithRetry(
+        pageCount: 4,
+        loadPageText: (i) async {
+          attempts.add(i);
+          // עמודים 1 ו-2 נופלים רק בניסיון הראשון — תקיעה חולפת של ה-worker.
+          final firstAttempt = attempts.where((a) => a == i).length == 1;
+          if ((i == 1 || i == 2) && firstAttempt) return null;
+          return 'עמוד $i';
+        },
+        beforeEachPage: () async => true,
+      );
+
+      expect(result, isNotNull);
+      expect(result!.droppedPages, 0);
+      expect(result.texts.keys.toList(), [0, 1, 2, 3]);
+      expect(result.texts[2], 'עמוד 2');
+      expect(attempts, [0, 1, 2, 3, 1, 2]);
+    });
+
+    test('עמוד שנכשל גם בניסיון החוזר נספר כנשמט', () async {
+      final result = await IndexingRepository.extractPageTextsWithRetry(
+        pageCount: 3,
+        loadPageText: (i) async => i == 1 ? null : 'עמוד $i',
+        beforeEachPage: () async => true,
+      );
+
+      expect(result!.droppedPages, 1);
+      expect(result.texts.keys.toList(), [0, 2]);
+    });
+
+    test('ביטול האינדוקס באמצע הניסיון החוזר מחזיר null', () async {
+      var calls = 0;
+      final result = await IndexingRepository.extractPageTextsWithRetry(
+        pageCount: 2,
+        loadPageText: (i) async => null,
+        beforeEachPage: () async => ++calls <= 2,
+      );
+
+      expect(result, isNull);
     });
   });
 

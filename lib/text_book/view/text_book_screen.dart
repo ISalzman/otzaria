@@ -322,6 +322,10 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   // Key עבור PageShapeScreen
   final Key _pageShapeKey = UniqueKey();
 
+  // בדיקת הכותרות החלופיות מסתיימת אחרי הבנייה ומשנה את מספר הלשוניות; בלי
+  // מפתח גלובלי לשונית החיפוש נבנית מאפס ומה שהוקלד בה עד אז אובד (issue #1263).
+  final GlobalKey _searchTabKey = GlobalKey();
+
   // בקשה לפתיחת דיאלוג הגדרות צורת הדף מתוך PageShapeScreen (עדכון חי)
   final ValueNotifier<int> _pageShapeOpenSettingsNotifier = ValueNotifier<int>(
     0,
@@ -2964,6 +2968,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
                   ),
                 ),
               Builder(
+                key: _searchTabKey,
                 builder: (context) {
                   void openSearch() {
                     context.read<TextBookBloc>().add(

@@ -27,7 +27,6 @@ class IndexingInProgress extends IndexingState {
     this.isPaused = false,
     this.isEconomy = false,
     this.isFinalizing = false,
-    this.finalizingProgress,
   });
 
   /// שלב הסריקה של ReconcileIndex — השוואת טביעות-אצבע לפני אינדוקס-מחדש.
@@ -41,11 +40,8 @@ class IndexingInProgress extends IndexingState {
   final bool isEconomy;
 
   /// כל הספרים אונדקסו והמנוע מאחד את קבצי האינדקס (commit ו-optimize).
+  /// אין לשלב זה התקדמות מדידה, ולכן המונה מוחלף בהודעה נפרדת.
   final bool isFinalizing;
-
-  /// התקדמות איחוד הסגמנטים כשבר בין 0 ל-1. null עד שהדגימה הראשונה
-  /// מגיעה, או כשלא ניתן למדוד — ואז החיווי נשאר בלתי-מוגדר.
-  final double? finalizingProgress;
 
   @override
   List<Object?> get props => [
@@ -54,7 +50,6 @@ class IndexingInProgress extends IndexingState {
     isPaused,
     isEconomy,
     isFinalizing,
-    finalizingProgress,
   ];
 }
 
@@ -65,6 +60,12 @@ class IndexingComplete extends IndexingState {
 
   bool get isClean => failures.isEmpty;
   int get failureCount => failures.length;
+
+  /// כשלים שמנעו אינדוקס של ספר; אזהרה (PDF שחלק מעמודיו נשמטו) אינה נספרת.
+  int get blockingFailureCount =>
+      failures.where((failure) => failure.preventedIndexing).length;
+
+  int get warningCount => failureCount - blockingFailureCount;
 
   @override
   List<Object?> get props => [failures];

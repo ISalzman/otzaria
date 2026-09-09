@@ -27,8 +27,12 @@ import 'package:otzaria/shortcuts/shortcut_validator.dart';
 import 'package:otzaria/tabs/bloc/tabs_state.dart';
 import 'package:otzaria/tabs/models/pdf_tab.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
+import 'package:otzaria/tools/calendar/services/notification_service.dart';
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
+import 'package:path/path.dart' as path;
+import 'package:otzaria/core/windowing/window_role.dart';
 import 'package:flutter/foundation.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/core/messages/plugin_messages.dart';
@@ -76,6 +80,7 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
     on<ConfirmPluginInstall>(_onConfirmPluginInstall);
     on<CancelPluginInstall>(_onCancelPluginInstall);
     on<UninstallPluginRequested>(_onUninstallPluginRequested);
+    on<ResetPluginDataRequested>(_onResetPluginDataRequested);
     on<PinPluginRequested>(_onPinPluginRequested);
     on<UnpinPluginRequested>(_onUnpinPluginRequested);
     on<PinPluginToNavRailRequested>(_onPinPluginToNavRailRequested);
@@ -96,6 +101,7 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
     on<DetachDevelopmentPluginRequested>(_onDetachDevelopmentPluginRequested);
     on<ReloadDevelopmentPluginRequested>(_onReloadDevelopmentPluginRequested);
     on<DevelopmentPluginManifestChanged>(_onDevelopmentPluginManifestChanged);
+    on<RescanDevelopmentManifests>(_onRescanDevelopmentManifests);
     on<LoadLocalhostPluginRequested>(_onLoadLocalhostPluginRequested);
     on<ConfirmDevPluginInstall>(_onConfirmDevPluginInstall);
 
@@ -590,6 +596,48 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
     }
   }
 
+  Future<void> _onResetPluginDataRequested(
+    ResetPluginDataRequested event,
+    Emitter<PluginSystemState> emit,
+  ) async {
+    try {
+      final plugin = await repository.getPlugin(event.pluginId);
+      if (plugin == null) return;
+      _removeDeclarative(event.pluginId);
+      ContextMenuRegistry.instance.removeAll(event.pluginId);
+      PluginToolbarRegistry.instance.removeAll(event.pluginId);
+      PluginShortcutRegistry.instance.removeAll(event.pluginId);
+      PluginHighlightRegistry.instance.removePlugin(event.pluginId);
+      PluginFileServer.instance.revokeAllForPlugin(event.pluginId);
+      _removeSearchProviders(event.pluginId);
+      await _cancelPluginNotifications(event.pluginId);
+      await _installerService.resetPluginData(event.pluginId);
+      PluginRuntimeDispatcher.instance.invalidatePlugin(event.pluginId);
+      await PluginRuntimeDispatcher.instance.reloadPlugin(event.pluginId);
+      add(LoadPlugins());
+      UiSnack.show(PluginMessages.pluginDataReset(plugin.name));
+    } catch (e) {
+      UiSnack.showError(PluginMessages.resetPluginDataError(e));
+    }
+  }
+
+  /// מבטל את התראות המערכת שהתוסף תזמן — מזהיהן נשמרים ב-KV הפנימי של הגשר
+  /// (`_internal/notification_ids`), ונמחקים יחד עם שאר הנתונים מיד אחר כך.
+  Future<void> _cancelPluginNotifications(String pluginId) async {
+    final raw = await repository.getKV(
+      pluginId,
+      '_internal',
+      'notification_ids',
+    );
+    if (raw == null) return;
+    final notifications = NotificationService();
+    if (!notifications.isInitialized) return;
+    final ids = (jsonDecode(raw) as List).whereType<int>();
+    for (final id in ids) {
+      await notifications.cancelNotification(id);
+    }
+  }
+
   Future<void> _onEnablePluginRequested(
     EnablePluginRequested event,
     Emitter<PluginSystemState> emit,
@@ -741,6 +789,40 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
   ) async {
     _removeSearchProviders(event.pluginId);
     PluginRuntimeDispatcher.instance.reloadPlugin(event.pluginId);
+  }
+
+  /// תוסף פיתוח שה-manifest שלו נערך כשהתוכנה הייתה סגורה — ה-watcher לא היה
+  /// שם כדי לרענן את הרשומה, והגרסה שנשמרה נשארת תקועה. כאן משווים את הגרסה
+  /// שבקובץ לזו שברשומה, ומעדכנים דרך אותו נתיב של ה-watcher.
+  ///
+  /// עלות בעלייה: שאילתה שכבר נעשית ל-`syncWatchers`, ואם אין תוספי פיתוח —
+  /// שום קריאת קבצים. הכשל בכל תוסף נבלע בנפרד: תיקייה שנעלמה או manifest
+  /// שנשבר באמצע עריכה אינם אמורים להפיל את הסריקה על השאר.
+  Future<void> _onRescanDevelopmentManifests(
+    RescanDevelopmentManifests event,
+    Emitter<PluginSystemState> emit,
+  ) async {
+    // הרשומה משותפת לכל החלונות; חלון משני היה כותב אותה שוב על אותם נתונים.
+    if (WindowRole.isSecondary) return;
+    final devPlugins = await repository.getDevelopmentPlugins();
+    for (final plugin in devPlugins) {
+      // localhost_dev נטען מ-HTTP (HMR) ואין לו תיקייה לקרוא ממנה.
+      if (plugin.isLocalhostDev) continue;
+      final devRootPath = plugin.devRootPath;
+      if (devRootPath == null) continue;
+      try {
+        final file = File(path.join(devRootPath, 'manifest.json'));
+        if (!await file.exists()) continue;
+        final json = jsonDecode(await file.readAsString());
+        final version = json is Map ? json['version'] : null;
+        if (version is! String || version == plugin.version) continue;
+        add(DevelopmentPluginManifestChanged(plugin.pluginId));
+      } catch (error) {
+        debugPrint(
+          'Plugin dev manifest rescan [${plugin.pluginId}]: $error',
+        );
+      }
+    }
   }
 
   Future<void> _onDevelopmentPluginManifestChanged(

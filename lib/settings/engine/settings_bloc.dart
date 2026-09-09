@@ -1,4 +1,5 @@
 import 'package:bloc_concurrency/bloc_concurrency.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/theme/app_fonts.dart';
@@ -11,8 +12,14 @@ import 'package:otzaria/settings/services/per_book_settings_service.dart';
 
 class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
   final SettingsRepository _repository;
+  final Future<void> Function(String fontFamily) _ensureFontLoaded;
 
-  SettingsBloc({required this._repository}) : super(SettingsState.initial()) {
+  SettingsBloc({
+    required this._repository,
+    @visibleForTesting
+    Future<void> Function(String fontFamily)? ensureFontLoaded,
+  }) : _ensureFontLoaded = ensureFontLoaded ?? AppFonts.ensureFontLoaded,
+       super(SettingsState.initial()) {
     on<LoadSettings>(_onLoadSettings);
     on<UpdateDarkMode>(_onUpdateDarkMode);
     on<UpdateFollowSystemTheme>(_onUpdateFollowSystemTheme);
@@ -84,17 +91,6 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
   ) async {
     final settings = await _repository.loadSettings();
 
-    // בדסקטופ: אם המשתמש בחר גופן מערכת בעבר, נטען אותו כדי שיהיה זמין ב-TextStyle.
-    await AppFonts.ensureFontLoaded(settings['fontFamily'] as String);
-    await AppFonts.ensureFontLoaded(
-      settings['commentatorsFontFamily'] as String,
-    );
-    // גופן "מפרשים תחתונים" בצורת הדף נשמר מחוץ ל-state — בלי טעינה כאן
-    // גופן מערכת מתאפס ל-fallback אחרי הפעלה מחדש (issue #849).
-    await AppFonts.ensureFontLoaded(
-      settings['pageShapeBottomFont'] as String? ?? AppFonts.defaultFont,
-    );
-
     emit(
       SettingsState(
         isDarkMode: settings['isDarkMode'],
@@ -165,6 +161,16 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
             (settings['settingsLanguageCode'] as String?) ??
             kDefaultSettingsLanguageCode,
       ),
+    );
+
+    // גופן מערכת דורש סריקת כל גופני המערכת — לכן טוענים אחרי הפליטה, אחרת
+    // החלון נחשף בעיצוב ברירת המחדל עד סיום הסריקה (issue #1245).
+    await _ensureFontLoaded(settings['fontFamily'] as String);
+    await _ensureFontLoaded(settings['commentatorsFontFamily'] as String);
+    // גופן "מפרשים תחתונים" בצורת הדף נשמר מחוץ ל-state — בלי טעינה כאן
+    // גופן מערכת מתאפס ל-fallback אחרי הפעלה מחדש (issue #849).
+    await _ensureFontLoaded(
+      settings['pageShapeBottomFont'] as String? ?? AppFonts.defaultFont,
     );
   }
 

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:collection';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart' hide Category;
@@ -7,12 +8,11 @@ import 'package:otzaria/core/messages/window_messages.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/core/windowing/window_role.dart';
 import 'package:otzaria/data/cache/generation_cache.dart';
+import 'package:otzaria/data/constants/database_constants.dart';
 import 'package:otzaria/data/data_providers/tantivy_data_provider.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/data/data_providers/user_books_database_holder.dart';
 import 'package:otzaria/find_ref/repository/reference_books_cache.dart';
-import 'package:otzaria/core/app_paths.dart';
-import 'package:otzaria/indexing/services/index_merge_progress.dart';
 import 'package:otzaria/indexing/utils/book_facet_metadata_cache.dart';
 import 'package:otzaria/indexing/utils/pdf_extraction_prefetcher.dart';
 import 'package:otzaria/indexing/models/catalogue_order_resolver.dart';
@@ -255,15 +255,13 @@ class IndexingRepository {
   /// [library] The library containing books to index
   /// [onProgress] Callback function to report progress
   /// [onFinalizing] נקרא כשכל הספרים אונדקסו והמנוע ניגש לאחד את קבצי
-  /// האינדקס.
-  /// [onFinalizingProgress] מדווח את התקדמות האיחוד כשבר בין 0 ל-1.
+  /// האינדקס — שלב ארוך וללא התקדמות מדידה.
   /// מבצע אינדוקס ומחזיר תוצאה מפורטת, כולל ביטול וכשלים פר-ספר.
   Future<IndexingRunResult> indexAllBooks(
     Library library, {
     void Function()? onActualIndexingStarted,
     required void Function(int processed, int total) onProgress,
     void Function()? onFinalizing,
-    void Function(double fraction)? onFinalizingProgress,
     bool includePdfBooks = true,
   }) async {
     if (WindowRole.isSecondary) {
@@ -281,9 +279,12 @@ class IndexingRepository {
       );
     }
 
-    final allBooks = orderBooksForIndexing(
-      library.getAllBooks(),
-    ).where((book) => includePdfBooks || book is! PdfBook).toList();
+    final allBooks = orderBooksForIndexing(library.getAllBooks())
+        .where(
+          (book) =>
+              isIndexableBook(book) && (includePdfBooks || book is! PdfBook),
+        )
+        .toList();
     final totalBooks = allBooks.length;
 
     if (await requiresManualReindex(library)) {
@@ -327,11 +328,6 @@ class IndexingRepository {
 
     try {
       await _setDbReadBoost(true);
-      // מצב bulk: בלי מיזוגי-רקע של סגמנטים בזמן הבנייה — ה-optimize בסוף
-      // ממזג הכול ממילא, והמיזוגים תוך-כדי רק גוזלים CPU מהאינדוקס עצמו
-      // (נמדד כ-~0.2ms למסמך של האטה בקריאות המנוע).
-      final engineForBulk = await _tantivyDataProvider.engine;
-      await engineForBulk.setBulkIndexing(enabled: true);
 
       final catalogueOrder = buildCatalogueOrderResolver(library);
       await Future.wait([
@@ -503,10 +499,8 @@ class IndexingRepository {
           }
 
           processedBooks++;
-          // כל commit יוצר סגמנט לכל thread של המנוע, וכולם ממוזגים
-          // בסוף ב-optimize סדרתי אחד — כך שסף נמוך מייקר את הסיום פי
-          // כמה. ה-commit הוא רק נקודת שמירה להתאוששות: קריסה מאבדת את
-          // הספרים שאונדקסו מאז האחרון, ולכן הסף חוסם גם מלמעלה.
+          // ה-commit הוא נקודת שמירה להתאוששות (קריסה מאבדת את הספרים שאונדקסו
+          // מאז האחרון), אך סף נמוך עולה בזמן commit ובסגמנטים קטנים.
           if (indexedSinceCommit >= 200) {
             commitStopwatch
               ..reset()
@@ -579,33 +573,13 @@ class IndexingRepository {
         debugPrint('💾 commit סופי: ${commitStopwatch.elapsedMilliseconds}ms');
         _stampCatalogueOrderAfterCommit();
         final optimizeStopwatch = Stopwatch()..start();
-        final mergeProgress = onFinalizingProgress == null
-            ? null
-            : IndexMergeProgress.start(
-                _tantivyDataProvider.activeIndexPath ??
-                    await AppPaths.getIndexPath(),
-                onFinalizingProgress,
-              );
-        try {
-          await optimizeIndexBestEffort(index.optimize);
-        } finally {
-          mergeProgress?.stop();
-        }
+        await optimizeIndexBestEffort(index.optimize);
         debugPrint('⚙️ optimize: ${optimizeStopwatch.elapsedMilliseconds}ms');
         debugPrint('⏱️ סה"כ אינדוקס: ${totalStopwatch.elapsed}');
       }
     } finally {
       prefetcher.dispose();
       await _setDbReadBoost(false);
-      // החזרת מדיניות המיזוג הרגילה — גם בביטול/שגיאה, כדי שאינדוקס
-      // אינקרמנטלי עתידי ימשיך למזג כרגיל. best-effort: כשל כאן לא
-      // מסכן את האינדקס (שכבר עבר commit).
-      try {
-        final engine = await _tantivyDataProvider.engine;
-        await engine.setBulkIndexing(enabled: false);
-      } catch (e) {
-        debugPrint('⚠️ כיבוי מצב bulk נכשל: $e');
-      }
       _tantivyDataProvider.isIndexing.value = false;
     }
     return cancelled
@@ -997,46 +971,88 @@ class IndexingRepository {
         onTimeout: () => <PdfOutlineNode>[],
       );
 
+      final extracted = await extractPageTextsWithRetry(
+        pageCount: document.pages.length,
+        loadPageText: (i) async {
+          final text = await document.pages[i].loadText().timeout(
+            const Duration(seconds: 5),
+            onTimeout: () => null,
+          );
+          return text?.fullText;
+        },
+        beforeEachPage: () async {
+          if (!_tantivyDataProvider.isIndexing.value) return false;
+          await PdfViewerActivity.instance.waitUntilIdle();
+          return true;
+        },
+      );
+      if (extracted == null) return empty;
+
       final pages = <({String reference, String text, int pageIndex})>[];
-      var droppedPages = 0;
-
-      // סדרתי בכוונה: כל קריאות pdfium מסורלות דרך worker isolate יחיד, כך
-      // שטעינת מקבץ לא מאיצה — אבל מפעילה את כל טיימרי ה-timeout יחד ומפילה
-      // עמודים תקינים שרק ממתינים בתור.
-      final pageCount = document.pages.length;
-      for (int i = 0; i < pageCount; i++) {
-        if (!_tantivyDataProvider.isIndexing.value) return empty;
-        await PdfViewerActivity.instance.waitUntilIdle();
-
-        final pageText = await document.pages[i].loadText().timeout(
-          const Duration(seconds: 5),
-          onTimeout: () => null,
-        );
-        if (pageText == null) {
-          droppedPages++;
-          continue;
-        }
-
+      for (final entry in extracted.texts.entries) {
+        final i = entry.key;
         final bookmark = referenceFromPageNumber(i + 1, outline, book.title);
         final ref = bookmark.isNotEmpty
             ? '${book.title}, $bookmark, עמוד ${i + 1}'
             : '${book.title}, עמוד ${i + 1}';
-
-        pages.add((reference: ref, text: pageText.fullText, pageIndex: i));
+        pages.add((reference: ref, text: entry.value, pageIndex: i));
       }
 
-      if (droppedPages > 0) {
+      if (extracted.droppedPages > 0) {
         debugPrint(
-          '⚠️ "${book.title}": $droppedPages עמודים נשמטו מהחילוץ (timeout)',
+          '⚠️ "${book.title}": ${extracted.droppedPages} עמודים נשמטו '
+          'מהחילוץ (timeout)',
         );
       }
 
-      return (pages: pages, outline: outline, droppedPages: droppedPages);
+      return (
+        pages: pages,
+        outline: outline,
+        droppedPages: extracted.droppedPages,
+      );
     } finally {
       // בלי סגירה מפורשת המסמך נשאר פתוח ב-pdfium עד סוף התהליך: אין
       // Finalizer על העטיפה, ו-FPDF_CloseDocument נקרא רק מ-dispose.
       await document.dispose();
     }
+  }
+
+  /// טקסט העמודים לפי אינדקס, בסדר עולה. עמוד שחרג מה-timeout (null) מנוסה
+  /// שוב פעם אחת בסוף הספר, כשה-worker של pdfium כבר פנוי.
+  ///
+  /// סדרתי בכוונה: כל קריאות pdfium מסורלות דרך worker יחיד, ותקיעה של עמוד
+  /// אחד מפילה את הטיימרים של העמודים שממתינים אחריו בתור — הניסיון החוזר
+  /// מחזיר אותם. מחזיר null כשה-[beforeEachPage] ביטל את האינדוקס.
+  @visibleForTesting
+  static Future<({Map<int, String> texts, int droppedPages})?>
+  extractPageTextsWithRetry({
+    required int pageCount,
+    required Future<String?> Function(int pageIndex) loadPageText,
+    required Future<bool> Function() beforeEachPage,
+  }) async {
+    final texts = SplayTreeMap<int, String>();
+    final timedOut = <int>[];
+    for (int i = 0; i < pageCount; i++) {
+      if (!await beforeEachPage()) return null;
+      final text = await loadPageText(i);
+      if (text == null) {
+        timedOut.add(i);
+      } else {
+        texts[i] = text;
+      }
+    }
+
+    var droppedPages = 0;
+    for (final i in timedOut) {
+      if (!await beforeEachPage()) return null;
+      final text = await loadPageText(i);
+      if (text == null) {
+        droppedPages++;
+      } else {
+        texts[i] = text;
+      }
+    }
+    return (texts: texts, droppedPages: droppedPages);
   }
 
   Future<List<({String reference, String text, int pageIndex})>>
@@ -1935,7 +1951,17 @@ class IndexingRepository {
   /// `toTextBook()`, ו-`book.text` כבר יודע לחלץ את התוכן דרך הממיר
   /// המתאים (ראה DatabaseLibraryProvider.getBookText).
   static bool isIndexableBook(Book book) =>
-      book is TextBook || book is PdfBook || book is ConvertibleDocumentBook;
+      book is TextBook ||
+      (book is PdfBook && !isBundledTalmudBavliPdf(book)) ||
+      book is ConvertibleDocumentBook;
+
+  /// מסכת PDF מצורפת אינה מאונדקסת: הטקסט המלא שלה כבר באינדקס, ותוצאת
+  /// טקסט נפתחת ב-PDF לפי הגדרת פורמט הפתיחה — האינדוקס רק הכפיל תוצאות.
+  static bool isBundledTalmudBavliPdf(PdfBook book) =>
+      !book.isUserBook &&
+      DatabaseConstants.isTalmudBavliPdfExternalLibraryId(
+        book.externalLibraryId,
+      );
 
   /// ממפה ספר לזרימת האינדוקס של TextBook; null לסוגים שאינם טקסטואליים.
   static TextBook? _asTextBookForIndex(Book book) => switch (book) {

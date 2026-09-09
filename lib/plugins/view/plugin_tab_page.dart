@@ -48,6 +48,7 @@ import 'package:otzaria/plugins/bloc/plugin_system_bloc.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_event.dart';
 import 'package:otzaria/plugins/services/plugin_crash_guard.dart';
 import 'package:otzaria/plugins/services/plugin_deep_link_policy.dart';
+import 'package:otzaria/plugins/services/plugin_host_shortcuts.dart';
 import 'package:otzaria/plugins/services/plugin_webview_failure_log.dart';
 import 'package:otzaria/plugins/services/plugin_network_gate.dart';
 import 'package:otzaria/plugins/view/plugin_crashed_view.dart';
@@ -117,15 +118,49 @@ const String _sdkStub = r'''
     return null;
   };
 
-  // מקשי מקלדת נבלעים ב-WebView ולא מגיעים ל-Flutter — מעבירים ESC לאפליקציה
-  // (יציאה ממסך מלא).
+  // מקשי מקלדת נבלעים ב-WebView ולא מגיעים ל-Flutter — מעבירים ESC (יציאה
+  // ממסך מלא) ואת קיצורי הניווט של התוכנה (הרשימה מוזרקת מ-Flutter).
+  window.__otzariaHostShortcuts = [];
+  window.__otzariaSetHostShortcuts = function (list) {
+    window.__otzariaHostShortcuts = Array.isArray(list) ? list : [];
+  };
+  window.__otzariaMatchHostShortcut = function (e, list) {
+    for (var i = 0; i < list.length; i++) {
+      var s = list[i];
+      if (s.codes.indexOf(e.code) !== -1 &&
+          !!e.ctrlKey === !!s.ctrl && !!e.shiftKey === !!s.shift &&
+          !!e.altKey === !!s.alt && !!e.metaKey === !!s.meta) {
+        return s;
+      }
+    }
+    return null;
+  };
   window.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape' && window.flutter_inappwebview) {
+    if (!window.flutter_inappwebview) return;
+    if (e.key === 'Escape') {
       window.flutter_inappwebview.callHandler('otzaria_escape_pressed');
+      return;
+    }
+    if (e.repeat) return;
+    var match = window.__otzariaMatchHostShortcut(e, window.__otzariaHostShortcuts);
+    if (match) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      window.flutter_inappwebview.callHandler('otzaria_host_shortcut', match.id);
     }
   }, true);
 })();
 ''';
+
+/// הסקריפט המוזרק לתוסף לפני הטעינה — חשוף לבדיקות של תפיסת הקיצורים.
+@visibleForTesting
+String get pluginSdkStubScript => _sdkStub;
+
+/// קוד JS שמעדכן בתוסף את רשימת קיצורי התוכנה שהוא מעביר חזרה.
+@visibleForTesting
+String buildSetHostShortcutsScript(List<PluginHostShortcut> shortcuts) =>
+    'window.__otzariaSetHostShortcuts && window.__otzariaSetHostShortcuts('
+    '${jsonEncode(shortcuts.map((s) => s.toJson()).toList())});';
 
 /// האם אירוע כשל היצירה שייך לטאב הזה.
 @visibleForTesting
@@ -228,6 +263,10 @@ class _PluginTabPageState extends State<PluginTabPage> {
 
   // כשל היצירה מגיע מהפלאגין כאירוע גלובלי (אין callback על ה-widget).
   StreamSubscription<WindowsWebViewCreationFailure>? _creationFailureSub;
+  StreamSubscription<SettingsState>? _settingsSub;
+
+  /// קיצורי הניווט שהוזרקו לתוסף, לפי המזהה שה-JS מחזיר.
+  Map<String, PluginHostShortcut> _hostShortcuts = const {};
   String? _creationFailure;
 
   // Cache PackageInfo so the async gap in onLoadStop never crosses a dispose
@@ -238,6 +277,12 @@ class _PluginTabPageState extends State<PluginTabPage> {
   void initState() {
     super.initState();
     _pluginSystemBloc = context.read<PluginSystemBloc>();
+    _settingsSub = context.read<SettingsBloc>().stream.listen((state) {
+      final controller = webViewController;
+      if (controller != null && !mapEquals(state.shortcuts, _lastShortcuts)) {
+        unawaited(_pushHostShortcuts(controller));
+      }
+    });
     // For localhost_dev the dev server root IS the entrypoint (e.g. http://localhost:5173/).
     // The manifest entrypoint (e.g. dist/index.html) is the production-build path only.
     localHtmlPath = widget.plugin.isLocalhostDev
@@ -568,6 +613,23 @@ class _PluginTabPageState extends State<PluginTabPage> {
     _cachedPackageInfo ??= await PackageInfo.fromPlatform();
   }
 
+  Map<String, String>? _lastShortcuts;
+
+  /// מזריק לתוסף את קיצורי הניווט לפי ההגדרה הנוכחית של המשתמש.
+  Future<void> _pushHostShortcuts(InAppWebViewController controller) async {
+    final shortcuts = context.read<SettingsBloc>().state.shortcuts;
+    final list = PluginHostShortcuts.build(shortcuts);
+    _hostShortcuts = {for (final s in list) s.id: s};
+    _lastShortcuts = Map.of(shortcuts);
+    try {
+      await controller.evaluateJavascript(
+        source: buildSetHostShortcutsScript(list),
+      );
+    } catch (e) {
+      debugPrint('PluginTabPage: host shortcuts inject failed: $e');
+    }
+  }
+
   @override
   void dispose() {
     _findRefRepository.dispose();
@@ -580,6 +642,7 @@ class _PluginTabPageState extends State<PluginTabPage> {
     );
     _creationWatchdog?.cancel();
     unawaited(_creationFailureSub?.cancel());
+    unawaited(_settingsSub?.cancel());
     final pluginId = widget.plugin.pluginId;
     final instanceId = widget.instanceId;
     final controller = webViewController;
@@ -856,6 +919,14 @@ class _PluginTabPageState extends State<PluginTabPage> {
               if (context.read<SettingsBloc>().state.isFullscreen) {
                 FullscreenHelper.toggleFullscreen(context, false);
               }
+            },
+          );
+          controller.addJavaScriptHandler(
+            handlerName: 'otzaria_host_shortcut',
+            callback: (args) {
+              if (!mounted || args.isEmpty) return;
+              final shortcut = _hostShortcuts[args.first];
+              if (shortcut != null) PluginHostShortcuts.dispatch(shortcut);
             },
           );
         } catch (e) {
@@ -1207,6 +1278,7 @@ class _PluginTabPageState extends State<PluginTabPage> {
 })();
 ''',
           );
+          await _pushHostShortcuts(controller);
           // הטעינה הצליחה עד הסוף (גם ה-stub וגם ה-boot payload הוזרקו).
           // מסירים את התוסף מ-quarantine כדי שהפעלה הבאה תאפשר טעינה רגילה.
           unawaited(

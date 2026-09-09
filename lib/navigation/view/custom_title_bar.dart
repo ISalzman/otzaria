@@ -15,6 +15,7 @@ import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
 import 'package:otzaria/shortcuts/shortcut_helper.dart';
+import 'package:otzaria/shortcuts/shortcut_validator.dart';
 import 'package:otzaria/navigation/bloc/navigation_state.dart';
 import 'package:otzaria/navigation/view/reading_tab_strip.dart';
 import 'package:otzaria/navigation/view/tab_context_menu.dart';
@@ -256,7 +257,9 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
             final useReaderStyle =
                 navState.currentScreen == Screen.search ||
                 (navState.currentScreen == Screen.reading &&
-                    context.select((TabsBloc bloc) => bloc.state.hasOpenTabs));
+                    context.select(
+                      (TabsBloc bloc) => bloc.state.hasOpenTabs,
+                    ));
             // ⚠️ **גובה אחד, בלי "גשר".** גרסה קודמת הוסיפה כאן חמשה
             // פיקסלים כדי שהכרטיסיה תוכל לצייר מתחת לעצמה, והתוצאה הייתה
             // ההפוכה: הסרגל התארך, התוכן נדחף למטה, והרצועה שבין הכרטיסיות
@@ -390,14 +393,17 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
     );
   }
 
+  /// ברירת המחדל תלויה בפלטפורמה, ולכן נלקחת מ-[ShortcutValidator] ולא
+  /// משוכפלת כאן.
+  static String _shortcutOf(String key) =>
+      Settings.getValue<String>(key) ??
+      ShortcutValidator.defaultShortcuts[key] ??
+      '';
+
   Widget _buildActionButtons(BuildContext context) {
-    final historyShortcut =
-        Settings.getValue<String>('key-shortcut-open-history') ?? 'ctrl+h';
-    final bookmarksShortcut =
-        Settings.getValue<String>('key-shortcut-open-bookmarks') ??
-        'ctrl+shift+b';
-    final workspaceShortcut =
-        Settings.getValue<String>('key-shortcut-switch-workspace') ?? 'ctrl+k';
+    final historyShortcut = _shortcutOf('key-shortcut-open-history');
+    final bookmarksShortcut = _shortcutOf('key-shortcut-open-bookmarks');
+    final workspaceShortcut = _shortcutOf('key-shortcut-switch-workspace');
 
     return SizedBox(
       width: _kAppBarControlsWidth,
@@ -800,7 +806,7 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
     return GestureDetector(
       onTap: () => context.read<TabsBloc>().add(TogglePinTab(tab)),
       child: Padding(
-        padding: const EdgeInsets.only(right: 4.0),
+        padding: const EdgeInsetsDirectional.only(start: 4.0),
         child: Tooltip(
           message: 'בטל הצמדה',
           child: const Icon(FluentIcons.pin_24_filled, size: 14),
@@ -936,9 +942,9 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
                   child: SizedBox(
                     height: _kTopBarHeight,
                     child: Padding(
-                      padding: EdgeInsets.only(
-                        left: 3,
-                        right: index == 0 ? 0 : 3,
+                      padding: EdgeInsetsDirectional.only(
+                        end: 3,
+                        start: index == 0 ? 0 : 3,
                       ),
                       // הגובה מפורש: ל-CustomPaint ללא ילד אין גודל טבעי,
                       // והוא היה מתכווץ לאפס — גם הציור וגם שטח הלחיצה.
@@ -1122,9 +1128,9 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
             child: SizedBox(
               height: _kTopBarHeight,
               child: Padding(
-                padding: EdgeInsets.only(
-                  left: outerPad,
-                  right: index == 0 ? 0 : outerPad,
+                padding: EdgeInsetsDirectional.only(
+                  end: outerPad,
+                  start: index == 0 ? 0 : outerPad,
                 ),
                 child: CustomPaint(
                   // טאב בבחירה מרובה נצבע ב-secondaryContainer כדי לסמן שהוא

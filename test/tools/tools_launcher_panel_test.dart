@@ -1097,6 +1097,36 @@ void main() {
       await tester.pumpAndSettle();
     }
 
+    // ── מצבי ביניים של רישום התוספים ───────────────────────────────────────
+
+    testWidgets('דיאלוג התקנה אינו מעלים את התוספים מהפאנל (issue #1225)', (
+      tester,
+    ) async {
+      await pumpPanel(tester);
+      expect(find.text('תוסף א'), findsOneWidget);
+      expect(find.text('תוסף ב'), findsOneWidget);
+
+      pluginSystemBloc.pushState(
+        const PluginSystemOverwriteRequired(
+          archivePath: '/tmp/a.otzplugin',
+          pluginName: 'תוסף א',
+          version: '1.0.0',
+        ),
+      );
+      await tester.pump();
+      expect(find.text('תוסף א'), findsOneWidget);
+      expect(find.text('תוסף ב'), findsOneWidget);
+
+      pluginSystemBloc.pushState(PluginSystemLoading());
+      await tester.pump();
+      expect(find.text('תוסף א'), findsOneWidget);
+
+      pluginSystemBloc.pushState(PluginSystemLoaded([plugins().first]));
+      await tester.pump();
+      expect(find.text('תוסף א'), findsOneWidget);
+      expect(find.text('תוסף ב'), findsNothing);
+    });
+
     // ── סימון מקלדת ─────────────────────────────────────────────────────────
 
     testWidgets('בפתיחה אין קובייה מסומנת — לוח שנה לא נראה נבחר', (
@@ -1270,6 +1300,7 @@ void main() {
       expect(find.text('הצמד לסרגל הניווט'), findsOneWidget);
       expect(find.text('הסתר מהממשק'), findsOneWidget);
       expect(find.text('השבת'), findsOneWidget);
+      expect(find.text('איפוס נתוני התוסף'), findsOneWidget);
       expect(find.text('מחק תוסף'), findsOneWidget);
       expect(find.text('הזזה'), findsOneWidget);
     });
@@ -2234,6 +2265,8 @@ class _RecordingPluginSystemBloc
   }
 
   final List<PluginSystemEvent> recorded = [];
+
+  void pushState(PluginSystemState state) => emit(state);
 
   @override
   void add(PluginSystemEvent event) {

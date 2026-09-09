@@ -22,6 +22,7 @@ import 'package:otzaria/text_book/view/page_shape/page_shape_screen.dart';
 import 'package:otzaria/text_book/view/page_shape/page_shape_settings_panel.dart';
 import 'package:otzaria/text_book/view/page_shape/utils/page_shape_settings_manager.dart';
 import 'package:otzaria/widgets/layout/context_overlay_panel.dart';
+import 'package:otzaria/widgets/layout/floating_panel.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
 import '../../../test_helpers/memory_cache_provider.dart';
@@ -201,8 +202,13 @@ void main() {
     expect(settingsPane(tester).isOpen, isTrue);
     expect(find.byType(PageShapeSettingsPanel), findsOneWidget);
 
-    // הפאנל (רוחב 400) יושב בצד הימני; הקשה בקצה השמאלי פוגעת ב-scrim.
-    await tester.tapAt(const Offset(30, 300));
+    final panelRect = tester.getRect(find.byType(FloatingPanel));
+    final screenWidth =
+        tester.view.physicalSize.width / tester.view.devicePixelRatio;
+    final scrimX = panelRect.left > 0
+        ? panelRect.left / 2
+        : panelRect.right + (screenWidth - panelRect.right) / 2;
+    await tester.tapAt(Offset(scrimX, 300));
     await tester.pump();
     await tester.pump();
     expect(settingsPane(tester).isOpen, isFalse);

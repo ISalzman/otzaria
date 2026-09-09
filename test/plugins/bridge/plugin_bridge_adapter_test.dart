@@ -5138,6 +5138,7 @@ Future<void> main() async {
       bool enabled = true,
       bool showInTools = true,
       String? toolTabIconName,
+      String sourceType = 'packaged',
     }) {
       return InstalledPlugin(
         pluginId: pluginId,
@@ -5148,6 +5149,7 @@ Future<void> main() async {
         enabled: enabled,
         pinned: false,
         showInTools: showInTools,
+        sourceType: sourceType,
         manifest: PluginManifest(
           schemaVersion: 1,
           id: pluginId,
@@ -5204,7 +5206,27 @@ Future<void> main() async {
       expect(entry['version'], '2.0.0');
       expect(entry['enabled'], isTrue);
       expect(entry['showInTools'], isTrue);
+      expect(entry['sourceType'], 'packaged');
       expect(entry['toolTabIconName'], 'calendar_24_regular');
+    });
+
+    test('sourceType: תוסף פיתוח מדווח development', () async {
+      repo.installedPlugins = [
+        makePlugin(
+          pluginId: 'org.test.dev',
+          name: 'Dev',
+          version: '1.0.0',
+          sourceType: 'development',
+        ),
+      ];
+
+      final result =
+          await adapter.execute('plugin', 'listInstalled', {}) as List;
+
+      expect(
+        (result.first as Map<String, dynamic>)['sourceType'],
+        'development',
+      );
     });
 
     test(

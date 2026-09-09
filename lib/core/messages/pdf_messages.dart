@@ -22,5 +22,10 @@ abstract class PdfMessages {
   static const String editableExportRestricted =
       'ספר זה אינו ניתן לייצוא לפורמט הניתן לעריכה. ניתן להדפיסו או לשמרו כ-PDF.';
 
+  static const String saferModeNoPrinter =
+      'במצב סייפר ניתן להדפיס רק למדפסת נייר, ולא נמצאה מדפסת כזו. '
+      'לפתיחת דיאלוג ההדפסה של המערכת נדרשת סיסמה.';
+
   static String fileExportFailed(Object error) => 'ייצוא הקובץ נכשל: $error';
+  static String printFailed(String printer) => 'ההדפסה למדפסת "$printer" נכשלה';
 }

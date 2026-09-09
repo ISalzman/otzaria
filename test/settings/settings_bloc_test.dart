@@ -142,6 +142,40 @@ void main() {
           verify(mockRepository.loadSettings()).called(1);
         },
       );
+
+      // issue #1245 — סריקת גופני המערכת נמשכת שניות; העיצוב לא מחכה לה.
+      test('emits the loaded state before the fonts finish loading', () async {
+        final fontsLoaded = Completer<void>();
+        final requestedFonts = <String>[];
+        when(
+          mockRepository.loadSettings(),
+        ).thenAnswer((_) async => mockSettings);
+        when(mockRepository.hasProtectedModePassword()).thenReturn(false);
+        final bloc = SettingsBloc(
+          repository: mockRepository,
+          ensureFontLoaded: (fontFamily) {
+            requestedFonts.add(fontFamily);
+            return fontsLoaded.future;
+          },
+        );
+        addTearDown(bloc.close);
+
+        bloc.add(LoadSettings());
+        final loaded = await bloc.stream.first;
+
+        expect(loaded.isDarkMode, isTrue);
+        expect(loaded.seedColor, Colors.blue);
+        expect(fontsLoaded.isCompleted, isFalse);
+        expect(requestedFonts, ['Rubik']);
+
+        fontsLoaded.complete();
+        await pumpEventQueue();
+        expect(requestedFonts, [
+          'Rubik',
+          'NotoRashiHebrew',
+          'NotoSerifHebrew',
+        ]);
+      });
     });
 
     group('UpdateDarkMode', () {

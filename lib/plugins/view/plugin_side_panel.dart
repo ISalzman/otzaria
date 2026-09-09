@@ -432,6 +432,16 @@ class _PluginActionsMenu extends StatelessWidget {
             context,
             metrics,
             AppMenuEntry<VoidCallback>(
+              value: () => showResetPluginDataDialog(context, plugin),
+              icon: FluentIcons.arrow_reset_24_regular,
+              label: 'איפוס נתוני התוסף',
+              isDestructive: true,
+            ),
+          ),
+          _menuItem(
+            context,
+            metrics,
+            AppMenuEntry<VoidCallback>(
               value: () => showDeletePluginDialog(context, plugin),
               icon: FluentIcons.delete_24_regular,
               label: 'מחק תוסף',

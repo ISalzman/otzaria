@@ -51,7 +51,7 @@ class PersonalNotesDatabase {
     final dbPath = await AppPaths.resolveNotesDbPath(_databaseName);
 
     final db = sqlite3.open(dbPath);
-    db.execute('PRAGMA journal_mode=WAL');
+    enableWalBestEffort(db, 'PersonalNotesDatabase');
     _createSchema(db);
     _migrateSchema(db);
     return db;

@@ -103,6 +103,7 @@ String odtToText(Uint8List bytes, String title, {bool embedImages = true}) {
     lists: _extractListStyles(document, archive),
     images: _extractImages(archive, embedImages: embedImages),
     fillImages: _extractFillImages(document, archive),
+    noteFormats: _extractNoteFormats(document, archive),
   );
 
   // חבילה שאין בה `office:text` אינה מסמך טקסט — ‎.ods‎ ששמו שונה, או
@@ -296,6 +297,9 @@ class _OdtContext {
   /// שם `draw:fill-image` → הנתיב שאליו הוא מצביע (`xlink:href`).
   final Map<String, String> fillImages;
 
+  /// `text:note-class` → `style:num-format` מ-`text:notes-configuration`.
+  final Map<String, String> noteFormats;
+
   /// מונה רץ לסימוני הערות שוליים.
   int _footnoteNumber = 1;
 
@@ -307,6 +311,7 @@ class _OdtContext {
     required this.lists,
     required this.images,
     required this.fillImages,
+    this.noteFormats = const {},
   });
 
   /// ה-data URI של מדיה לפי ה-`xlink:href` שלה, או `null` כשאינה בחבילה.
@@ -315,7 +320,17 @@ class _OdtContext {
       ? null
       : images[href.startsWith('./') ? href.substring(2) : href];
 
-  int nextFootnote() => _footnoteNumber++;
+  /// סימון ההערה הבא, בפורמט שהמסמך הגדיר לאותו `text:note-class`.
+  /// פורמט שמבטל מספור חוזר לספרות: סימון ריק היה מנתק את גוף ההערה
+  /// מהעוגן שלו בשכבת התצוגה.
+  String nextNoteMarker(String? noteClass) {
+    final value = _footnoteNumber++;
+    final label = _formatOdtNumber(
+      value,
+      noteFormats[noteClass ?? 'footnote'] ?? '1',
+    );
+    return label.isEmpty ? '$value' : label;
+  }
 
   /// פותר את שרשרת `style:parent-style-name` לעיצוב מחושב.
   /// הגנת-מעגל: סגנון שכבר ביקרנו בו עוצר את הפתירה.
@@ -742,6 +757,47 @@ Map<String, Map<int, _OdtListLevel>> _extractListStyles(
   return lists;
 }
 
+/// בונה מפת `text:note-class` → `style:num-format` מתוך
+/// `text:notes-configuration` (issue #1239).
+///
+/// ההגדרה יושבת ב-styles.xml, אך content.xml יכול לדרוס אותה — ולכן
+/// הסריקה בשני הקבצים, בסדר הזה.
+Map<String, String> _extractNoteFormats(
+  xml.XmlDocument content,
+  Archive archive,
+) {
+  final formats = <String, String>{};
+
+  void collect(xml.XmlDocument document) {
+    for (final config in document.findAllElements(
+      'text:notes-configuration',
+    )) {
+      final noteClass = config.getAttribute('text:note-class');
+      final format = config.getAttribute('style:num-format');
+      if (noteClass != null && format != null) {
+        formats[noteClass] = format;
+      }
+    }
+  }
+
+  final globalStyles = _fileNamed(archive, 'styles.xml');
+  if (globalStyles != null) {
+    try {
+      collect(
+        xml.XmlDocument.parse(
+          _decodeXml(
+            readArchiveEntry(globalStyles, format: DocumentFormat.odt),
+          ),
+        ),
+      );
+    } catch (_) {
+      // הגדרת הערות גלובלית פגומה — המספור נשאר בספרות.
+    }
+  }
+  collect(content);
+  return formats;
+}
+
 /// בונה מפת נתיב-תמונה → data URI. ODF מאחסן את המדיה תחת `Pictures/`.
 ///
 /// תמונה שחורגת מ-[EmbeddedMediaLimits] או שרשומתה פגומה נשארת כתג ריק —
@@ -1106,7 +1162,10 @@ String _renderNote(xml.XmlElement note, _OdtContext ctx, {int depth = 0}) {
     if (rendered.trim().isNotEmpty) parts.add(rendered.trim());
   }
   if (parts.isEmpty) return '';
-  return otzariaFootnote('${ctx.nextFootnote()}', parts.join(' '));
+  return otzariaFootnote(
+    ctx.nextNoteMarker(note.getAttribute('text:note-class')),
+    parts.join(' '),
+  );
 }
 
 /// מרנדר `draw:frame`. מסגרת היא מכולה כללית: היא עוטפת תמונה, אך גם

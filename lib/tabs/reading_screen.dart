@@ -5,7 +5,6 @@ import 'package:flutter/foundation.dart'
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:otzaria/core/startup_timeline.dart';
 import 'package:otzaria/core/focus_repository.dart';
 import 'package:otzaria/history/bloc/history_bloc.dart';
 import 'package:otzaria/history/bloc/history_event.dart';
@@ -290,7 +289,6 @@ class _ReadingScreenState extends State<ReadingScreen>
 
   @override
   Widget build(BuildContext context) {
-    StartupTimeline.instance.markOnce('readingScreenBuild');
     return MultiBlocListener(
       listeners: [
         // תוספים שמוצגים בטאב הפעיל ממשיכים לרוץ; השאר מושהים. כולל טאב
@@ -545,7 +543,6 @@ class _ReadingScreenState extends State<ReadingScreen>
     int pdfPaneCount = 1,
   }) {
     if (tab is PdfBookTab) {
-      StartupTimeline.instance.markOnce('paneContent:PdfBookTab');
       return PdfBookScreen(
         key: ValueKey(tab),
         tab: tab,

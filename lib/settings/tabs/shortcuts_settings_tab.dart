@@ -397,8 +397,8 @@ class ShortcutsSettingsTab extends StatelessWidget {
     ),
   ];
 
-  /// אוסף הקיצורים הזמינים לבחירה ב-dropdown. התווית נגזרת דינמית כדי
-  /// ש-Mac יציג `⌘` במקום `CTRL`. הערך (המפתח) נשאר קנוני (`ctrl+X`).
+  /// אוסף הקיצורים הזמינים לבחירה ב-dropdown. הערך נשאר קנוני (`ctrl+X`),
+  /// והתווית והסינון נגזרים דינמית כדי ש-Mac יציג `⌘` ויסתיר את השמורים.
   static final Map<String, String> _shortcutsList = _buildShortcutsList();
 
   static Map<String, String> _buildShortcutsList() {
@@ -447,13 +447,17 @@ class ShortcutsSettingsTab extends StatelessWidget {
       'ctrl+shift+e',
       'ctrl+shift+f',
       'ctrl+shift+l',
+      'ctrl+shift+m',
       'ctrl+shift+n',
       'ctrl+shift+p',
       'ctrl+shift+t',
       'ctrl+shift+w',
     ];
     return {
-      for (final k in keys) k: ShortcutHelper.formatShortcutForDisplay(k),
+      for (final k in keys)
+        if (!ShortcutHelper.usesMacModifiers ||
+            !ShortcutValidator.macReservedShortcuts.contains(k))
+          k: ShortcutHelper.formatShortcutForDisplay(k),
     };
   }
 

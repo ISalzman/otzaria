@@ -699,4 +699,58 @@ Future<void> main() async {
       findsNothing,
     );
   });
+
+  // ── issue #1250: גרירה (משטח מגע / מגע) לא בונה מחדש את כל החלונית ────
+  testWidgets('גרירת הרשימה אינה מפעילה rebuild של TocViewer', (tester) async {
+    final toc = List.generate(
+      60,
+      (i) => TocEntry(text: 'item $i', index: i, level: 1),
+    );
+    final bloc = _TestTextBookBloc(
+      _loadedState(toc: toc, visibleIndices: const [0], selectedIndex: null),
+    );
+    addTearDown(bloc.close);
+    final focusNode = FocusNode();
+    addTearDown(focusNode.dispose);
+
+    await tester.pumpWidget(
+      _wrap(
+        TocViewer(
+          scrollController: ItemScrollController(),
+          closeLeftPaneCallback: () {},
+          focusNode: focusNode,
+        ),
+        bloc,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    var tocViewerRebuilds = 0;
+    debugOnRebuildDirtyWidget = (element, builtOnce) {
+      if (element.widget is TocViewer) tocViewerRebuilds++;
+    };
+    addTearDown(() => debugOnRebuildDirtyWidget = null);
+
+    // גרירה עם dragDetails — הודעות ScrollStart/ScrollEnd של גרירה ידנית.
+    await tester.drag(
+      find.byType(SingleChildScrollView),
+      const Offset(0, -200),
+    );
+    await tester.pumpAndSettle();
+
+    final scrollable = tester.state<ScrollableState>(
+      find
+          .descendant(
+            of: find.byType(SingleChildScrollView),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+    expect(scrollable.position.pixels, greaterThan(0), reason: 'הרשימה נגללה');
+    expect(
+      tocViewerRebuilds,
+      0,
+      reason: 'setState בתחילת/סוף גלילה גורם לפריים ארוך שקוטע את האינרציה',
+    );
+  });
 }

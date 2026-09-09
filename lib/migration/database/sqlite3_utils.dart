@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:otzaria/data/sqlite/sqlite3_api.dart';
 
 /// Converts a sqlite3 [ResultSet] to a list of dynamic maps.
@@ -24,5 +25,18 @@ void withTransaction(Database db, void Function() fn) {
   } catch (_) {
     db.execute('ROLLBACK');
     rethrow;
+  }
+}
+
+/// מפעיל WAL כשאפשר, ולא מפיל את פתיחת ה-DB כשלא.
+///
+/// המעבר ל-WAL קוטם את קובץ ה-journal, וקטימה חסומה (נעילה שנשארה מסגירה
+/// כפויה, אנטי-וירוס) אינה סיבה שכל התכונה לא תעלה: ה-DB נשאר שמיש במצב
+/// ה-journal הקיים. [label] מזהה את הקורא בלוג.
+void enableWalBestEffort(Database db, String label) {
+  try {
+    db.execute('PRAGMA journal_mode=WAL');
+  } catch (e) {
+    debugPrint('[$label] journal_mode=WAL failed: $e');
   }
 }

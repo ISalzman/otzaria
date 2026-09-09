@@ -2225,7 +2225,7 @@ class _CombinedViewState extends State<CombinedView> {
         'combined-${widget.tab.book.title}-${state.continuousReadingMode}',
       ),
       initialScrollIndex: clampedInitial,
-      initialAlignment: kReadingAnchorAlignment,
+      initialAlignment: initialReadingAlignment(clampedInitial),
       itemPositionsListener: widget.tab.positionsListener,
       itemScrollController: widget.tab.scrollController,
       scrollOffsetController: widget.tab.mainOffsetController,

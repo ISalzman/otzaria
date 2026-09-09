@@ -25,6 +25,20 @@ void main() {
       expect(state.failureCount, 1);
     });
 
+    test('אזהרת PDF חלקי אינה נספרת ככשל חוסם', () {
+      const partial = IndexingFailure(
+        bookTitle: 'ברכות',
+        bookPath: 'ברכות.pdf',
+        kind: IndexingFailureKind.partialPdf,
+        error: '12 עמודים נשמטו',
+      );
+      const state = IndexingComplete(failures: [failure, partial, partial]);
+
+      expect(state.isClean, isFalse);
+      expect(state.blockingFailureCount, 1);
+      expect(state.warningCount, 2);
+    });
+
     test('השוויון משתנה כאשר רשימת הכשלים משתנה', () {
       expect(
         const IndexingComplete(),

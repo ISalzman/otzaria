@@ -1562,7 +1562,8 @@ class FindRefRepository {
     final out = <DbReferenceResult>[];
 
     for (final r in results) {
-      // Deduplicate by (bookId, isUserBook, title, segment, isPdf [, filePath]):
+      // Deduplicate by (bookId, isUserBook, title, isPdf [, filePath]) +
+      // segment, וגם + reference:
       //   - title|segment|isPdf — שני TOC/AltToc שמובילים לאותה שורה באותו ספר
       //     הם כפילות, ללא תלות בפורמט ה-reference
       //     ("בראשית תולדות עליה ב" מול "תולדות עליה ב").
@@ -1577,9 +1578,14 @@ class FindRefRepository {
       //     ה-global AltToc fallback מייצר תוצאה עם filePath ריק, וצריך
       //     להתמזג עם תוצאת ה-per-book של אותו bookId שיש לה filePath ידוע.
       final filePathKey = r.bookId == -1 ? r.filePath : '';
-      final key =
-          '${r.bookId}|${r.isUserBook}|${r.title}|${r.segment}|${r.isPdf}|$filePathKey';
-      if (seen.add(key)) {
+      final bookKey =
+          '${r.bookId}|${r.isUserBook}|${r.title}|${r.isPdf}|$filePathKey';
+      // אותה כתובת מלאה באותו ספר — גם כשה-segment שונה (כותרת "סעיף ג" ב-TOC
+      // מול עלה "סעיף ג" במבנה הסעיפים המסונתז שמצביע לשורת התוכן, issue #1249).
+      // למשתמש שתי השורות זהות; הראשונה (TOC) נשמרת.
+      final newSegment = seen.add('$bookKey|${r.segment}');
+      final newReference = seen.add('$bookKey|ref:${r.reference}');
+      if (newSegment && newReference) {
         out.add(r);
       }
     }

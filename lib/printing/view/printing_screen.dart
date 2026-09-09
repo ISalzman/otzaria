@@ -23,6 +23,7 @@ import 'package:otzaria/printing/serial_latest_runner.dart';
 import 'package:otzaria/printing/printing_helpers.dart';
 import 'package:otzaria/printing/pdf_text_rasterizer.dart';
 import 'package:otzaria/printing/export_restriction_service.dart';
+import 'package:otzaria/printing/safer_print_service.dart';
 import 'package:otzaria/printing/word_export_service.dart';
 import 'package:otzaria/utils/file/save_file_with_extension.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart';
@@ -31,7 +32,6 @@ import 'package:otzaria/widgets/misc/app_menu_exports.dart';
 import 'package:otzaria/widgets/feedback/scrollable_positioned_list_scrollbar.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:pdfrx/pdfrx.dart';
-import 'package:printing/printing.dart';
 import 'package:pdf/pdf.dart' hide PdfDocument;
 import 'package:pdf/widgets.dart' as pw;
 import 'package:otzaria/models/books.dart';
@@ -1580,7 +1580,9 @@ class _PrintingScreenState extends State<PrintingScreen> {
           UiSnack.show(WindowMessages.printOnlyInMainWindow);
           return;
         }
-        final printed = await Printing.layoutPdf(
+        final printed = await printPdfWithSaferMode(
+          context: context,
+          name: widget.bookId,
           usePrinterSettings: true,
           onLayout: _createOutputPdf,
           format: format,

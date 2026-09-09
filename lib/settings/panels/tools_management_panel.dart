@@ -345,6 +345,7 @@ class _ToolsManagementPanelState extends State<ToolsManagementPanel> {
                 togglePluginNetworkAccess(context, plugins[i]),
             onToggleRunOnStartup: () =>
                 togglePluginRunOnStartup(context, plugins[i]),
+            onResetData: () => showResetPluginDataDialog(context, plugins[i]),
             onDelete: () => showDeletePluginDialog(context, plugins[i]),
           ),
         ),
@@ -780,6 +781,7 @@ class _DraggableSettingsPluginRow extends StatelessWidget {
   final VoidCallback onToggleEnabled;
   final VoidCallback onToggleNetworkAccess;
   final VoidCallback onToggleRunOnStartup;
+  final VoidCallback onResetData;
   final VoidCallback onDelete;
 
   const _DraggableSettingsPluginRow({
@@ -798,6 +800,7 @@ class _DraggableSettingsPluginRow extends StatelessWidget {
     required this.onToggleEnabled,
     required this.onToggleNetworkAccess,
     required this.onToggleRunOnStartup,
+    required this.onResetData,
     required this.onDelete,
   });
 
@@ -824,6 +827,7 @@ class _DraggableSettingsPluginRow extends StatelessWidget {
           onToggleEnabled: onToggleEnabled,
           onToggleNetworkAccess: onToggleNetworkAccess,
           onToggleRunOnStartup: onToggleRunOnStartup,
+          onResetData: onResetData,
           onDelete: onDelete,
         );
         // גרירה מכל מקום בכרטיס פעילה תמיד מחוץ למצב בחירה (גם לתוסף מושבת) —
@@ -870,6 +874,7 @@ class _PluginRow extends StatefulWidget {
   final VoidCallback onToggleEnabled;
   final VoidCallback onToggleNetworkAccess;
   final VoidCallback onToggleRunOnStartup;
+  final VoidCallback onResetData;
   final VoidCallback onDelete;
 
   const _PluginRow({
@@ -887,6 +892,7 @@ class _PluginRow extends StatefulWidget {
     required this.onToggleEnabled,
     required this.onToggleNetworkAccess,
     required this.onToggleRunOnStartup,
+    required this.onResetData,
     required this.onDelete,
   });
 
@@ -935,6 +941,12 @@ class _PluginRowState extends State<_PluginRow> {
           fixedBg: cs.errorContainer,
           fixedFg: cs.onErrorContainer,
           onTap: widget.onToggleEnabled,
+        ),
+        _RowAction(
+          icon: FluentIcons.arrow_reset_24_regular,
+          label: context.settingsText('איפוס נתוני התוסף'),
+          isDestructive: true,
+          onTap: widget.onResetData,
         ),
         _RowAction(
           icon: FluentIcons.delete_24_regular,
@@ -996,6 +1008,12 @@ class _PluginRowState extends State<_PluginRow> {
         icon: FluentIcons.pause_circle_24_regular,
         label: context.settingsText('השבת'),
         onTap: widget.onToggleEnabled,
+      ),
+      _RowAction(
+        icon: FluentIcons.arrow_reset_24_regular,
+        label: context.settingsText('איפוס נתוני התוסף'),
+        isDestructive: true,
+        onTap: widget.onResetData,
       ),
       _RowAction(
         icon: FluentIcons.delete_24_regular,
