@@ -52,6 +52,25 @@ void main() {
       );
     });
 
+    test('reconcile מאנדקס מחדש PDF שדווח כשונה, ולא את ספרי הטקסט', () {
+      final changedPdf = PdfBook(title: 'ספר סרוק', path: '/tmp/scanned.pdf');
+      final events = buildRefreshIndexingPlan(
+        library: library,
+        newBooks: newBooks,
+        changedBooks: [changedBooks.single, changedPdf],
+        indexWholeLibrary: true,
+        reconcile: true,
+        autoUpdateIndex: true,
+      );
+
+      expect(events.map((event) => event.runtimeType), [
+        StartIndexing,
+        ReconcileIndex,
+        ReindexChangedBooks,
+      ]);
+      expect((events.last as ReindexChangedBooks).books, [changedPdf]);
+    });
+
     test('עדכון דלתא בלי reconcile — ReindexChangedBooks כן רץ', () {
       final events = plan(indexWholeLibrary: true);
 

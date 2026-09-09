@@ -66,10 +66,13 @@ List<IndexingEvent> buildRefreshIndexingPlan({
   }
 
   if (reconcile) {
-    // מאנדקס מחדש כל ספר שטביעת אצבעו השתנתה, ולכן changedBooks מיותר כאן.
-    // ⚠️ ReconcileIndex מוגבל ל-TextBook/ConvertibleDocumentBook בעוד
-    // ReindexChangedBooks מכסה גם PdfBook — PdfBook ב-changedBooks יידלג בשקט.
+    // ReconcileIndex מטפל רק בספרים שיש להם טביעת אצבע; PDF נשאר במסלול
+    // המדויק של הספרים שהשתנו, כי אין לו טביעת אצבע להשוואה.
     events.add(ReconcileIndex(library));
+    final changedPdfBooks = changedBooks.whereType<PdfBook>().toList();
+    if (changedPdfBooks.isNotEmpty) {
+      events.add(ReindexChangedBooks(changedPdfBooks, library));
+    }
   } else if (changedBooks.isNotEmpty) {
     // StartIndexing מדלג על ספרים קיימים — לשונים נדרש מסלול משלהם.
     events.add(ReindexChangedBooks(changedBooks, library));

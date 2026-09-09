@@ -903,17 +903,25 @@ void main() {
 
     test('bytes קטנים: אותה תוצאה כמו המסלול הסינכרוני', () async {
       final clean = Uint8List.fromList(utf8.encode('טקסט נקי בלי תמונות'));
-      expect(await IndexingRepository.cleanDataUrisOffFrame(clean), isNull);
+      final cleanSource = await IndexingRepository.cleanDataUrisOffFrame(
+        clean,
+      );
+      expect(cleanSource.bytes, same(clean));
+      expect(cleanSource.text, isNull);
 
       final withImage = Uint8List.fromList(
         utf8.encode('שורה\n<img src="data:image/png;base64,${'A' * 100}"/>'),
       );
+      final imageSource = await IndexingRepository.cleanDataUrisOffFrame(
+        withImage,
+      );
       expect(
-        await IndexingRepository.cleanDataUrisOffFrame(withImage),
+        imageSource.text,
         IndexingRepository.stripDataUrisForIndex(
           utf8.decode(withImage, allowMalformed: true),
         ),
       );
+      expect(imageSource.bytes, isNull);
     });
 
     test('bytes גדולים (מסלול ה-isolate): אותה תוצאה בדיוק', () async {
@@ -921,19 +929,23 @@ void main() {
       final bytes = Uint8List.fromList(utf8.encode(text));
       expect(bytes.length, greaterThan(1 << 20));
 
+      final source = await IndexingRepository.cleanDataUrisOffFrame(bytes);
       expect(
-        await IndexingRepository.cleanDataUrisOffFrame(bytes),
+        source.text,
         IndexingRepository.stripDataUrisForIndex(
           utf8.decode(bytes, allowMalformed: true),
         ),
       );
+      expect(source.bytes, isNull);
     });
 
     test('bytes גדולים בלי data URI נשארים במסלול ה-bytes', () async {
       // שלוש מנות סריקה ומעלה, כדי לכסות גם את המנה האחרונה החלקית.
       final bytes = Uint8List((3 << 20) * 4 + 777)
         ..fillRange(0, (3 << 20) * 4 + 777, 0x78);
-      expect(await IndexingRepository.cleanDataUrisOffFrame(bytes), isNull);
+      final source = await IndexingRepository.cleanDataUrisOffFrame(bytes);
+      expect(source.bytes, same(bytes));
+      expect(source.text, isNull);
     });
 
     test('data: היושב על תפר בין מנות הסריקה אינו מפוספס', () async {
@@ -945,11 +957,13 @@ void main() {
         final raw = utf8.decode(bytes, allowMalformed: true);
         final expected = IndexingRepository.stripDataUrisForIndex(raw);
         expect(expected, isNot(raw), reason: 'התפר בהיסט $offset לא נוקה');
+        final source = await IndexingRepository.cleanDataUrisOffFrame(bytes);
         expect(
-          await IndexingRepository.cleanDataUrisOffFrame(bytes),
+          source.text,
           expected,
           reason: 'data: על התפר בהיסט $offset',
         );
+        expect(source.bytes, isNull);
       }
     });
 

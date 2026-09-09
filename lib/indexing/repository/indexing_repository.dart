@@ -1169,23 +1169,39 @@ class IndexingRepository {
 
   /// זהה ל-[bytesContainDataUriScheme] + [stripDataUrisForIndex], בלי לחסום
   /// פריים בספר גדול: הסריקה נפרסת למנות על ה-thread הקורא, ורק כשנמצא
-  /// `data:` הפענוח והבנייה מחדש עוברים ל-isolate. null = אין מה לנקות
-  /// ומסלול ה-bytes הגולמי נשאר.
+  /// `data:` הפענוח והבנייה מחדש עוברים ל-isolate. [bytes] נשמר רק כשהוא
+  /// נקי; אחרת [text] מחזיק את המקור המנוקה.
   ///
   /// הסריקה רצה **פעם אחת**, וכאן — תוצאתה היא שמכריעה אם צריך isolate
   /// בכלל. גרסה שסרקה כאן וגם שוב בתוך ה-isolate הכפילה את החסימה.
   @visibleForTesting
-  static Future<String?> cleanDataUrisOffFrame(Uint8List bytes) async {
+  static Future<({Uint8List? bytes, String? text})> cleanDataUrisOffFrame(
+    Uint8List bytes,
+  ) async {
     if (bytes.length < _dataUriOffFrameThreshold) {
-      return _cleanDataUris(bytes);
+      final cleaned = _cleanDataUris(bytes);
+      return (bytes: cleaned == null ? bytes : null, text: cleaned);
     }
-    if (!await _containsDataUriInChunks(bytes)) return null;
-    // ההעתקה ל-isolate נגבית רק כאן: 909 מ-979 הספרים שמעל הסף נקיים,
-    // ובהם היא נחסכת כולה — ואיתה הכפלת שיא הזיכרון.
-    return Isolate.run(
-      () => stripDataUrisForIndex(utf8.decode(bytes, allowMalformed: true)),
+    if (!await _containsDataUriInChunks(bytes)) {
+      return (bytes: bytes, text: null);
+    }
+    // מעבירים בעלות על הבתים במקום ללכוד Uint8List ב-closure: שליחת רשימה
+    // mutable ל-isolate מעתיקה אותה, ובספר מצויר גדול מוסיפה עותק שלם לשיא
+    // הזיכרון. אחרי הסריקה החיובית אין עוד צורך להחזיק במסלול ה-bytes.
+    final transferable = TransferableTypedData.fromList([bytes]);
+    return (
+      bytes: null,
+      text: await Isolate.run(
+        () => _stripTransferredDataUrisForIndex(transferable),
+      ),
     );
   }
+
+  static String _stripTransferredDataUrisForIndex(
+    TransferableTypedData transferable,
+  ) => stripDataUrisForIndex(
+    utf8.decode(transferable.materialize().asUint8List(), allowMalformed: true),
+  );
 
   /// המנות חופפות ב-4 בייטים — בלי החפיפה `data:` שיושב על תפר בין מנות
   /// נעלם, וספר מצויר נחשב נקי.
@@ -1238,11 +1254,13 @@ class IndexingRepository {
       // ניקוי תמונות מוטמעות חייב לרוץ בשני הצדדים — אחרת חתימת האינדוקס
       // לעולם לא תתאים לאימות ו-reconcile יאנדקס את הספר מחדש בכל ריצה.
       if (bytes != null) {
-        final cleaned = await cleanDataUrisOffFrame(bytes);
-        if (cleaned != null) {
-          text = cleaned;
-          bytes = null;
-        }
+        // כשהמקור מצויר, cleanDataUrisOffFrame מעביר אותו ל-isolate. מאפסים
+        // את ההפניה המקומית לפני ה-await; במקרה הנקי היא מוחזרת בתוצאה.
+        final rawBytes = bytes;
+        bytes = null;
+        final cleaned = await cleanDataUrisOffFrame(rawBytes);
+        bytes = cleaned.bytes;
+        text = cleaned.text;
       }
     }
     if ((bytes == null || bytes.isEmpty) && (text == null || text.isEmpty)) {
