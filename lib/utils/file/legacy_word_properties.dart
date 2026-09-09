@@ -559,6 +559,56 @@ class _Stylesheet {
 
 // ── FKP ───────────────────────────────────────────────────────────────────
 
+/// קוד פורמט המספור של הערות השוליים (MSONFC), מתוך מאפייני
+/// הסקציות — או `null` כשהמסמך אינו קובע אותו (issue #1239).
+///
+/// ב-Word 97 ומעלה הפורמט הוא מאפיין סקציה (`sprmSNfcFtnRef`) ולא שדה
+/// ב-DOP: ה-DOP נושא את המקום הזה כ-`unused` מאז Word 6. הספר מוצג כרצף
+/// אחד, ולכן הסקציה הראשונה שקובעת פורמט חלה על כולו.
+///
+/// **אינו זורק**: PLC פגום מחזיר `null` — המספור יהיה בספרות, כמו קודם.
+int? legacyWordFootnoteNumberFormat(
+  Uint8List stream,
+  Uint8List table, {
+  required int plcfSedOffset,
+  required int plcfSedLength,
+}) {
+  // PlcfSed: ‏(n+1) מיקומי CP בני 4 בתים ואחריהם n מבני SED בני 12 בתים.
+  if (plcfSedLength <= 4 ||
+      plcfSedOffset < 0 ||
+      plcfSedOffset + plcfSedLength > table.length) {
+    return null;
+  }
+  try {
+    final count = (plcfSedLength - 4) ~/ 16;
+    if (count <= 0) return null;
+    final sedBase = plcfSedOffset + (count + 1) * 4;
+    final tableView = ByteData.sublistView(table);
+
+    for (var i = 0; i < count; i++) {
+      // fcSepx הוא השדה השני ב-SED, ו-0xFFFFFFFF פירושו "לסקציה אין מאפיינים".
+      final fcSepx = tableView.getUint32(sedBase + i * 12 + 2, Endian.little);
+      if (fcSepx == 0xFFFFFFFF || fcSepx + 2 > stream.length) continue;
+
+      // Sepx: `cb` בן שני בתים ואחריו grpprl באורך הזה.
+      final cb = ByteData.sublistView(
+        stream,
+        fcSepx,
+        fcSepx + 2,
+      ).getUint16(0, Endian.little);
+      final end = fcSepx + 2 + cb;
+      if (cb <= 0 || end > stream.length) continue;
+
+      for (final sprm in _sprms(stream, fcSepx + 2, end)) {
+        if (sprm.opcode == _sprmSNfcFtnRef) return sprm.operand;
+      }
+    }
+    return null;
+  } catch (_) {
+    return null;
+  }
+}
+
 /// טווח grpprl בתוך זרם `WordDocument`.
 class _GrpprlRange {
   final int start;
@@ -670,6 +720,9 @@ const int _sprmPFInTable = 0x2416;
 const int _sprmPFTtp = 0x2417;
 const int _sprmPJc = 0x2461;
 const int _sprmPOutLvl = 0x2640;
+
+/// פורמט מספור הערות השוליים של הסקציה — אופרנד בן בית אחד (MSONFC).
+const int _sprmSNfcFtnRef = 0x3009;
 
 const int _sprmCFBold = 0x0835;
 const int _sprmCFItalic = 0x0836;

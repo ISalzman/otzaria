@@ -896,4 +896,51 @@ void main() {
       expect(out, contains('על הרקע'));
     });
   });
+  // issue #1239: פורמט מספור ההערות יושב ב-`text:notes-configuration`.
+  group('פורמט מספור הערות', () {
+    String note(String body) =>
+        '<text:note text:note-class="footnote">'
+        '<text:note-body><text:p>$body</text:p></text:note-body>'
+        '</text:note>';
+
+    String notesConfig(String numFormat) =>
+        '<text:notes-configuration text:note-class="footnote" '
+        'style:num-format="$numFormat"/>';
+
+    test('בלי הגדרה — מספור בספרות', () {
+      final out = _convert('<text:p>א${note('הערה')}</text:p>');
+
+      expect(out, contains('<sup class="footnote-marker">1</sup>'));
+    });
+
+    test('num-format עברי — מספור באותיות', () {
+      final out = _convert(
+        '<text:p>א${note('ראשונה')} ב${note('שנייה')}</text:p>',
+        styles: _stylesXml(notesConfig('א')),
+      );
+
+      expect(out, contains('<sup class="footnote-marker">א</sup>'));
+      expect(out, contains('<sup class="footnote-marker">ב</sup>'));
+      expect(out, isNot(contains('>1</sup>')));
+    });
+
+    test('num-format לטיני', () {
+      final out = _convert(
+        '<text:p>א${note('הערה')}</text:p>',
+        styles: _stylesXml(notesConfig('A')),
+      );
+
+      expect(out, contains('<sup class="footnote-marker">A</sup>'));
+    });
+
+    // num-format ריק מבטל מספור, והסימון הריק היה מנתק את גוף ההערה מהעוגן.
+    test('num-format ריק חוזר לספרות', () {
+      final out = _convert(
+        '<text:p>א${note('הערה')}</text:p>',
+        styles: _stylesXml(notesConfig('')),
+      );
+
+      expect(out, contains('<sup class="footnote-marker">1</sup>'));
+    });
+  });
 }

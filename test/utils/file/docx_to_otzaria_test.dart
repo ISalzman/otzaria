@@ -13,6 +13,7 @@ Uint8List _buildDocx(
   List<int> documentXmlBytes, {
   List<int>? footnotesXmlBytes,
   List<int>? stylesXmlBytes,
+  List<int>? settingsXmlBytes,
 }) {
   final encoder = ZipEncoder();
   final archive = Archive();
@@ -35,6 +36,15 @@ Uint8List _buildDocx(
   if (stylesXmlBytes != null) {
     archive.addFile(
       ArchiveFile('word/styles.xml', stylesXmlBytes.length, stylesXmlBytes),
+    );
+  }
+  if (settingsXmlBytes != null) {
+    archive.addFile(
+      ArchiveFile(
+        'word/settings.xml',
+        settingsXmlBytes.length,
+        settingsXmlBytes,
+      ),
     );
   }
   return Uint8List.fromList(encoder.encode(archive));
@@ -1935,6 +1945,137 @@ void main() {
         contains('<div style="text-align: right;">'),
       );
       expect(convert('<w:jc w:val="both"/>'), isNot(contains('<div')));
+    });
+  });
+  // issue #1239: פורמט מספור ההערות של המסמך — ברירת המחדל ב-settings.xml,
+  // ועקיפה אפשרית ב-w:sectPr.
+  group('פורמט מספור הערות השוליים', () {
+    List<int> footnotesXml(int count) {
+      final notes = <String>[];
+      for (var i = 1; i <= count; i++) {
+        notes.add(
+          '<w:footnote w:id="$i"><w:p><w:r><w:t>גוף $i</w:t></w:r></w:p>'
+          '</w:footnote>',
+        );
+      }
+      return _utf8Xml(
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<w:footnotes $_xmlNs>${notes.join()}</w:footnotes>',
+      );
+    }
+
+    String documentXml({String sectPr = '', int count = 1}) {
+      final refs = <String>[];
+      for (var i = 1; i <= count; i++) {
+        refs.add('<w:r><w:footnoteReference w:id="$i"/></w:r>');
+      }
+      return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+          '<w:document $_xmlNs><w:body>'
+          '<w:p><w:r><w:t>פסקה</w:t></w:r>${refs.join()}</w:p>'
+          '$sectPr'
+          '</w:body></w:document>';
+    }
+
+    List<int> settingsXml(String numFmt) => _utf8Xml(
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+      '<w:settings $_xmlNs><w:footnotePr>'
+      '<w:numFmt w:val="$numFmt"/>'
+      '</w:footnotePr></w:settings>',
+    );
+
+    test('בלי settings.xml — מספור בספרות', () {
+      final out = docxToText(
+        _buildDocx(
+          _utf8Xml(documentXml()),
+          footnotesXmlBytes: footnotesXml(1),
+        ),
+        'ספר',
+      );
+
+      expect(out, contains('<sup class="footnote-marker">1</sup>'));
+    });
+
+    test('hebrew1 ב-settings.xml — מספור באותיות עבריות', () {
+      final out = docxToText(
+        _buildDocx(
+          _utf8Xml(documentXml(count: 2)),
+          footnotesXmlBytes: footnotesXml(2),
+          settingsXmlBytes: settingsXml('hebrew1'),
+        ),
+        'ספר',
+      );
+
+      expect(out, contains('<sup class="footnote-marker">א</sup>'));
+      expect(out, contains('<sup class="footnote-marker">ב</sup>'));
+      expect(out, isNot(contains('>1</sup>')));
+    });
+
+    test('w:sectPr עוקף את settings.xml', () {
+      final out = docxToText(
+        _buildDocx(
+          _utf8Xml(
+            documentXml(
+              sectPr:
+                  '<w:sectPr><w:footnotePr>'
+                  '<w:numFmt w:val="upperLetter"/>'
+                  '</w:footnotePr></w:sectPr>',
+            ),
+          ),
+          footnotesXmlBytes: footnotesXml(1),
+          settingsXmlBytes: settingsXml('hebrew1'),
+        ),
+        'ספר',
+      );
+
+      expect(out, contains('<sup class="footnote-marker">A</sup>'));
+    });
+
+    test('w:sectPr בלי numFmt אינו מבטל את settings.xml', () {
+      final out = docxToText(
+        _buildDocx(
+          _utf8Xml(
+            documentXml(
+              sectPr:
+                  '<w:sectPr><w:footnotePr>'
+                  '<w:numRestart w:val="eachPage"/>'
+                  '</w:footnotePr></w:sectPr>',
+            ),
+          ),
+          footnotesXmlBytes: footnotesXml(1),
+          settingsXmlBytes: settingsXml('hebrew1'),
+        ),
+        'ספר',
+      );
+
+      expect(out, contains('<sup class="footnote-marker">א</sup>'));
+    });
+
+    // numFmt=none היה מייצר סימון ריק, ושכבת התצוגה מזהה הערה לפי הצמידות
+    // בין הסימון לגוף — ולכן ההערה כולה הייתה נעלמת.
+    test('numFmt=none חוזר לספרות ולא לסימון ריק', () {
+      final out = docxToText(
+        _buildDocx(
+          _utf8Xml(documentXml()),
+          footnotesXmlBytes: footnotesXml(1),
+          settingsXmlBytes: settingsXml('none'),
+        ),
+        'ספר',
+      );
+
+      expect(out, contains('<sup class="footnote-marker">1</sup>'));
+    });
+
+    test('settings.xml פגום אינו מפיל את ההמרה', () {
+      final out = docxToText(
+        _buildDocx(
+          _utf8Xml(documentXml()),
+          footnotesXmlBytes: footnotesXml(1),
+          settingsXmlBytes: _utf8Xml('<w:settings'),
+        ),
+        'ספר',
+      );
+
+      expect(out, contains('<sup class="footnote-marker">1</sup>'));
     });
   });
 }

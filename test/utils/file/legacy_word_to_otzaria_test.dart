@@ -22,6 +22,9 @@ Uint8List buildDoc(
   int? ccpTextOverride,
   bool omitClx = false,
   bool omitTableStream = false,
+  List<String> footnotes = const [],
+  List<int> footnoteRefs = const [],
+  int? footnoteNumberFormat,
 }) => buildWordBinary(
   pieces,
   encrypted: encrypted,
@@ -31,9 +34,21 @@ Uint8List buildDoc(
   ccpTextOverride: ccpTextOverride,
   omitClx: omitClx,
   omitTableStream: omitTableStream,
+  footnotes: footnotes,
+  footnoteRefs: footnoteRefs,
+  footnoteNumberFormat: footnoteNumberFormat,
 );
 
 String para(String text) => '$text\r';
+
+/// סימן הערת שוליים אוטומטית בגוף המסמך — תו בקרה, ולכן אינו נפלט כטקסט.
+final String footnoteMark = String.fromCharCode(0x02);
+
+/// תווי הבקרה של שדה: ההוראה יושבת בין [fieldBegin] ל-[fieldSeparator],
+/// ואחריה התוצאה עד [fieldEnd].
+final String fieldBegin = String.fromCharCode(0x13);
+final String fieldSeparator = String.fromCharCode(0x14);
+final String fieldEnd = String.fromCharCode(0x15);
 
 /// שכבת המאפיינים והערות השוליים אומתו מול שישה מסמכי Word אמיתיים בעברית
 /// (ראו `docs/legacy_word_doc_research.md`). הבדיקות כאן מקבעות את החוזה
@@ -332,6 +347,83 @@ void main() {
         format: DocumentFormat.dot,
       );
       expect(out, '<h1>תבנית</h1>\nתוכן תבנית');
+    });
+  });
+
+  // הערות השוליים יושבות בתת-מסמך מיד אחרי הגוף, ונפלטות כמרקר וגוף צמודים
+  // — הצורה ששכבת התצוגה מציגה כמפרש בצד.
+  group('הערות שוליים', () {
+    test('סימן וגוף נפלטים במקום סימן ההערה שבגוף', () {
+      final out = convert(
+        buildDoc(
+          [WordPiece(para('ברא$footnoteMark אלהים'))],
+          footnotes: ['לשון הראשונה'],
+          footnoteRefs: [3],
+        ),
+      );
+
+      expect(out, contains('<sup class="footnote-marker">1</sup>'));
+      expect(out, contains('<i class="footnote">לשון הראשונה</i>'));
+    });
+
+    // issue #1240: הוראת השדה של `NOTEREF` זלגה לגוף ההערה, כי רק גוף המסמך
+    // ידע לדלג על שדות.
+    test('הוראת שדה בתוך הערה מושמטת והתוצאה נשמרת', () {
+      final out = convert(
+        buildDoc(
+          [WordPiece(para('גוף$footnoteMark'))],
+          footnotes: [
+            'ועי׳ לקמן הערה $fieldBegin NOTEREF _Ref403498473 '
+                '$fieldSeparator 10$fieldEnd.',
+          ],
+          footnoteRefs: [3],
+        ),
+      );
+
+      expect(out, contains('ועי׳ לקמן הערה 10.'));
+      expect(out, isNot(contains('NOTEREF')));
+      expect(out, isNot(contains('_Ref403498473')));
+    });
+
+    // issue #1239: פורמט המספור הוא מאפיין סקציה (`sprmSNfcFtnRef`).
+    test('מספור באותיות עבריות לפי פורמט המסמך', () {
+      final out = convert(
+        buildDoc(
+          [WordPiece(para('א$footnoteMark ב$footnoteMark'))],
+          footnotes: ['ראשונה', 'שנייה'],
+          footnoteRefs: [1, 4],
+          footnoteNumberFormat: 45, // msonfcHebrew1
+        ),
+      );
+
+      expect(out, contains('<sup class="footnote-marker">א</sup>'));
+      expect(out, contains('<sup class="footnote-marker">ב</sup>'));
+      expect(out, isNot(contains('>1</sup>')));
+    });
+
+    test('בלי פורמט מוגדר — המספור נשאר בספרות', () {
+      final out = convert(
+        buildDoc(
+          [WordPiece(para('א$footnoteMark'))],
+          footnotes: ['הערה'],
+          footnoteRefs: [1],
+        ),
+      );
+
+      expect(out, contains('<sup class="footnote-marker">1</sup>'));
+    });
+
+    test('פורמט chicago מוצג בסימנים של Word', () {
+      final out = convert(
+        buildDoc(
+          [WordPiece(para('א$footnoteMark'))],
+          footnotes: ['הערה'],
+          footnoteRefs: [1],
+          footnoteNumberFormat: 9, // msonfcChiManSty
+        ),
+      );
+
+      expect(out, contains('<sup class="footnote-marker">*</sup>'));
     });
   });
 

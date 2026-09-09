@@ -42,6 +42,22 @@ void main() {
       expect(out.split('\n').first, '<h1>א&lt;b&gt;&amp;</h1>');
     });
 
+    // הוראת שדה מסומנת ב-Word כיעד שאפשר להתעלם ממנו, אבל גם בלי הסימון
+    // היא אינה תוכן — התוצאה בלבד נשמרת.
+    test(r'\fldinst נבלע וה-fldrslt נשמר', () {
+      final out = _convert(
+        _doc(
+          r'\pard עיין הערה '
+          r'{\field{\fldinst NOTEREF _Ref403498473}{\fldrslt 10}}'
+          r'. סוף\par',
+        ),
+      );
+
+      expect(out, contains('10'));
+      expect(out, isNot(contains('NOTEREF')));
+      expect(out, isNot(contains('_Ref403498473')));
+    });
+
     test(r'\par מפריד בין פסקאות', () {
       final out = _convert(_doc(r'ראשונה\par שנייה\par'));
       expect(out, '<h1>ספר</h1>\nראשונה\nשנייה');
