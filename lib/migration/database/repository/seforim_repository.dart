@@ -2959,13 +2959,17 @@ extension BookAcronymRepository on SeforimRepository {
       return matches.map((e) => e.toMap()).toList();
     }
 
-    // Fallback שטוח — רק כשההיררכי לא מצא דבר **ולספר אין מבנה alt_toc**.
-    // מאפשר לטוקן בודד להגיע לכותרת עמוקה (כמו "דף לו" תחת ספר→פרשה→דף
-    // ב"הזוהר המתורגם") בלי לדרוש את שמות הביניים. ספרים עם alt_toc ("ספר
-    // הזהר") כבר חושפים דפים שם — להם נשמר החיפוש ההיררכי בלבד, כדי לא
-    // להציף בכותרות-משנה לא רלוונטיות ("פרק לו"/"סימן לו").
+    // Fallback שטוח — רק כשההיררכי לא מצא דבר. מאפשר לציטוט להגיע לכותרת
+    // עמוקה בלי שמות הביניים ("דף לו" תחת ספר→פרשה→דף ב"הזוהר המתורגם",
+    // "סימן ה" תחת בית יוסף→אורח חיים). ספרים עם alt_toc ("ספר הזהר") כבר
+    // חושפים דפים שם, ולכן טוקן בודד או ציטוט-דף אינם נופלים אליו — אחרת
+    // "לו" היה מציף בכותרות-משנה ("פרק לו"/"סימן לו"). ציטוט רב-מילים
+    // ("סימן ה") חייב להתאים לכותרת אחת במלואו ואינו מציף (issue #1200).
     final altCache = await _buildAltTocCacheForBook(bookId, bookTitle);
-    if (altCache.all.isNotEmpty) return const [];
+    if (altCache.all.isNotEmpty &&
+        (queryTokens.length == 1 || parseDafCitation(queryTokens) != null)) {
+      return const [];
+    }
 
     return _searchTocFlat(cache, queryTokens).map((e) => e.toMap()).toList();
   }
