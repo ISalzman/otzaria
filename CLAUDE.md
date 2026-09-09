@@ -527,7 +527,7 @@ flutter test test/settings/l10n/
 - String interpolation inside the key (`'שמור ${count} ספרים'`) — use `args:` instead
 - A non-Hebrew invented key
 - Editing `settings_catalogs.g.dart` by hand — it is generated, and your edit is lost on the next build
-- `textDirection` or `Directionality` to "fix" the English mode — the app stays RTL; only the settings screen switches locally
+- `textDirection` or `Directionality` to "fix" the English mode — direction is owned by two widgets only (see below); reading content and dialogs stay RTL
 
 **Two traps that make a string render Hebrew even though it looks wrapped:**
 
@@ -537,6 +537,16 @@ flutter test test/settings/l10n/
    ```dart
    showDialog(context: context, builder: settingsDialogBuilder(context, (_) => const MyDialog()));
    ```
+
+**Direction in an LTR interface language** is owned by `ChromeDirectionality` / `ContentDirectionality`
+(`lib/settings/l10n/chrome_directionality.dart`) and by nothing else. `ChromeDirectionality` applies the
+interface language's direction, and wraps exactly the app chrome: the title bar (from *outside*
+`CustomTitleBar` — its `State` reads the direction too, e.g. to tell which half of a split tab the
+pointer is on), the navigation rail, the tabs column and the tools launcher. `ContentDirectionality`
+pins the screens themselves back to RTL, so books, the library and the reader never flip. A new chrome
+widget uses `EdgeInsetsDirectional` / `AlignmentDirectional` and resolves any physical side against
+`Directionality.of(context)` — never a hard-coded `left`/`right`. Covered by
+`test/navigation/chrome_direction_test.dart`.
 
 Strings outside `lib/settings/` are Hebrew-only by design — do **not** wrap them. The exceptions below **do** go through the same catalog (translated text, direction stays RTL — the app-wide `SettingsTextScope` in `lib/app.dart` makes `context.settingsText` work everywhere, dialogs included, with no `settingsDialogBuilder` needed outside settings):
 
@@ -926,6 +936,7 @@ dart format lib/file.dart    # Format ONLY files you modified
 | Area | Test File |
 |------|-----------|
 | Navigation BLoC | `test/navigation/navigation_bloc_test.dart` |
+| כיווניות הכרום בשפת ממשק LTR | `test/navigation/chrome_direction_test.dart` |
 | תפריט ההקשר של כרטיסיה (משותף לרצועה העליונה ולעמודה) | `test/navigation/tab_context_menu_test.dart` |
 | Startup guard / auto-reindex | `test/navigation/startup_work_gate_test.dart`, `…startup_auto_reindex_test.dart`, `…new_books_indexing_guard_test.dart` |
 

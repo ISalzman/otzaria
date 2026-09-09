@@ -185,6 +185,12 @@ class _ContextOverlayPanelState extends State<ContextOverlayPanel> {
     });
   }
 
+  /// הצד הפיזי שבו יושב הפאנל, לפי הכיווניות: `centerEnd` הוא שמאל ב-RTL
+  /// וימין ב-LTR.
+  bool _isLeft(BuildContext context) =>
+      widget.alignment.resolve(Directionality.of(context)) ==
+      Alignment.centerLeft;
+
   /// כותרת הפאנל עם כפתור סגירה (X) בקצה
   Widget _buildTitleBar(BuildContext context, EdgeInsets horizontal) {
     return Padding(
@@ -205,7 +211,7 @@ class _ContextOverlayPanelState extends State<ContextOverlayPanel> {
             ),
           ),
           Align(
-            alignment: Alignment.centerLeft,
+            alignment: AlignmentDirectional.centerEnd,
             child: IconButton(
               icon: const Icon(FluentIcons.dismiss_24_regular, size: 20),
               tooltip: 'סגור',
@@ -240,9 +246,9 @@ class _ContextOverlayPanelState extends State<ContextOverlayPanel> {
       right: resolved.right,
     );
 
-    // centerEnd = פאנל בשמאל → ידית בקצה ימין, פס גלילה נשאר בשמאל (ללא חפיפה).
-    // centerStart = פאנל בימין → ידית בקצה שמאל; פס הגלילה חייב לעבור לימין.
-    final isLeft = widget.alignment == AlignmentDirectional.centerEnd;
+    // פאנל בשמאל → ידית בקצה ימין, פס גלילה נשאר בשמאל (ללא חפיפה).
+    // פאנל בימין → ידית בקצה שמאל; פס הגלילה חייב לעבור לימין.
+    final isLeft = _isLeft(context);
 
     final scrollableChild = PanelScrollableContent(
       padding: horizontalPadding,
@@ -275,8 +281,7 @@ class _ContextOverlayPanelState extends State<ContextOverlayPanel> {
     final cs = Theme.of(context).colorScheme;
     final effectiveBackgroundColor =
         widget.backgroundColor ?? cs.surfaceContainerHigh;
-    // centerEnd = שמאל פיזי ב-RTL, centerStart = ימין פיזי
-    final isLeft = widget.alignment == AlignmentDirectional.centerEnd;
+    final isLeft = _isLeft(context);
     final showHandle = widget.isOpen;
     final overhang = showHandle ? kPaneHandleInnerReach : 0.0;
     // בחלון צר מצמצמים את הרוחב כדי להשאיר שוליים משני הצדדים
