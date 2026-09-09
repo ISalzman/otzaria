@@ -1,6 +1,7 @@
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/settings/engine/settings_repository.dart';
+import 'package:otzaria/shortcuts/shortcut_helper.dart';
 import 'package:otzaria/shortcuts/shortcut_validator.dart';
 
 import '../../helpers/memory_settings_cache.dart';
@@ -18,6 +19,9 @@ void main() {
   late SettingsRepository repository;
 
   setUp(() async {
+    // ברירות המחדל תלויות פלטפורמה — מקבעים כדי שהבדיקה לא תשתנה לפי המארח.
+    ShortcutHelper.isMacForTesting = false;
+    addTearDown(() => ShortcutHelper.isMacForTesting = null);
     cache = MemorySettingsCache();
     await Settings.init(cacheProvider: cache);
     repository = SettingsRepository();

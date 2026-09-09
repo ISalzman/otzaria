@@ -15,6 +15,7 @@ import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
 import 'package:otzaria/shortcuts/shortcut_helper.dart';
+import 'package:otzaria/shortcuts/shortcut_validator.dart';
 import 'package:otzaria/navigation/bloc/navigation_state.dart';
 import 'package:otzaria/navigation/view/reading_tab_strip.dart';
 import 'package:otzaria/navigation/view/tab_context_menu.dart';
@@ -390,14 +391,17 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
     );
   }
 
+  /// ברירת המחדל תלויה בפלטפורמה, ולכן נלקחת מ-[ShortcutValidator] ולא
+  /// משוכפלת כאן.
+  static String _shortcutOf(String key) =>
+      Settings.getValue<String>(key) ??
+      ShortcutValidator.defaultShortcuts[key] ??
+      '';
+
   Widget _buildActionButtons(BuildContext context) {
-    final historyShortcut =
-        Settings.getValue<String>('key-shortcut-open-history') ?? 'ctrl+h';
-    final bookmarksShortcut =
-        Settings.getValue<String>('key-shortcut-open-bookmarks') ??
-        'ctrl+shift+b';
-    final workspaceShortcut =
-        Settings.getValue<String>('key-shortcut-switch-workspace') ?? 'ctrl+k';
+    final historyShortcut = _shortcutOf('key-shortcut-open-history');
+    final bookmarksShortcut = _shortcutOf('key-shortcut-open-bookmarks');
+    final workspaceShortcut = _shortcutOf('key-shortcut-switch-workspace');
 
     return SizedBox(
       width: _kAppBarControlsWidth,
