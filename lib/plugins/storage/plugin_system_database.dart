@@ -24,7 +24,7 @@ class PluginSystemDatabase {
   Future<Database> _initDatabase() async {
     final dbPath = await AppPaths.resolvePluginsDbPath();
     final db = sqlite3.open(dbPath);
-    db.execute('PRAGMA journal_mode=WAL');
+    enableWalBestEffort(db, 'PluginSystemDatabase');
     _createSchema(db);
     ensureSchemaUpgrades(db);
     return db;
