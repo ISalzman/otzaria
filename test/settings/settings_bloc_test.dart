@@ -31,49 +31,49 @@ void main() {
       settingsBloc.close();
     });
 
+    final mockSettings = {
+      'isDarkMode': true,
+      'followSystemTheme': false,
+      'seedColor': Colors.blue,
+      'darkSeedColor': const Color(0xFFCE93D8),
+      'textMaxWidth': 800.0,
+      'fontSize': 18.0,
+      'fontFamily': 'Rubik',
+      'commentatorsFontFamily': 'NotoRashiHebrew',
+      // issue #849 — נטען בעליית התוכנה כדי שגופן מערכת לא יתאפס ל-fallback.
+      'pageShapeBottomFont': 'NotoSerifHebrew',
+      'commentatorsFontSize': 22.0,
+      'lineHeight': 1.5,
+      'showOtzarHachochma': true,
+      'showHebrewBooks': true,
+      'showExternalBooks': true,
+      'autoUpdateIndex': false,
+      'defaultContinuousReadingMode': true,
+      'defaultSidebarOpen': true,
+      'defaultCommentaryOpen': true,
+      'pinSidebar': true,
+      'sidebarWidth': 300.0,
+      'facetFilteringWidth': 235.0,
+      'commentaryPaneWidth': 400.0,
+      'copyWithHeaders': 'none',
+      'copyHeaderFormat': 'same_line_after_brackets',
+      'isFullscreen': false,
+      'libraryViewMode': 'grid',
+      'libraryShowPreview': true,
+      'searchShowPreview': true,
+      'enablePerBookSettings': true,
+      'pdfBookViewByDefault': false,
+      'shortcuts': <String, String>{},
+      'isOfflineMode': false,
+      'softwareAndBookUpdatesEnabled': true,
+      'personalNotesCollapsedByDefault': true,
+    };
+
     test('initial state is correct', () {
       expect(settingsBloc.state, equals(SettingsState.initial()));
     });
 
     group('LoadSettings', () {
-      final mockSettings = {
-        'isDarkMode': true,
-        'followSystemTheme': false,
-        'seedColor': Colors.blue,
-        'darkSeedColor': const Color(0xFFCE93D8),
-        'textMaxWidth': 800.0,
-        'fontSize': 18.0,
-        'fontFamily': 'Rubik',
-        'commentatorsFontFamily': 'NotoRashiHebrew',
-        // issue #849 — נטען בעליית התוכנה כדי שגופן מערכת לא יתאפס ל-fallback.
-        'pageShapeBottomFont': 'NotoSerifHebrew',
-        'commentatorsFontSize': 22.0,
-        'lineHeight': 1.5,
-        'showOtzarHachochma': true,
-        'showHebrewBooks': true,
-        'showExternalBooks': true,
-        'autoUpdateIndex': false,
-        'defaultContinuousReadingMode': true,
-        'defaultSidebarOpen': true,
-        'defaultCommentaryOpen': true,
-        'pinSidebar': true,
-        'sidebarWidth': 300.0,
-        'facetFilteringWidth': 235.0,
-        'commentaryPaneWidth': 400.0,
-        'copyWithHeaders': 'none',
-        'copyHeaderFormat': 'same_line_after_brackets',
-        'isFullscreen': false,
-        'libraryViewMode': 'grid',
-        'libraryShowPreview': true,
-        'searchShowPreview': true,
-        'enablePerBookSettings': true,
-        'pdfBookViewByDefault': false,
-        'shortcuts': <String, String>{},
-        'isOfflineMode': false,
-        'softwareAndBookUpdatesEnabled': true,
-        'personalNotesCollapsedByDefault': true,
-      };
-
       blocTest<SettingsBloc, SettingsState>(
         'emits updated state when LoadSettings is added',
         build: () {
@@ -680,7 +680,7 @@ void main() {
         final bloc = SettingsBloc(
           repository: mockRepository,
           initialSettings: {
-            'shortcuts': <String, String>{},
+            ...mockSettings,
             'readingTabsPlacement': SettingsRepository.readingTabsPlacementSide,
           },
         );
