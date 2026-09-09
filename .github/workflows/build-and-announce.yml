@@ -1093,15 +1093,17 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          found=0
-          while IFS= read -r FILE; do
-            found=1
-            sed -i 's|^  WebKitColor color;$|  WebKitColor color{};|' "$FILE"
-            sed -i 's|^  gboolean hasColor = webkit_web_view_get_theme_color(webview_, \&color);$|#if WEBKIT_CHECK_VERSION(2, 50, 0)\n  gboolean hasColor = webkit_web_view_get_theme_color(webview_, \&color);\n#else\n  gboolean hasColor = FALSE;\n#endif|' "$FILE"
-            grep -q "WEBKIT_CHECK_VERSION(2, 50, 0)" "$FILE" || { echo "::error::theme_color patch did not apply to $FILE"; exit 1; }
-            echo "patched: $FILE"
-          done < <(find "${PUB_CACHE:-$HOME/.pub-cache}/hosted/pub.dev" -path '*/flutter_inappwebview_linux-*/linux/in_app_webview/in_app_webview.cc')
-          [ "$found" = "1" ] || { echo "::error::in_app_webview.cc not found in pub cache"; exit 1; }
+          root_uri=$(jq -er '.packages[] | select(.name == "flutter_inappwebview_linux") | .rootUri' .dart_tool/package_config.json)
+          case "$root_uri" in
+            file://*) package_root="${root_uri#file://}" ;;
+            *) package_root=$(realpath -m ".dart_tool/$root_uri") ;;
+          esac
+          FILE="$package_root/linux/in_app_webview/in_app_webview.cc"
+          [ -f "$FILE" ] || { echo "::error::resolved flutter_inappwebview_linux source not found: $FILE"; exit 1; }
+          sed -i 's|^  WebKitColor color;$|  WebKitColor color{};|' "$FILE"
+          sed -i 's|^  gboolean hasColor = webkit_web_view_get_theme_color(webview_, \&color);$|#if WEBKIT_CHECK_VERSION(2, 50, 0)\n  gboolean hasColor = webkit_web_view_get_theme_color(webview_, \&color);\n#else\n  gboolean hasColor = FALSE;\n#endif|' "$FILE"
+          grep -q "WEBKIT_CHECK_VERSION(2, 50, 0)" "$FILE" || { echo "::error::theme_color patch did not apply to $FILE"; exit 1; }
+          echo "patched resolved flutter_inappwebview_linux source: $FILE"
 
       - name: Build Flutter Linux app (with retry)
         shell: bash
