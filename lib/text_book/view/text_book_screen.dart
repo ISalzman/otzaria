@@ -1692,7 +1692,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         isOpen: state.showLeftPane,
         paneWidth: paneWidth,
         isPinned: state.pinLeftPane,
-        onTogglePin: MediaQuery.of(context).size.width >= 600
+        onTogglePin: NavPanelSearch.canHoist(context)
             ? () => context.read<TextBookBloc>().add(
                 TogglePinLeftPane(!state.pinLeftPane),
               )

@@ -201,10 +201,13 @@ const double kNavPanelSearchHoistMinWidth = 600.0;
 /// עזר לזיהוי המצב: בתוך חלונית ניווט שדה החיפוש עולה לסרגל שמעליה, ולכן
 /// הלשונית אינה מציירת שדה מקומי. מחוץ לחלונית (דיאלוג, מסך אחר) היא כן.
 abstract final class NavPanelSearch {
-  /// האם המסך רחב דיו כדי ששדה החיפוש יעלה לסרגל העליון. במסך צר הוא נשאר
-  /// בתוך החלונית, ששם יש לו את מלוא רוחבה.
+  /// האם החלונית רחבה דיה כדי ששדה החיפוש יעלה לסרגל העליון. בחלונית צרה הוא
+  /// נשאר בתוכה, ששם יש לו את מלוא רוחבה. בתצוגה מפוצלת החלון רחב אך החלונית
+  /// צרה — ולכן נמדדת החלונית ([NavPanelPaneWidthScope]), לא החלון (issue #1268).
   static bool canHoist(BuildContext context) =>
-      MediaQuery.sizeOf(context).width >= kNavPanelSearchHoistMinWidth;
+      (NavPanelPaneWidthScope.maybeOf(context) ??
+          MediaQuery.sizeOf(context).width) >=
+      kNavPanelSearchHoistMinWidth;
 
   static bool isHoisted(BuildContext context) =>
       canHoist(context) &&
@@ -217,6 +220,26 @@ abstract final class NavPanelSearch {
     BuildContext context, {
     required bool autoSelected,
   }) => !autoSelected || canHoist(context);
+}
+
+/// רוחב החלונית (הטאב) שבה מוצג הספר — מסופק ע"י מארח החלוניות, כדי שהחלטות
+/// רוחב יתייחסו לחלונית ולא לחלון כולו.
+class NavPanelPaneWidthScope extends InheritedWidget {
+  final double width;
+
+  const NavPanelPaneWidthScope({
+    super.key,
+    required this.width,
+    required super.child,
+  });
+
+  static double? maybeOf(BuildContext context) => context
+      .dependOnInheritedWidgetOfExactType<NavPanelPaneWidthScope>()
+      ?.width;
+
+  @override
+  bool updateShouldNotify(NavPanelPaneWidthScope oldWidget) =>
+      oldWidget.width != width;
 }
 
 /// מסמן את אינדקס הלשונית שבתוכה יושב התוכן — כדי שהפרסום יגיע לסרגל רק

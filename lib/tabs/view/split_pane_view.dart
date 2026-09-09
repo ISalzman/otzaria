@@ -6,6 +6,7 @@ import 'package:otzaria/tabs/models/combined_tab.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/tabs/view/pane_drop_geometry.dart';
 import 'package:otzaria/theme/theme_exports.dart';
+import 'package:otzaria/widgets/navigation/nav_panel_search.dart';
 
 export 'pane_drop_geometry.dart'
     show
@@ -82,7 +83,12 @@ class SplitPaneView extends StatelessWidget {
     return ClipRect(
       child: KeyedSubtree(
         key: GlobalObjectKey(pane),
-        child: paneBuilder(pane),
+        child: LayoutBuilder(
+          builder: (context, constraints) => NavPanelPaneWidthScope(
+            width: constraints.maxWidth,
+            child: paneBuilder(pane),
+          ),
+        ),
       ),
     );
   }
