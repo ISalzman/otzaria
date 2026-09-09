@@ -939,4 +939,114 @@ void main() {
       );
     });
   });
+
+  // issue #1200 — "בית יוסף סימן ה": הסימן יושב מתחת לחלקי הטור (אורח חיים,
+  // יורה דעה...), והחיפוש ההיררכי נעצר ברמת החלקים. ה-fallback השטוח שהיה
+  // מציל את זה מנוטרל לספרים עם alt_toc — ובית יוסף הוא כזה.
+  group('ציטוט שמדלג על רמת ביניים (issue #1200)', () {
+    Future<int> buildTurLikeBook({required bool withAltToc}) async {
+      final catId = await createCategory();
+      final bookId = await createBook(catId, 'בית יוסף');
+      await insertLines(bookId, ['l0', 'l1', 'l2', 'l3']);
+      final orach = await insertToc(
+        bookId: bookId,
+        lineIndex: 0,
+        text: 'אורח חיים',
+        level: 1,
+      );
+      await insertToc(
+        bookId: bookId,
+        lineIndex: 0,
+        text: 'סימן ד',
+        level: 2,
+        parentId: orach,
+      );
+      await insertToc(
+        bookId: bookId,
+        lineIndex: 1,
+        text: 'סימן ה',
+        level: 2,
+        parentId: orach,
+      );
+      final yoreh = await insertToc(
+        bookId: bookId,
+        lineIndex: 2,
+        text: 'יורה דעה',
+        level: 1,
+      );
+      await insertToc(
+        bookId: bookId,
+        lineIndex: 3,
+        text: 'סימן ה',
+        level: 2,
+        parentId: yoreh,
+      );
+      await repository.updateTocEntryLineIdsByLineIndex(bookId);
+      if (withAltToc) {
+        final db = await database.database;
+        db.execute(
+          'INSERT INTO alt_toc_structure (bookId, key, title, heTitle) '
+          'VALUES (?, ?, ?, ?)',
+          [bookId, 'Topic', 'Topic', 'נושאים'],
+        );
+        final structureId = db.lastInsertRowId;
+        final lineId =
+            db.select('SELECT id FROM line WHERE bookId = ? LIMIT 1', [
+                  bookId,
+                ]).first['id']
+                as int;
+        db.execute('INSERT INTO tocText (text) VALUES (?)', ['הלכות ציצית']);
+        db.execute(
+          'INSERT INTO alt_toc_entry '
+          '(structureId, parentId, textId, level, lineId, isLastChild, hasChildren) '
+          'VALUES (?, NULL, ?, 1, ?, 1, 0)',
+          [structureId, db.lastInsertRowId, lineId],
+        );
+      }
+      return bookId;
+    }
+
+    test('בלי alt_toc — "סימן ה" נמצא בשני החלקים (fallback שטוח)', () async {
+      final bookId = await buildTurLikeBook(withAltToc: false);
+      final results = await repository.getTocEntriesForReference(
+        bookId,
+        'בית יוסף',
+        queryTokens: ['סימן', 'ה'],
+      );
+      expect(results.map((r) => r['reference']), [
+        'בית יוסף אורח חיים סימן ה',
+        'בית יוסף יורה דעה סימן ה',
+      ]);
+    });
+
+    test('עם alt_toc — "סימן ה" נמצא בשני החלקים גם בלי לציין את החלק', () async {
+      final bookId = await buildTurLikeBook(withAltToc: true);
+      final results = await repository.getTocEntriesForReference(
+        bookId,
+        'בית יוסף',
+        queryTokens: ['סימן', 'ה'],
+      );
+      expect(
+        results.map((r) => r['reference']),
+        [
+          'בית יוסף אורח חיים סימן ה',
+          'בית יוסף יורה דעה סימן ה',
+        ],
+        reason:
+            'הציטוט מדלג על רמת החלק — כמו "בית יוסף אורח חיים סימן ה" שכן עובד',
+      );
+    });
+
+    test('עם alt_toc — הנתיב המלא ממשיך לעבוד', () async {
+      final bookId = await buildTurLikeBook(withAltToc: true);
+      final results = await repository.getTocEntriesForReference(
+        bookId,
+        'בית יוסף',
+        queryTokens: ['אורח', 'חיים', 'סימן', 'ה'],
+      );
+      expect(results.map((r) => r['reference']), [
+        'בית יוסף אורח חיים סימן ה',
+      ]);
+    });
+  });
 }
