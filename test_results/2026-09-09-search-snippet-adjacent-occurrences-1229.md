@@ -38,4 +38,5 @@
 personal_notes_file_backed_book, search_scope_menu, change_location_dialog, shamor_zachor).
 ארבעה נוספים עברו בבידוד — רגישים לעומס: `find_ref_db_isolate_shared_queries_test`,
 `text_book_bloc_test` ×2, `raised_markers_perf_test`. האחרון —
-`data_providers/database_library_provider_test` "buildLibraryCatalog שומר מחבר" — (יעודכן).
+`data_providers/database_library_provider_test` "buildLibraryCatalog שומר מחבר" — נכשל באותה צורה גם על `upstream/dev` נקי במכונה שקטה
+(מחיקת תיקיית temp נכשלת אחרי `database is locked`) — כשל בסיס סביבתי.
