@@ -279,9 +279,12 @@ class IndexingRepository {
       );
     }
 
-    final allBooks = orderBooksForIndexing(
-      library.getAllBooks(),
-    ).where((book) => includePdfBooks || book is! PdfBook).toList();
+    final allBooks = orderBooksForIndexing(library.getAllBooks())
+        .where(
+          (book) =>
+              isIndexableBook(book) && (includePdfBooks || book is! PdfBook),
+        )
+        .toList();
     final totalBooks = allBooks.length;
 
     if (await requiresManualReindex(library)) {

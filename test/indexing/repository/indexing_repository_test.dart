@@ -906,6 +906,32 @@ void main() {
       expect(provider.indexedFilePaths, isEmpty);
     });
 
+    test('מסכת PDF מצורפת אינה נכנסת למסלול האינדוקס המלא', () async {
+      final engine = _RecordingSearchEngine();
+      final provider = _RecordingTantivyDataProvider(engine);
+      final library = Library(categories: []);
+      final bundledPdf = PdfBook(
+        title: 'ברכות',
+        path: r'C:\library\תלמוד בבלי\ברכות.pdf',
+        externalLibraryId: DatabaseConstants.talmudBavliPdfExternalLibraryId(
+          'ברכות',
+        ),
+      );
+      library.books.add(bundledPdf);
+      final repository = _FakeExtractionRepository(provider);
+
+      final result = await repository.indexAllBooks(
+        library,
+        onProgress: (_, _) {},
+      );
+
+      expect(result.completed, isTrue);
+      expect(result.totalBooks, 0);
+      expect(repository.extractedTitles, isEmpty);
+      expect(engine.addedPdfTitles, isEmpty);
+      expect(provider.indexedFilePaths, isEmpty);
+    });
+
     test('אחרי commit מוצלח מושלם חותם הסדר הקטלוגי שנכשל באתחול', () async {
       // רגרסיה: חותם שלא נכתב באתחול הותיר את האינדקס המלא "ישן" בהפעלה
       // הבאה, והמשתמש נדרש למחוק ולבנות הכול מחדש.
