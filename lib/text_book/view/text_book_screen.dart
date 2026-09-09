@@ -31,6 +31,7 @@ import 'package:otzaria/tabs/bloc/tabs_event.dart';
 import 'package:otzaria/tabs/bloc/tabs_state.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/utils/book_versions_action.dart';
+import 'package:otzaria/text_book/utils/dibburim_structure.dart';
 import 'package:otzaria/text_book/utils/per_book_display_settings.dart';
 import 'package:otzaria/text_display/view/text_display_bar_button.dart';
 import 'package:otzaria/text_book/utils/reader_build_policy.dart';
@@ -943,15 +944,40 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     _searchHost.activeTab = tabController.index;
   }
 
-  /// טעינת הגדרות פר-ספר
+  /// בודק אם ללשונית 'כותרות' יש תוכן: מבנים חלופיים במסד או דיבורי-מתחיל.
   Future<void> _checkAltTitles() async {
     try {
+      final textBookBloc = context.read<TextBookBloc>();
       final structures = await DatabaseLibraryProvider.instance
           .getAlternativeStructuresForBook(widget.tab.book.title);
+      final dibburim = await loadDibburimForBook(widget.tab.book);
 
       if (!mounted) return;
 
-      final hasAltTitles = structures.isNotEmpty;
+      final currentState = textBookBloc.state;
+      final TextBookLoaded state;
+      if (currentState is TextBookLoaded) {
+        state = currentState;
+      } else {
+        state = await textBookBloc.stream
+            .where((state) => state is TextBookLoaded)
+            .map((state) => state as TextBookLoaded)
+            .first;
+        if (!mounted) return;
+      }
+      final usableDibburim =
+          hasDibburimEntries(
+            state.tableOfContents,
+            dibburim,
+          )
+          ? dibburim
+          : const <int, String>{};
+
+      if (usableDibburim.isNotEmpty) {
+        setState(() => _dibburim = usableDibburim);
+      }
+
+      final hasAltTitles = structures.isNotEmpty || usableDibburim.isNotEmpty;
       if (hasAltTitles != _hasAltTitles) {
         setState(() {
           _hasAltTitles = hasAltTitles;
@@ -1113,6 +1139,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   }
 
   bool _hasAltTitles = true; // נניח שיש בהתחלה, נעדכן אחרי בדיקה
+  Map<int, String> _dibburim = const {};
 
   @override
   void dispose() {
@@ -2960,6 +2987,8 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
                   index: 1,
                   child: AltTocSidebarView(
                     book: widget.tab.book,
+                    dibburim: _dibburim,
+                    tableOfContents: state.tableOfContents,
                     focusNode: altTitlesSearchFocusNode,
                     closeLeftPaneCallback: () => context
                         .read<TextBookBloc>()
