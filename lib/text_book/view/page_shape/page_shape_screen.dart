@@ -462,8 +462,16 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
     );
   }
 
+  /// "הערות" הוא מפרש וירטואלי בלי קישורים (הטור היה נפתח ונעלם), ומפרש
+  /// "נדיר" הוא בדרך כלל קישור בודד שסווג בטעות — שניהם לא מוצעים בטורים.
   List<String> _availableCommentators(TextBookLoaded state) {
-    return state.availableCommentators;
+    return state.availableCommentators
+        .where(
+          (title) =>
+              title != kNotesCommentatorTitle &&
+              !state.rareCommentators.contains(title),
+        )
+        .toList();
   }
 
   List<String> _selectedRightPaneCommentators(TextBookLoaded state) {
@@ -1761,7 +1769,7 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
                         scrollable: true,
                         child: PageShapeSettingsPanel(
                           key: ValueKey(_settingsPaneKey),
-                          availableCommentators: state.availableCommentators,
+                          availableCommentators: _availableCommentators(state),
                           bookTitle: state.book.title,
                           heCategories: state.book.heCategories,
                           currentLeft: _leftCommentator,
