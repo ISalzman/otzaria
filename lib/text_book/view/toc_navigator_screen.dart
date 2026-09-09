@@ -139,14 +139,15 @@ class _TocViewerState extends State<TocViewer>
     final next = (start + delta).clamp(0, flat.length - 1);
     if (next == current) return;
 
-    setState(() => _highlightedEntryIndex = flat[next].entry.index);
-    final useFlat = display.totalCount > _kTocFlattenThreshold;
+    final targetIndex = flat[next].entry.index;
+    setState(() => _highlightedEntryIndex = targetIndex);
     SchedulerBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
+      final current = _displayDataFor(state.tableOfContents);
       _scrollEntryIntoView(
-        flat[next].entry.index,
-        display: display,
-        useFlat: useFlat,
+        targetIndex,
+        display: current,
+        useFlat: current.totalCount > _kTocFlattenThreshold,
       );
     });
   }
@@ -247,16 +248,15 @@ class _TocViewerState extends State<TocViewer>
 
     _ensureParentsOpen(state.tableOfContents, activeIndex);
 
-    // החלטה בין מסלול וירטואלי לרקורסיבי - חייב להיות זהה ללוגיקה ב-build,
-    // אחרת ננסה לגלול בקונטרולר שלא מחובר.
-    final display = _displayDataFor(state.tableOfContents);
-    final bool useFlat = display.totalCount > _kTocFlattenThreshold;
-
     SchedulerBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
 
       SchedulerBinding.instance.addPostFrameCallback((_) {
         if (!mounted || _isManuallyScrolling) return;
+        // ההחלטה וירטואלי/רקורסיבי נלקחת כאן ולא בזמן התזמון: שני frames
+        // עברו, וניקוי חיפוש בינתיים מחליף מסלול ומנתק את בקר הגלילה.
+        final display = _displayDataFor(state.tableOfContents);
+        final bool useFlat = display.totalCount > _kTocFlattenThreshold;
         if (_scrollEntryIntoView(
           activeIndex,
           display: display,
