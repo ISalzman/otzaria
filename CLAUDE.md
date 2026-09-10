@@ -952,7 +952,8 @@ dart format lib/file.dart    # Format ONLY files you modified
 | Library browser | `test/library/view/library_browser_preview_width_test.dart`, `…grid_items_test.dart`, `…library_browser_flat_tree_test.dart` |
 | שמירת טקסט החיפוש בניווט בספרייה ("חזור"/"בית") | `test/library/bloc/library_navigation_keeps_search_test.dart`, `test/library/view/library_empty_state_navigation_test.dart` |
 | Empty library screen | `test/empty_library/empty_library_screen_test.dart` |
-| PDF isolate / rasterizer | `test/printing/pdf_isolate_test.dart`, `…pdf_text_rasterizer_test.dart` |
+| PDF isolate | `test/printing/pdf_isolate_test.dart` |
+| טקסט מעוצב ב-PDF (גופן Type0 עם גליפים מ-shaper, פריסה ויישור, bidi) | `test/printing/shaped_text/pdf_shaped_font_test.dart`, `…shaped_text_layout_test.dart` |
 | PDF in-book search highlight pattern | `test/pdf_book/pdf_search_highlight_pattern_test.dart` |
 | ניתוב החיפוש בתוך PDF (פשוט מול מנוע) | `test/pdf_book/pdf_search_in_book_routing_test.dart` |
 | Printing models | `test/printing/print_content_models_test.dart` |
