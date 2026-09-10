@@ -169,6 +169,25 @@ void main() {
     expect(_chipLabels(tester), ['רמב"ם תשובה ב', 'בראשית פרק א']);
   });
 
+  // issue #1288 — לא הייתה דרך לנקות את רשימת האיתורים האחרונים מהמסך.
+  testWidgets('ניקוי האיתורים האחרונים מוחק אותם ומחזיר את הדוגמאות', (
+    tester,
+  ) async {
+    FindRefRecentStore.remember('בראשית פרק א');
+    FindRefRecentStore.remember('רמב"ם תשובה ב');
+
+    await _pumpDialog(tester);
+    expect(find.text('האיתורים האחרונים'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('נקה'));
+    await tester.pumpAndSettle();
+
+    expect(FindRefRecentStore.load(), isEmpty);
+    expect(find.text('האיתורים האחרונים'), findsNothing);
+    expect(find.text('דוגמאות'), findsOneWidget);
+    expect(find.byTooltip('נקה'), findsNothing);
+  });
+
   testWidgets('בהיעדר איתורים אחרונים הדוגמאות מתחלפות בין פתיחות', (
     tester,
   ) async {
