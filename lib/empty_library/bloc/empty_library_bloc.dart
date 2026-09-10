@@ -165,12 +165,13 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
       if (backupDir != null) {
         await _restoreDatabaseFiles(backupDir, backupPath!);
       }
-      emit(
-        _error(
-          errorMessage: 'שגיאה בייבוא הספרייה: $e',
-          selectedPath: event.sourceFolder,
-        ),
-      );
+      // Scoped Storage באנדרואיד: התיקייה נראית אך אינה ניתנת לקריאה (#1219).
+      final message = e is PathAccessException
+          ? 'אין לתוכנה הרשאת קריאה לקובץ המקור ${e.path}. '
+                'באנדרואיד יש לבחור את קובץ ${DatabaseConstants.databaseFileName} '
+                'דרך "בחר קובץ ספרייה".'
+          : 'שגיאה בייבוא הספרייה: $e';
+      emit(_error(errorMessage: message, selectedPath: event.sourceFolder));
     } finally {
       if (writeSessionStarted) {
         await SqliteDataProvider.instance.reopenAfterExternalWrite(

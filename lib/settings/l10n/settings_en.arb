@@ -231,6 +231,7 @@
   "יש לבחור את {file}": "You need to select {file}",
   "בחר ארכיון ספרייה (ZIP או ZST)": "Select a library archive file (ZIP or ZST)",
   "בחר תיקייה שקיימים בה קובצי הספרייה והמערכת": "Select a folder that contains the library and system files",
+  "לתוכנה אין הרשאת קריאה לתיקייה שנבחרה — יש לבחור את קובץ {file} דרך \"בחר קובץ ספרייה\"": "Otzaria has no permission to read the selected folder — pick the {file} file with \"Select a Library File\" instead",
   "כל הקבצים זוהו": "All Files Found",
   "חסר קובץ הספרייה (seforim.db) — לא ניתן להמשיך בלי הספרייה": "The library file (seforim.db) is missing — you cannot continue without it",
   "{label} חסר — {consequence}": "{label} is missing — {consequence}",
