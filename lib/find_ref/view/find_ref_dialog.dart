@@ -1223,6 +1223,18 @@ class _FindRefDialogState extends State<FindRefDialog> {
     });
   }
 
+  void _forgetRecentSuggestion(String suggestion) {
+    FindRefRecentStore.forget(suggestion);
+    final remaining = FindRefRecentStore.load();
+    if (remaining.isEmpty) {
+      _clearRecentSuggestions();
+      return;
+    }
+    setState(() {
+      _suggestions = remaining.take(_suggestionCount).toList();
+    });
+  }
+
   /// מצב פתיחה: מסביר מה מקלידים, ומציע את האיתורים האחרונים — ובהיעדרם
   /// דוגמאות מתחלפות.
   Widget _buildIdleState() {
@@ -1271,11 +1283,21 @@ class _FindRefDialogState extends State<FindRefDialog> {
             alignment: WrapAlignment.center,
             children: [
               for (final suggestion in _suggestions)
-                ActionChip(
-                  label: Text(suggestion),
-                  visualDensity: VisualDensity.compact,
-                  onPressed: () => _applySuggestion(suggestion),
-                ),
+                if (_suggestionsAreRecent)
+                  InputChip(
+                    label: Text(suggestion),
+                    visualDensity: VisualDensity.compact,
+                    onPressed: () => _applySuggestion(suggestion),
+                    deleteIcon: const Icon(FluentIcons.dismiss_12_regular),
+                    deleteButtonTooltipMessage: context.settingsText('הסר'),
+                    onDeleted: () => _forgetRecentSuggestion(suggestion),
+                  )
+                else
+                  ActionChip(
+                    label: Text(suggestion),
+                    visualDensity: VisualDensity.compact,
+                    onPressed: () => _applySuggestion(suggestion),
+                  ),
             ],
           ),
         ],
