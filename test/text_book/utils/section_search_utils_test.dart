@@ -56,6 +56,19 @@ void main() {
       }
     });
 
+    test('גבול באמצע מילה בין הופעות — כל תוצאה מציגה הקשר מלא', () async {
+      const line = 'אבג מילה אבג';
+      final results = await searchInContent(
+        content: [line],
+        query: 'אבג',
+        patternSource: literalPatternSource('אבג'),
+      );
+      expect(results.length, 2);
+      for (final result in results) {
+        expect(result.snippet, line);
+      }
+    });
+
     test('היסט ההתאמה מצביע על הופעה בתוך המילה', () async {
       final results = await searchInContent(
         content: ['את השמים'],

@@ -24,12 +24,17 @@ String _snippetAroundMatch(
 }) {
   // גבול שמותיר ליד ההופעה רק שבר מילה קוטם את התוצאה ל"אחכם!" — צד כזה
   // מקבל את ההקשר המלא גם אם הוא חופף לשכנה (issue #1229).
-  if (!_hasNeighborWord(line.substring(lowerBound, match.start), ' ')) {
+  if (!_hasNeighborWord(
+    line,
+    start: lowerBound,
+    end: match.start,
+  )) {
     lowerBound = 0;
   }
   if (!_hasNeighborWord(
-    line.substring(match.end, upperBound),
-    ' ',
+    line,
+    start: match.end,
+    end: upperBound,
     before: false,
   )) {
     upperBound = line.length;
@@ -51,10 +56,24 @@ String _snippetAroundMatch(
   return line.substring(start, end).trim();
 }
 
-/// האם בקטע שבין הגבול להופעה יש מילה שלמה המופרדת ממנה ברווח.
-bool _hasNeighborWord(String side, String separator, {bool before = true}) {
-  if (side.trim().isEmpty) return false;
-  return before ? side.endsWith(separator) : side.startsWith(separator);
+/// האם בקטע שבין הגבול להופעה יש מילה שלמה, ולא רק חלק ממילה שנחתך בגבול.
+bool _hasNeighborWord(
+  String line, {
+  required int start,
+  required int end,
+  bool before = true,
+}) {
+  final side = line.substring(start, end);
+  final trimmed = side.trim();
+  if (trimmed.isEmpty) return false;
+
+  if (before) {
+    if (!side.endsWith(' ')) return false;
+    return start == 0 || line[start - 1] == ' ' || trimmed.contains(' ');
+  }
+
+  if (!side.startsWith(' ')) return false;
+  return end == line.length || line[end] == ' ' || trimmed.contains(' ');
 }
 
 final RegExp _whitespaceRun = RegExp(r'\s+');
