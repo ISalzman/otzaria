@@ -10,7 +10,7 @@ import 'package:pdf/widgets.dart' as pw;
 import 'pdf_shaped_font.dart';
 import 'shaped_text_layout.dart';
 
-class ShapedText extends pw.Widget {
+class ShapedText extends pw.Widget with pw.SpanningWidget {
   ShapedText(
     this.text, {
     required this.fonts,
@@ -43,6 +43,9 @@ class ShapedText extends pw.Widget {
   final double? heightFactor;
 
   ShapedTextBlock? _block;
+  final _ShapedTextContext _context = _ShapedTextContext();
+  var _firstLine = 0;
+  var _lastLine = 0;
 
   ShapedTextLayout get _layout => ShapedTextLayout(
     fonts: [for (final font in fonts) font.shaper],
@@ -69,8 +72,41 @@ class ShapedText extends pw.Widget {
         ? constraints.maxWidth
         : constraints.constrainWidth();
     final block = _block = _layout.layout(text, maxWidth: maxWidth);
-    box = PdfRect(0, 0, maxWidth, block.height);
+    final firstLine = _context.startLine.clamp(0, block.lines.length);
+    var lastLine = block.lines.length;
+    if (constraints.maxHeight.isFinite) {
+      final fittingLines = (constraints.maxHeight / block.lineHeight).floor();
+      lastLine = firstLine + (fittingLines < 1 ? 1 : fittingLines);
+      if (lastLine > block.lines.length) lastLine = block.lines.length;
+    }
+    _firstLine = firstLine;
+    _lastLine = lastLine;
+    _context.endLine = lastLine;
+    box = PdfRect(
+      0,
+      0,
+      maxWidth,
+      (lastLine - firstLine) * block.lineHeight,
+    );
   }
+
+  @override
+  bool get canSpan => true;
+
+  @override
+  bool get hasMoreWidgets =>
+      _block != null && _context.endLine < _block!.lines.length;
+
+  @override
+  void restoreContext(covariant pw.WidgetContext context) {
+    final shapedContext = context as _ShapedTextContext;
+    _context
+      ..startLine = shapedContext.endLine
+      ..endLine = shapedContext.endLine;
+  }
+
+  @override
+  pw.WidgetContext saveContext() => _context;
 
   @override
   void paint(pw.Context context) {
@@ -84,8 +120,10 @@ class ShapedText extends pw.Widget {
     final canvas = context.canvas..setFillColor(color);
     final top = box!.bottom + box!.height;
 
-    for (var index = 0; index < block.lines.length; index++) {
-      final baseline = top - index * block.lineHeight - block.baselineOffset;
+    for (var index = _firstLine; index < _lastLine; index++) {
+      final visibleIndex = index - _firstLine;
+      final baseline =
+          top - visibleIndex * block.lineHeight - block.baselineOffset;
       for (final segment in block.lines[index].segments) {
         fonts[segment.fontIndex].drawShapedRun(
           canvas,
@@ -96,5 +134,21 @@ class ShapedText extends pw.Widget {
         );
       }
     }
+  }
+}
+
+class _ShapedTextContext extends pw.WidgetContext {
+  var startLine = 0;
+  var endLine = 0;
+
+  @override
+  _ShapedTextContext clone() => _ShapedTextContext()
+    ..startLine = startLine
+    ..endLine = endLine;
+
+  @override
+  void apply(covariant _ShapedTextContext other) {
+    startLine = other.startLine;
+    endLine = other.endLine;
   }
 }

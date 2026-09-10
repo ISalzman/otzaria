@@ -156,6 +156,40 @@ void main() {
   }, skip: skipReason);
 
   group('ShapedText widget', () {
+    test('spans a long paragraph across pages', () async {
+      ShaperLibrary.path = libraryPath;
+      final shaper = ShaperFont.register(fontBytes!);
+      addTearDown(shaper.dispose);
+
+      final document = pw.Document();
+      late PdfShapedFont pdfFont;
+      document.addPage(
+        pw.MultiPage(
+          pageFormat: PdfPageFormat.a5,
+          margin: const pw.EdgeInsets.all(24),
+          build: (context) {
+            pdfFont = PdfShapedFont(
+              context.document,
+              shaper: shaper,
+              fontBytes: fontBytes,
+            );
+            return [
+              ShapedText(
+                buildParagraph(500),
+                fonts: [pdfFont],
+                fontSize: 16,
+                heightFactor: 1.35,
+              ),
+            ];
+          },
+        ),
+      );
+
+      final bytes = await document.save();
+      expect(document.document.pdfPageList.pages.length, greaterThan(1));
+      expect(bytes.length, greaterThan(1000));
+    });
+
     test('renders a multi-line document for inspection', () async {
       ShaperLibrary.path = libraryPath;
       final shaper = ShaperFont.register(fontBytes!);
