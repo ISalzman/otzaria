@@ -176,7 +176,7 @@ void main() {
     FindRefRecentStore.remember('בראשית פרק א');
     FindRefRecentStore.remember('רמב"ם תשובה ב');
 
-    await _pumpDialog(tester);
+    await _pumpDialog(tester, screenSize: const Size(1200, 900));
     expect(find.text('האיתורים האחרונים'), findsOneWidget);
 
     await tester.tap(find.byTooltip('נקה'));

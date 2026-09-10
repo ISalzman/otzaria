@@ -192,8 +192,8 @@ class _FindRefDialogState extends State<FindRefDialog> {
   static const int _suggestionCount = 3;
 
   /// ההצעות שמוצגות במצב הפתיחה, ומאיזה מקור הן הגיעו.
-  late final List<String> _suggestions;
-  late final bool _suggestionsAreRecent;
+  late List<String> _suggestions;
+  late bool _suggestionsAreRecent;
 
   int _selectedIndex = 0;
   bool _includePersonalBooks =
@@ -1183,7 +1183,8 @@ class _FindRefDialogState extends State<FindRefDialog> {
     return RtlIcon(FluentIcons.book_24_regular, size: 20, color: color);
   }
 
-  /// תווית מעל ההצעות — מבדילה בין איתורים אחרונים לדוגמאות.
+  /// תווית מעל ההצעות — מבדילה בין איתורים אחרונים לדוגמאות, ומאפשרת
+  /// לנקות את האחרונים (issue #1288).
   Widget _buildSuggestionsLabel(ColorScheme colorScheme) {
     return Row(
       mainAxisSize: MainAxisSize.min,
@@ -1202,8 +1203,24 @@ class _FindRefDialogState extends State<FindRefDialog> {
               : context.settingsText('דוגמאות'),
           style: TextStyle(fontSize: 12, color: colorScheme.onSurfaceVariant),
         ),
+        if (_suggestionsAreRecent)
+          IconButton(
+            tooltip: context.settingsText('נקה'),
+            icon: const Icon(FluentIcons.dismiss_16_regular, size: 14),
+            color: colorScheme.onSurfaceVariant,
+            visualDensity: VisualDensity.compact,
+            onPressed: _clearRecentSuggestions,
+          ),
       ],
     );
+  }
+
+  void _clearRecentSuggestions() {
+    FindRefRecentStore.clear();
+    setState(() {
+      _suggestionsAreRecent = false;
+      _suggestions = _rotatedExamples();
+    });
   }
 
   /// מצב פתיחה: מסביר מה מקלידים, ומציע את האיתורים האחרונים — ובהיעדרם
