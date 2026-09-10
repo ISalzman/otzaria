@@ -657,6 +657,7 @@ const Map<String, Map<String, String>> kSettingsCatalogs = {
     'לפחות X מילים': 'At least X words',
     'לפחות מספר מילים שתבחר מופיעות בתוצאה.': 'At least the number of words you choose appears in the result.',
     'לפי שפת מערכת ההפעלה': 'Use device language',
+    'לתוכנה אין הרשאת קריאה לתיקייה שנבחרה — יש לבחור את קובץ {file} דרך "בחר קובץ ספרייה"': 'Otzaria has no permission to read the selected folder — pick the {file} file with "Select a Library File" instead',
     'מאגר הספרים וחיפוש': 'Library and Search',
     'מאגר תורני חינמי, רחב ומהיר לשימוש בכל מקום.': 'A Free Torah Library — Extensive, Fast, and Accessible Everywhere..',
     'מאוזן': 'Balanced',

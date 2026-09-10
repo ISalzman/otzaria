@@ -84,43 +84,80 @@ const _kLibraryAssets = <({String label, String consequence})>[
   (label: _kTalmudAssetLabel, consequence: 'ספרי התלמוד בבלי לא ייכללו.'),
 ];
 
+/// תוצאת סריקת תיקיית מקור: הנכסים שזוהו, והאם התוכנה מורשית לקרוא אותם.
+@visibleForTesting
+class LibraryFolderScan {
+  final List<String> found;
+  final bool readable;
+  const LibraryFolderScan({required this.found, required this.readable});
+}
+
+/// בדיקת קריאה בפועל של קובץ שנמצא. ב-Android Scoped Storage `exists()` מחזיר
+/// true גם לקובץ שאין לאפליקציה הרשאה לפתוח (issue #1219).
+@visibleForTesting
+Future<void> Function(File file)? debugLibraryFolderReadProbe;
+
+Future<void> _probeRead(File file) async {
+  final handle = await file.open();
+  await handle.close();
+}
+
 /// סורק תיקיית מקור ומחזיר תוויות של נכסי הספרייה שזוהו בה, בגרסה דחוסה או
 /// רגילה. seforim.db הוא הנכס הנדרש; השאר נלווים ומיובאים אם קיימים.
-Future<List<String>> _scanFolderAssets(String folder) async {
-  Future<bool> anyExists(List<String> names) async {
+/// קובץ שקיים אך אינו ניתן לקריאה מסמן את התיקייה כולה כלא-נגישה.
+@visibleForTesting
+Future<LibraryFolderScan> scanLibraryFolderAssets(String folder) async {
+  Future<String?> firstExisting(List<String> names) async {
     for (final name in names) {
-      if (await File(p.join(folder, name)).exists()) return true;
+      final file = File(p.join(folder, name));
+      if (await file.exists()) return file.path;
     }
-    return false;
+    return null;
   }
 
   final found = <String>[];
-  if (await anyExists([
+  String? probePath;
+  final dbPath = await firstExisting([
     DatabaseConstants.databaseFileName,
     DatabaseConstants.databaseArchiveFileName,
-  ])) {
+  ]);
+  if (dbPath != null) {
     found.add(_kSeforimAssetLabel);
+    probePath = dbPath;
   }
-  if (await anyExists([
+  final catalogPath = await firstExisting([
     DatabaseConstants.externalCatalogDatabaseFileName,
     DatabaseConstants.externalCatalogArchiveFileName,
-  ])) {
+  ]);
+  if (catalogPath != null) {
     found.add(_kCatalogAssetLabel);
+    probePath ??= catalogPath;
   }
-  if (await File(
-    p.join(folder, DatabaseConstants.lexicalDatabaseFileName),
-  ).exists()) {
+  final lexicalPath = await firstExisting([
+    DatabaseConstants.lexicalDatabaseFileName,
+  ]);
+  if (lexicalPath != null) {
     found.add(_kLexicalAssetLabel);
+    probePath ??= lexicalPath;
   }
-  if (await File(
-        p.join(folder, DatabaseConstants.talmudBavliArchiveFileName),
-      ).exists() ||
+  final talmudArchive = await firstExisting([
+    DatabaseConstants.talmudBavliArchiveFileName,
+  ]);
+  if (talmudArchive != null ||
       await Directory(
         p.join(folder, DatabaseConstants.talmudBavliFolderName),
       ).exists()) {
     found.add(_kTalmudAssetLabel);
+    probePath ??= talmudArchive;
   }
-  return found;
+  if (probePath != null) {
+    try {
+      await (debugLibraryFolderReadProbe ?? _probeRead)(File(probePath));
+    } on PathAccessException {
+      return const LibraryFolderScan(found: [], readable: false);
+    }
+  }
+  return LibraryFolderScan(found: found, readable: true);
 }
 
 class _LibrarySetupDialogContent extends StatefulWidget {
@@ -146,6 +183,7 @@ class _LibrarySetupDialogContentState
 
   /// תיקיית המקור לייבוא (פעולת [_LibraryAction.chooseFile]) והנכסים שזוהו בה.
   String? _sourceFolder;
+  bool _sourceFolderUnreadable = false;
   List<String> _detectedAssets = const [];
 
   String? _sourceArchive;
@@ -195,9 +233,9 @@ class _LibrarySetupDialogContentState
           })
           .catchError((_) {});
       // סורק אילו נכסים כבר קיימים בספרייה — כדי לא להזהיר על מה שכבר יש.
-      _scanFolderAssets(widget.currentLibraryPath!)
-          .then((assets) {
-            if (mounted) setState(() => _systemAssets = assets);
+      scanLibraryFolderAssets(widget.currentLibraryPath!)
+          .then((scan) {
+            if (mounted) setState(() => _systemAssets = scan.found);
           })
           .catchError((_) {});
     }
@@ -222,11 +260,12 @@ class _LibrarySetupDialogContentState
       dialogTitle: context.settingsText('בחר תיקייה המכילה את קבצי הספרייה'),
     );
     if (folder == null || !mounted) return;
-    final detected = await _scanFolderAssets(folder);
+    final scan = await scanLibraryFolderAssets(folder);
     if (!mounted) return;
     setState(() {
       _sourceFolder = folder;
-      _detectedAssets = detected;
+      _detectedAssets = scan.found;
+      _sourceFolderUnreadable = !scan.readable;
     });
   }
 
@@ -255,6 +294,7 @@ class _LibrarySetupDialogContentState
     setState(() {
       _sourceFolder = p.dirname(file.path!);
       _detectedAssets = [_kSeforimAssetLabel];
+      _sourceFolderUnreadable = false;
     });
   }
 
@@ -345,6 +385,12 @@ class _LibrarySetupDialogContentState
     if (_sourceFolder == null) {
       return context.settingsText(
         'בחר תיקייה שקיימים בה קובצי הספרייה והמערכת',
+      );
+    }
+    if (_sourceFolderUnreadable) {
+      return context.settingsText(
+        'לתוכנה אין הרשאת קריאה לתיקייה שנבחרה — יש לבחור את קובץ {file} דרך "בחר קובץ ספרייה"',
+        args: {'file': DatabaseConstants.databaseFileName},
       );
     }
     final missing = _kLibraryAssets
