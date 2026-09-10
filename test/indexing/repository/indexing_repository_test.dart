@@ -15,7 +15,9 @@ import 'package:otzaria/indexing/utils/pdf_extraction_prefetcher.dart';
 import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/utils/file/document_conversion_exceptions.dart';
+import 'package:otzaria/settings/services/custom_folders/custom_folder.dart';
 import 'package:otzaria/utils/file/document_format.dart';
+import 'package:path/path.dart' as p;
 import 'package:otzaria_search_engine/otzaria_search_engine.dart';
 import 'package:pdfrx/pdfrx.dart';
 
@@ -570,6 +572,84 @@ void main() {
       expect(provider.indexedFilePaths, {existingFilePath});
     });
 
+    test('מפתח תחת תיקייה אישית שאינה נגישה — לא נמחק', () async {
+      // רגרסיה (issue #1295): כונן חיצוני מנותק ⇒ הקובץ לא קיים והספר אינו
+      // בספרייה, והמפתח נמחק — כל חיבור גרר אינדוקס מחדש.
+      final engine = _RecordingSearchEngine();
+      final provider = _RecordingTantivyDataProvider(engine);
+      final library = _buildLibrary(bavliBooks: const [('שבת', 1)]);
+
+      final sep = io.Platform.pathSeparator;
+      final detachedRoot =
+          '${io.Directory.systemTemp.path}${sep}detached-drive';
+      final detachedKey =
+          '$detachedRoot$sep'
+          'ספר.pdf';
+      final missingKey =
+          '${io.Directory.systemTemp.path}${sep}definitely-missing$sep'
+          'אחר.pdf';
+      provider.indexedFilePaths.addAll({detachedKey, missingKey});
+      final repository = IndexingRepository(provider);
+
+      final removed = await repository.dropOrphanedIndexEntries(
+        library,
+        customFolders: [
+          CustomFolder(path: detachedRoot, addedAt: DateTime(2026)),
+        ],
+      );
+
+      expect(removed, 1);
+      expect(engine.removedFilePaths, [missingKey]);
+      expect(provider.indexedFilePaths, {detachedKey});
+    });
+
+    test('קובץ שנמחק בתוך תיקייה אישית קיימת — נמחק כרגיל', () async {
+      final engine = _RecordingSearchEngine();
+      final provider = _RecordingTantivyDataProvider(engine);
+      final library = _buildLibrary(bavliBooks: const [('שבת', 1)]);
+
+      final root = await io.Directory.systemTemp.createTemp('otzaria-folder');
+      addTearDown(() => root.delete(recursive: true));
+      final deletedKey = p.join(root.path, 'נמחק.pdf');
+      provider.indexedFilePaths.add(deletedKey);
+      final repository = IndexingRepository(provider);
+
+      final removed = await repository.dropOrphanedIndexEntries(
+        library,
+        customFolders: [CustomFolder(path: root.path, addedAt: DateTime(2026))],
+      );
+
+      expect(removed, 1);
+      expect(engine.removedFilePaths, [deletedKey]);
+      expect(provider.indexedFilePaths, isEmpty);
+    });
+
+    test('תיקייה אישית מוסתרת — נשמרים רק מפתחותיה', () async {
+      // ספרי תיקייה מוסתרת מדולגים בבניית העץ ולכן נראים יתומים; מחיקתם
+      // הייתה גוררת אינדוקס מלא בהחזרת התיקייה. ספר שנמחק מתיקייה גלויה
+      // אינו שייך לתיקייה המוסתרת וחייב להימחק גם באותו מצב.
+      final engine = _RecordingSearchEngine();
+      final provider = _RecordingTantivyDataProvider(engine);
+      final library = _buildLibrary(bavliBooks: const [('שבת', 1)]);
+
+      final root = await io.Directory.systemTemp.createTemp('otzaria-hidden');
+      addTearDown(() => root.delete(recursive: true));
+      provider.indexedFilePaths.addAll({'uid:99', 'uid:100'});
+      final repository = IndexingRepository(provider);
+
+      final removed = await repository.dropOrphanedIndexEntries(
+        library,
+        customFolders: [
+          CustomFolder(path: root.path, hidden: true, addedAt: DateTime(2026)),
+        ],
+        preservedHiddenUserBookKeys: {'uid:99'},
+      );
+
+      expect(removed, 1);
+      expect(engine.removedFilePaths, ['uid:100']);
+      expect(provider.indexedFilePaths, {'uid:99'});
+    });
+
     test('ספרייה ריקה — לא נוגע באינדקס', () async {
       final engine = _RecordingSearchEngine();
       final provider = _RecordingTantivyDataProvider(engine);
@@ -885,6 +965,119 @@ void main() {
     });
   });
 
+  group('IndexingRepository — עבודת data URI מחוץ לפריים', () {
+    // מעל 1MB הסריקה נפרסת למנות על ה-thread הקורא והניקוי עובר ל-isolate;
+    // הבדיקות מקבעות שהתוצאה זהה בשני צדי הסף — טביעת האצבע נגזרת ממנה.
+    String bigTextWithImage() =>
+        'לפני\n${'מילה ' * 300000}\ndata:image/png;base64,${'A' * 200000}\nאחרי';
+
+    /// bytes שבהם ה-`data:` מתחיל בדיוק ב-[offset] (ASCII, ולכן היסט
+    /// הבייטים הוא גם היסט התווים).
+    Uint8List bytesWithUriAt(int offset) {
+      final uri = utf8.encode('data:image/png;base64,${'A' * 200}');
+      return Uint8List(offset + uri.length + 16)
+        ..fillRange(0, offset, 0x78) // 'x'
+        ..setRange(offset, offset + uri.length, uri)
+        ..fillRange(offset + uri.length, offset + uri.length + 16, 0x79); // 'y'
+    }
+
+    test('bytes קטנים: אותה תוצאה כמו המסלול הסינכרוני', () async {
+      final clean = Uint8List.fromList(utf8.encode('טקסט נקי בלי תמונות'));
+      final cleanSource = await IndexingRepository.cleanDataUrisOffFrame(
+        clean,
+      );
+      expect(cleanSource.bytes, same(clean));
+      expect(cleanSource.text, isNull);
+
+      final withImage = Uint8List.fromList(
+        utf8.encode('שורה\n<img src="data:image/png;base64,${'A' * 100}"/>'),
+      );
+      final imageSource = await IndexingRepository.cleanDataUrisOffFrame(
+        withImage,
+      );
+      expect(
+        imageSource.text,
+        IndexingRepository.stripDataUrisForIndex(
+          utf8.decode(withImage, allowMalformed: true),
+        ),
+      );
+      expect(imageSource.bytes, isNull);
+    });
+
+    test('bytes גדולים (מסלול ה-isolate): אותה תוצאה בדיוק', () async {
+      final text = bigTextWithImage();
+      final bytes = Uint8List.fromList(utf8.encode(text));
+      expect(bytes.length, greaterThan(1 << 20));
+
+      final source = await IndexingRepository.cleanDataUrisOffFrame(bytes);
+      expect(
+        source.text,
+        IndexingRepository.stripDataUrisForIndex(
+          utf8.decode(bytes, allowMalformed: true),
+        ),
+      );
+      expect(source.bytes, isNull);
+    });
+
+    test('bytes גדולים בלי data URI נשארים במסלול ה-bytes', () async {
+      // שלוש מנות סריקה ומעלה, כדי לכסות גם את המנה האחרונה החלקית.
+      final bytes = Uint8List((3 << 20) * 4 + 777)
+        ..fillRange(0, (3 << 20) * 4 + 777, 0x78);
+      final source = await IndexingRepository.cleanDataUrisOffFrame(bytes);
+      expect(source.bytes, same(bytes));
+      expect(source.text, isNull);
+    });
+
+    test('data: היושב על תפר בין מנות הסריקה אינו מפוספס', () async {
+      const chunk = 4 << 20;
+      // התאמה שמתחילה בארבעת הבייטים שלפני התפר נחתכת בין מנה למנה; סריקה
+      // בלי חפיפה מחזירה כאן null, כלומר מסמנת ספר מצויר כנקי.
+      for (final offset in [chunk - 4, chunk - 3, chunk - 2, chunk - 1]) {
+        final bytes = bytesWithUriAt(offset);
+        final raw = utf8.decode(bytes, allowMalformed: true);
+        final expected = IndexingRepository.stripDataUrisForIndex(raw);
+        expect(expected, isNot(raw), reason: 'התפר בהיסט $offset לא נוקה');
+        final source = await IndexingRepository.cleanDataUrisOffFrame(bytes);
+        expect(
+          source.text,
+          expected,
+          reason: 'data: על התפר בהיסט $offset',
+        );
+        expect(source.bytes, isNull);
+      }
+    });
+
+    test(
+      'טקסט גדול (מסלול ה-isolate): אותה תוצאה כמו הניקוי הסינכרוני',
+      () async {
+        final text = bigTextWithImage();
+        expect(text.length, greaterThan(1 << 20));
+
+        expect(
+          await IndexingRepository.stripDataUrisOffFrame(text),
+          IndexingRepository.stripDataUrisForIndex(text),
+        );
+      },
+    );
+
+    test('טקסט נקי גדול: אותה תוצאה, בלי סריקה כפולה על החוט הקורא', () async {
+      final text = 'מילה ' * 300000;
+      expect(text.length, greaterThan(1 << 20));
+
+      // גם הסריקה עצמה עוברת ל-isolate; בדיקה מקדימה כאן הייתה סורקת את
+      // הטקסט פעמיים על החוט שמצייר פריימים (המחרוזת נשלחת בלי העתקה).
+      expect(await IndexingRepository.stripDataUrisOffFrame(text), text);
+    });
+
+    test('טקסט קטן חוזר דרך המסלול הסינכרוני (אותו מופע)', () async {
+      const text = 'טקסט רגיל בלי תמונות';
+      expect(
+        identical(await IndexingRepository.stripDataUrisOffFrame(text), text),
+        isTrue,
+      );
+    });
+  });
+
   group('IndexingRepository.indexAllBooks', () {
     test('includePdfBooks=false אינו כותב PDF לאינדקס ההפצה', () async {
       final engine = _RecordingSearchEngine();
@@ -903,6 +1096,32 @@ void main() {
 
       expect(result.completed, isTrue);
       expect(engine.addedDocuments, isEmpty);
+      expect(provider.indexedFilePaths, isEmpty);
+    });
+
+    test('מסכת PDF מצורפת אינה נכנסת למסלול האינדוקס המלא', () async {
+      final engine = _RecordingSearchEngine();
+      final provider = _RecordingTantivyDataProvider(engine);
+      final library = Library(categories: []);
+      final bundledPdf = PdfBook(
+        title: 'ברכות',
+        path: r'C:\library\תלמוד בבלי\ברכות.pdf',
+        externalLibraryId: DatabaseConstants.talmudBavliPdfExternalLibraryId(
+          'ברכות',
+        ),
+      );
+      library.books.add(bundledPdf);
+      final repository = _FakeExtractionRepository(provider);
+
+      final result = await repository.indexAllBooks(
+        library,
+        onProgress: (_, _) {},
+      );
+
+      expect(result.completed, isTrue);
+      expect(result.totalBooks, 0);
+      expect(repository.extractedTitles, isEmpty);
+      expect(engine.addedPdfTitles, isEmpty);
       expect(provider.indexedFilePaths, isEmpty);
     });
 
@@ -1756,6 +1975,33 @@ void main() {
     );
   });
 
+  group('IndexingRepository — ביטול בתוך טעינת מקור הספר', () {
+    test('indexBooks עוצר ואינו מסמן את הספר כמאונדקס', () async {
+      final engine = _RecordingSearchEngine();
+      final provider = _RecordingTantivyDataProvider(engine);
+      final first = TextBook(id: 1, title: 'שבת');
+      final second = TextBook(id: 2, title: 'עירובין');
+      final library = _buildLibrary(bavliBooks: const []);
+      library.books.addAll([first, second]);
+
+      final repository = _CancelDuringLoadRepository(provider);
+      final progress = <(int, int)>[];
+      final result = await repository.indexBooks(
+        [first, second],
+        library,
+        onProgress: (p, t) => progress.add((p, t)),
+      );
+
+      expect(result.completed, isFalse);
+      // רק הספר הראשון נטען, והוא לא נרשם כמאונדקס.
+      expect(repository.loadedTitles, ['שבת']);
+      expect(provider.indexedFilePaths, isEmpty);
+      expect(result.indexedBooks, 0);
+      // הדיווח נשאר כשהיה: הספר הנוכחי מדווח בתחילת עיבודו.
+      expect(progress, [(1, 2)]);
+    });
+  });
+
   group('IndexingRepository.orderBooksForIndexing', () {
     test('ספרי PDF נדחפים לסוף, סדר שאר הספרים נשמר', () {
       final t1 = TextBook(title: 'א');
@@ -1931,6 +2177,78 @@ void main() {
         link: 'https://example.com',
       );
       expect(IndexingRepository.isIndexableBook(external), isFalse);
+    });
+
+    test('מסכת PDF מצורפת מוחרגת — הטקסט המלא שלה כבר באינדקס', () {
+      final bundled = PdfBook(
+        title: 'ברכות',
+        path: r'C:\library\תלמוד בבלי\ברכות.pdf',
+        externalLibraryId: DatabaseConstants.talmudBavliPdfExternalLibraryId(
+          'ברכות',
+        ),
+      );
+      expect(IndexingRepository.isIndexableBook(bundled), isFalse);
+    });
+
+    test('PDF אישי נשאר אינדוקסיבילי גם בתיקייה בשם "תלמוד בבלי"', () {
+      final personal = PdfBook(
+        title: 'ברכות',
+        path: r'C:\personal\תלמוד בבלי\ברכות.pdf',
+        isUserBook: true,
+      );
+      expect(IndexingRepository.isIndexableBook(personal), isTrue);
+
+      final downloaded = PdfBook(
+        title: 'ספר שהורד',
+        path: r'C:\library\hbS45.pdf',
+        externalLibraryId: 'hebrewbooks:12345',
+      );
+      expect(IndexingRepository.isIndexableBook(downloaded), isTrue);
+    });
+  });
+
+  group('IndexingRepository.extractPageTextsWithRetry', () {
+    test('עמוד שחרג מה-timeout מנוסה שוב בסוף ונשמר במקומו', () async {
+      final attempts = <int>[];
+      final result = await IndexingRepository.extractPageTextsWithRetry(
+        pageCount: 4,
+        loadPageText: (i) async {
+          attempts.add(i);
+          // עמודים 1 ו-2 נופלים רק בניסיון הראשון — תקיעה חולפת של ה-worker.
+          final firstAttempt = attempts.where((a) => a == i).length == 1;
+          if ((i == 1 || i == 2) && firstAttempt) return null;
+          return 'עמוד $i';
+        },
+        beforeEachPage: () async => true,
+      );
+
+      expect(result, isNotNull);
+      expect(result!.droppedPages, 0);
+      expect(result.texts.keys.toList(), [0, 1, 2, 3]);
+      expect(result.texts[2], 'עמוד 2');
+      expect(attempts, [0, 1, 2, 3, 1, 2]);
+    });
+
+    test('עמוד שנכשל גם בניסיון החוזר נספר כנשמט', () async {
+      final result = await IndexingRepository.extractPageTextsWithRetry(
+        pageCount: 3,
+        loadPageText: (i) async => i == 1 ? null : 'עמוד $i',
+        beforeEachPage: () async => true,
+      );
+
+      expect(result!.droppedPages, 1);
+      expect(result.texts.keys.toList(), [0, 2]);
+    });
+
+    test('ביטול האינדוקס באמצע הניסיון החוזר מחזיר null', () async {
+      var calls = 0;
+      final result = await IndexingRepository.extractPageTextsWithRetry(
+        pageCount: 2,
+        loadPageText: (i) async => null,
+        beforeEachPage: () async => ++calls <= 2,
+      );
+
+      expect(result, isNull);
     });
   });
 
@@ -2125,6 +2443,25 @@ class _ReindexProbeRepository extends IndexingRepository {
       totalBooks: books.length,
       indexedBooks: books.length,
     );
+  }
+}
+
+/// טעינת מקור הספר מתפרקת לשלבים עם yield (קריאת ה-DB במנות, עבודת ה-data
+/// URI ב-isolate); הבדיקה מקבעת שביטול שנפל בתוך הטעינה עדיין נכבד.
+class _CancelDuringLoadRepository extends IndexingRepository {
+  _CancelDuringLoadRepository(this.provider) : super(provider);
+
+  final _RecordingTantivyDataProvider provider;
+  final loadedTitles = <String>[];
+
+  @override
+  Future<({Uint8List? bytes, String? text})> loadTextBookSource(
+    TextBook book,
+  ) async {
+    loadedTitles.add(book.title);
+    await Future<void>.delayed(Duration.zero);
+    provider.isIndexing.value = false; // לחיצת ביטול בזמן טעינת התוכן
+    return (bytes: null, text: 'תוכן');
   }
 }
 

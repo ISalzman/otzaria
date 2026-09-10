@@ -220,8 +220,23 @@ class ShortcutValidator {
     copyTextMarkLinkKey,
   ];
 
+  /// מקשים שתפריט המערכת ב-Mac בולע לפני שהאירוע מגיע ל-Flutter (⌘H הסתרת
+  /// היישום, ⌘M מזעור החלון) — קיצור בערך כזה לא ייתפס שם לעולם.
+  static const Set<String> macReservedShortcuts = {'ctrl+h', 'ctrl+m'};
+
+  /// ברירות המחדל שמחליפות ב-Mac את הקיצורים שב-[macReservedShortcuts].
+  static const Map<String, String> macDefaultShortcutOverrides = {
+    'key-shortcut-open-history': 'ctrl+y',
+    'key-shortcut-open-more': 'ctrl+shift+m',
+  };
+
   /// Default values for shortcuts
-  static const Map<String, String> defaultShortcuts = {
+  static Map<String, String> get defaultShortcuts =>
+      ShortcutHelper.usesMacModifiers
+      ? {..._defaultShortcuts, ...macDefaultShortcutOverrides}
+      : _defaultShortcuts;
+
+  static const Map<String, String> _defaultShortcuts = {
     'key-shortcut-open-library-browser': 'ctrl+l',
     currentWindowSearchKey: 'ctrl+f',
     'key-shortcut-open-find-ref': 'ctrl+o',

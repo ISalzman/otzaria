@@ -11,6 +11,7 @@ import 'package:otzaria/indexing/models/indexing_run_result.dart';
 import 'package:otzaria/indexing/repository/indexing_repository.dart';
 import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/models/books.dart';
+import 'package:otzaria/settings/services/custom_folders/custom_folder.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -74,42 +75,6 @@ void main() {
           booksProcessed: 0,
           totalBooks: 2,
           isFinalizing: true,
-        ),
-        const IndexingComplete(),
-      ],
-    );
-
-    blocTest<IndexingBloc, IndexingState>(
-      'התקדמות האיחוד נפלטת כשבר על גבי מצב האיחוד',
-      build: () {
-        final repository = _FakeIndexingRepository()
-          ..finalizeGate = Completer<void>()
-          ..finalizeFractions = const [0.25, 0.75];
-        return _FakeIndexingBloc(repository);
-      },
-      act: (bloc) async {
-        bloc.add(StartIndexing(libraryWithBooks(2)));
-        await Future.delayed(Duration.zero);
-        repositoryOf(bloc).finalizeGate!.complete();
-      },
-      expect: () => [
-        const IndexingInProgress(booksProcessed: 0, totalBooks: 2),
-        const IndexingInProgress(
-          booksProcessed: 0,
-          totalBooks: 2,
-          isFinalizing: true,
-        ),
-        const IndexingInProgress(
-          booksProcessed: 0,
-          totalBooks: 2,
-          isFinalizing: true,
-          finalizingProgress: 0.25,
-        ),
-        const IndexingInProgress(
-          booksProcessed: 0,
-          totalBooks: 2,
-          isFinalizing: true,
-          finalizingProgress: 0.75,
         ),
         const IndexingComplete(),
       ],
@@ -666,7 +631,6 @@ class _FakeIndexingRepository extends IndexingRepository {
 
   /// כשהוא מסופק — הריצה מדווחת על שלב האיחוד ונעצרת בו עד לשחרור.
   Completer<void>? finalizeGate;
-  List<double> finalizeFractions = const [];
 
   /// דיווחי onScanProgress שהסריקה ב-reconcile תפלוט לפני הסיום.
   List<(int, int)> scanProgressReports = const [];
@@ -688,16 +652,12 @@ class _FakeIndexingRepository extends IndexingRepository {
     void Function()? onActualIndexingStarted,
     required void Function(int processed, int total) onProgress,
     void Function()? onFinalizing,
-    void Function(double fraction)? onFinalizingProgress,
     bool includePdfBooks = true,
   }) async {
     indexAllCalls++;
     final gate = finalizeGate;
     if (gate != null) {
       onFinalizing?.call();
-      for (final fraction in finalizeFractions) {
-        onFinalizingProgress?.call(fraction);
-      }
       await gate.future;
       return result;
     }
@@ -743,7 +703,11 @@ class _FakeIndexingRepository extends IndexingRepository {
   }
 
   @override
-  Future<int> dropOrphanedIndexEntries(Library library) async {
+  Future<int> dropOrphanedIndexEntries(
+    Library library, {
+    List<CustomFolder>? customFolders,
+    Set<String>? preservedHiddenUserBookKeys,
+  }) async {
     dropOrphanedCalls++;
     return 0;
   }

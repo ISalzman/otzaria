@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
-import 'package:otzaria/core/startup_timeline.dart';
 import 'package:window_manager/window_manager.dart';
 
 /// מעדכן את כותרת החלון לפי הכרטיסיה הפעילה בו, כמו בדפדפן.
@@ -58,9 +57,7 @@ class WindowTitleSync {
     if (title == _lastSent) return;
     _lastSent = title;
     try {
-      StartupTimeline.instance.markOnce('windowTitle:invoke');
       await windowManager.setTitle(title);
-      StartupTimeline.instance.markOnce('windowTitle:done');
     } catch (e) {
       // כותרת אינה שווה קריסה, ואינה שווה גם הודעה למשתמש.
       debugPrint('setTitle failed: $e');

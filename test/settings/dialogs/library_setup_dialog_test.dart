@@ -1,7 +1,12 @@
+import 'dart:io';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/settings/dialogs/library_setup_dialog.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
+// ignore: depend_on_referenced_packages
+import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 
 Widget _host(void Function(BuildContext) onOpen) => MaterialApp(
   home: Scaffold(
@@ -61,6 +66,23 @@ Future<void> _select(WidgetTester tester, String optionTitle) async {
   await tester.ensureVisible(title);
   await tester.tap(title);
   await tester.pumpAndSettle();
+}
+
+/// בורר תיקייה מזויף: מחזיר תמיד את [folder], כמו משתמש שבחר אותה.
+class _FolderFilePickerPlatform extends FilePickerPlatform
+    with MockPlatformInterfaceMixin {
+  _FolderFilePickerPlatform(this.folder);
+  final String folder;
+
+  @override
+  Future<String?> getDirectoryPath({
+    String? dialogTitle,
+    String? initialDirectory,
+    AndroidOptions androidOptions = const AndroidOptions(),
+    WindowsOptions windowsOptions = const WindowsOptions(),
+    LinuxOptions linuxOptions = const LinuxOptions(),
+    WebOptions webOptions = const WebOptions(),
+  }) async => folder;
 }
 
 void main() {
@@ -197,5 +219,70 @@ void main() {
         expect(find.text('בחר קובץ ספרייה'), findsOneWidget);
       },
     );
+  });
+
+  group('בחירת תיקייה שאינה ניתנת לקריאה (issue #1219)', () {
+    late Directory temp;
+
+    setUp(() async {
+      temp = await Directory.systemTemp.createTemp('otzaria_1219_');
+      await File('${temp.path}/seforim.db').writeAsBytes([0, 1, 2]);
+      FilePickerPlatform.instance = _FolderFilePickerPlatform(temp.path);
+    });
+
+    tearDown(() async {
+      debugLibraryFolderReadProbe = null;
+      await temp.delete(recursive: true);
+    });
+
+    test(
+      'scanLibraryFolderAssets: קובץ קיים אך חסום לקריאה → לא נגיש',
+      () async {
+        debugLibraryFolderReadProbe = (file) async =>
+            throw PathAccessException(file.path, const OSError('EACCES', 13));
+        final scan = await scanLibraryFolderAssets(temp.path);
+        expect(scan.readable, isFalse);
+        expect(scan.found, isEmpty);
+      },
+    );
+
+    test('scanLibraryFolderAssets: קובץ קריא → זוהה', () async {
+      final scan = await scanLibraryFolderAssets(temp.path);
+      expect(scan.readable, isTrue);
+      expect(scan.found, contains('ספריית הספרים (seforim.db)'));
+    });
+
+    testWidgets('תיקייה חסומה: הנחיה לבחור את הקובץ, ואישור מושבת', (
+      tester,
+    ) async {
+      debugLibraryFolderReadProbe = (file) async =>
+          throw PathAccessException(file.path, const OSError('EACCES', 13));
+      await _openSetup(tester);
+      await _select(tester, 'בחירת תיקייה מהמחשב');
+      await tester.ensureVisible(find.text('בחר תיקייה'));
+      // הסריקה קוראת מהדיסק — IO אמיתי אינו מסתיים תחת FakeAsync.
+      await tester.runAsync(() async {
+        await tester.tap(find.text('בחר תיקייה'));
+        await Future<void>.delayed(const Duration(milliseconds: 200));
+      });
+      await tester.pumpAndSettle();
+      expect(find.textContaining('אין הרשאת קריאה לתיקייה'), findsOneWidget);
+      expect(find.text('כל הקבצים זוהו'), findsNothing);
+      expect(_actionOnPressed(tester, 'אישור'), isNull);
+    });
+
+    testWidgets('תיקייה קריאה: כל הקבצים זוהו ואישור פעיל', (tester) async {
+      await _openSetup(tester);
+      await _select(tester, 'בחירת תיקייה מהמחשב');
+      await tester.ensureVisible(find.text('בחר תיקייה'));
+      // הסריקה קוראת מהדיסק — IO אמיתי אינו מסתיים תחת FakeAsync.
+      await tester.runAsync(() async {
+        await tester.tap(find.text('בחר תיקייה'));
+        await Future<void>.delayed(const Duration(milliseconds: 200));
+      });
+      await tester.pumpAndSettle();
+      expect(find.textContaining('הספרייה (seforim.db)'), findsNothing);
+      expect(_actionOnPressed(tester, 'אישור'), isNotNull);
+    });
   });
 }

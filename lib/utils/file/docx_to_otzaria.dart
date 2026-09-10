@@ -5,10 +5,10 @@ import 'package:archive/archive.dart';
 import 'package:otzaria/utils/file/document_conversion_exceptions.dart';
 import 'package:otzaria/utils/file/document_format.dart';
 import 'package:otzaria/utils/file/embedded_media.dart';
+import 'package:otzaria/utils/file/word_number_format.dart';
 import 'package:otzaria/utils/file/zip_limits.dart';
 import 'package:otzaria/utils/text/html_escape.dart';
 import 'package:otzaria/utils/text/inline_style.dart';
-import 'package:otzaria/utils/text/numeral_formats.dart';
 import 'package:otzaria/utils/text/otzaria_markup.dart';
 import 'package:xml/xml.dart' as xml;
 
@@ -66,10 +66,23 @@ String _decodeXmlBytes(List<int> bytes) {
   }
 }
 
-/// מונה רץ לסימוני הערות שוליים (משותף לגוף ולתאי טבלה).
+/// מונה רץ לסימוני הערות שוליים (משותף לגוף ולתאי טבלה),
+/// בפורמט שהמסמך הגדיר (issue #1239) — ספרות, אותיות עבריות, רומיות.
 class _FootnoteCounter {
+  _FootnoteCounter(this.numFmt);
+
+  /// שם `w:numFmt` של המסמך (`decimal` כברירת מחדל).
+  final String numFmt;
+
   int _value = 1;
-  int next() => _value++;
+
+  /// הסימון הבא. `numFmt` שמבטל מספור (`none`) חוזר לספרות:
+  /// סימון ריק היה מנתק את גוף ההערה מהעוגן שלו בשכבת התצוגה.
+  String next() {
+    final value = _value++;
+    final label = formatWordNumber(value, numFmt);
+    return label.isEmpty ? '$value' : label;
+  }
 }
 
 /// הגדרת רמה אחת ברשימה ממוספרת (`w:lvl` ב-numbering.xml).
@@ -100,7 +113,7 @@ class _DocxContext {
   /// `styleId` → רמת כותרת 1–6, מקובץ styles.xml.
   final Map<String, int> headingStyles;
 
-  final _FootnoteCounter footnoteCounter = _FootnoteCounter();
+  final _FootnoteCounter footnoteCounter;
 
   /// מונים רצים לרשימות: `numId` → (`ilvl` → הערך הנוכחי).
   final Map<String, Map<int, int>> _listCounters = {};
@@ -109,8 +122,9 @@ class _DocxContext {
     this.footnotes,
     this.images,
     this.numbering,
-    this.headingStyles,
-  );
+    this.headingStyles, {
+    String footnoteNumFmt = 'decimal',
+  }) : footnoteCounter = _FootnoteCounter(footnoteNumFmt);
 
   /// מחזיר את תווית המספור/תבליט לפריט רשימה (למשל `1.`, `1.1.`, `א.`, `•`).
   /// מקדם את המונה המתאים ומאפס רמות עמוקות יותר (מבנה multilevel תקין).
@@ -129,33 +143,12 @@ class _DocxContext {
       final kLvl = levels![k];
       if (kLvl == null) continue;
       final count = counters[k] ?? kLvl.start;
-      label = label.replaceAll('%${k + 1}', _formatNum(count, kLvl.numFmt));
+      label = label.replaceAll(
+        '%${k + 1}',
+        formatWordNumber(count, kLvl.numFmt),
+      );
     }
     return label.isEmpty ? '•' : label;
-  }
-}
-
-/// ממיר מספר לתצוגה לפי פורמט המספור של Word.
-String _formatNum(int n, String fmt) {
-  switch (fmt) {
-    case 'decimalZero':
-      return n < 10 ? '0$n' : '$n';
-    case 'lowerLetter':
-      return toLatinLetters(n, upper: false);
-    case 'upperLetter':
-      return toLatinLetters(n, upper: true);
-    case 'lowerRoman':
-      return toRomanNumeral(n).toLowerCase();
-    case 'upperRoman':
-      return toRomanNumeral(n);
-    case 'hebrew1':
-    case 'hebrew2':
-      return toHebrewNumeral(n);
-    case 'none':
-      return '';
-    case 'decimal':
-    default:
-      return '$n';
   }
 }
 
@@ -722,9 +715,13 @@ String _renderParagraphInline(xml.XmlElement paragraph, _DocxContext ctx) {
     if (footnoteRef != null) {
       final id = footnoteRef.getAttribute('w:id');
       if (id != null && ctx.footnotes.containsKey(id)) {
-        final n = ctx.footnoteCounter.next();
         segs.add(
-          _Seg.raw(otzariaFootnote('$n', escapeHtmlText(ctx.footnotes[id]!))),
+          _Seg.raw(
+            otzariaFootnote(
+              ctx.footnoteCounter.next(),
+              escapeHtmlText(ctx.footnotes[id]!),
+            ),
+          ),
         );
       }
       continue;
@@ -736,8 +733,7 @@ String _renderParagraphInline(xml.XmlElement paragraph, _DocxContext ctx) {
     if (inlineFootnote != null) {
       final body = escapeHtmlText(inlineFootnote.innerText).trim();
       if (body.isNotEmpty) {
-        final n = ctx.footnoteCounter.next();
-        segs.add(_Seg.raw(otzariaFootnote('$n', body)));
+        segs.add(_Seg.raw(otzariaFootnote(ctx.footnoteCounter.next(), body)));
       }
       continue;
     }
@@ -1155,12 +1151,6 @@ String ooxmlWordArchiveToText(
   required DocumentFormat format,
   bool embedImages = true,
 }) {
-  final ctx = _DocxContext(
-    _extractFootnotes(archive),
-    _extractImages(archive, embedImages: embedImages),
-    _extractNumbering(archive),
-    _extractHeadingStyles(archive),
-  );
   final List<String> list = [
     otzariaInlineText('<h1>${escapeHtmlText(title)}</h1>'),
   ];
@@ -1195,6 +1185,19 @@ String ooxmlWordArchiveToText(
       cause: 'ל-word/document.xml אין w:body',
     );
   }
+
+  final ctx = _DocxContext(
+    _extractFootnotes(archive),
+    _extractImages(archive, embedImages: embedImages),
+    _extractNumbering(archive),
+    _extractHeadingStyles(archive),
+    // ברירת המחדל יושבת ב-settings.xml, וסקציה יכולה לעקוף אותה; הספר
+    // מוצג כרצף אחד, ולכן העקיפה הראשונה קובעת לכולו.
+    footnoteNumFmt:
+        _sectionFootnoteNumFmt(body) ??
+        _footnoteNumFmtIn(_archiveXmlRoot(archive, 'word/settings.xml')) ??
+        'decimal',
+  );
   _processBlockChildren(body.childElements, ctx, list);
 
   return list.join('\n');
@@ -1234,6 +1237,8 @@ String wordMl2003ToText(
     _extractWordMlImages(root, embedImages: embedImages),
     _extractWordMlNumbering(root),
     _headingStylesFrom(document),
+    // ב-WordML 2003 הגדרות המסמך יושבות ב-`w:docPr`, ולא בקובץ נפרד.
+    footnoteNumFmt: _footnoteNumFmtIn(root.getElement('w:docPr')) ?? 'decimal',
   );
 
   final list = <String>[
@@ -1297,7 +1302,9 @@ Map<String, Map<int, _NumLevel>> _extractWordMlNumbering(xml.XmlElement root) {
       final ilvl = int.tryParse(lvl.getAttribute('w:ilvl') ?? '');
       if (ilvl == null) continue;
       levels[ilvl] = _NumLevel(
-        _numberFormatForNfc(lvl.getElement('w:nfc')?.getAttribute('w:val')),
+        wordNumFmtForMsonfc(
+          int.tryParse(lvl.getElement('w:nfc')?.getAttribute('w:val') ?? ''),
+        ),
         lvl.getElement('w:lvlText')?.getAttribute('w:val') ?? '',
         int.tryParse(lvl.getElement('w:start')?.getAttribute('w:val') ?? '') ??
             1,
@@ -1317,19 +1324,49 @@ Map<String, Map<int, _NumLevel>> _extractWordMlNumbering(xml.XmlElement root) {
   return result;
 }
 
-/// קודי `MSONFC` → שמות `w:numFmt`, כדי שמנוע המספור יישאר אחד.
-String _numberFormatForNfc(String? nfc) => switch (int.tryParse(nfc ?? '')) {
-  0 => 'decimal',
-  1 => 'upperRoman',
-  2 => 'lowerRoman',
-  3 => 'upperLetter',
-  4 => 'lowerLetter',
-  22 => 'decimalZero',
-  23 => 'bullet',
-  45 || 47 => 'hebrew1',
-  255 => 'none',
-  _ => 'decimal',
-};
+/// פורמט מספור הערות השוליים מתוך ה-`w:footnotePr` הראשון שב-[scope],
+/// או null כשאינו מוגדר שם.
+///
+/// OOXML כותב שם (`w:numFmt`) ו-WordML 2003 כותב קוד MSONFC
+/// (`w:nfcFtnRef`) — שניהם נקראים כדי שלא לנחש באיזה דיאלקט המסמך.
+String? _footnoteNumFmtIn(xml.XmlElement? scope) {
+  if (scope == null) return null;
+  for (final pr in scope.findAllElements('w:footnotePr')) {
+    final name = pr.getElement('w:numFmt')?.getAttribute('w:val');
+    if (name != null && name.isNotEmpty) return name;
+    final nfc = pr.getElement('w:nfcFtnRef')?.getAttribute('w:val');
+    if (nfc != null) return wordNumFmtForMsonfc(int.tryParse(nfc));
+  }
+  return null;
+}
+
+/// פורמט מספור ההערות של `w:sectPr` שיושב ישירות תחת `w:body`.
+///
+/// רק הרמה הזו נסרקת: `w:sectPr` של מעבר-סקציה יושב בתוך `w:pPr` ואינו
+/// רלוונטי כשהספר מוצג כרצף אחד, וסריקת כל הגוף הייתה מעבר נוסף על העץ.
+String? _sectionFootnoteNumFmt(xml.XmlElement body) {
+  for (final child in body.childElements) {
+    if (child.name.qualified != 'w:sectPr') continue;
+    final fmt = _footnoteNumFmtIn(child);
+    if (fmt != null) return fmt;
+  }
+  return null;
+}
+
+/// שורש ה-XML של [name] בחבילה, או null אם חסר/פגום.
+xml.XmlElement? _archiveXmlRoot(Archive archive, String name) {
+  for (final file in archive) {
+    if (!file.isFile || file.name != name) continue;
+    try {
+      return xml.XmlDocument.parse(
+        _decodeXmlBytes(readArchiveEntry(file, format: DocumentFormat.docx)),
+      ).rootElement;
+    } catch (_) {
+      return null;
+    }
+  }
+  return null;
+}
 
 /// מעבד רצף אלמנטי-בלוק (ילדי body / sdtContent) *לפי הסדר*: פסקאות,
 /// טבלאות, ובקרות-תוכן (`w:sdt`). ה-sdt עטיפה שקופה — יורדים ל-`w:sdtContent`

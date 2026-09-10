@@ -68,6 +68,33 @@ void main() {
 
   OpenedTab firstTab() => tabsBloc.state.tabs.first;
 
+  /// תמונה אטומה קטנה — `_sendSnapshot` דוחה צילום שקוף.
+  Future<ui.Image> opaqueImage() {
+    final completer = Completer<ui.Image>();
+    ui.decodeImageFromPixels(
+      Uint8List.fromList(List<int>.filled(4 * 4 * 4, 0xFF)),
+      4,
+      4,
+      ui.PixelFormat.rgba8888,
+      completer.complete,
+    );
+    return completer.future;
+  }
+
+  /// מוסר לגרירה מוק חלון, כמו שהרצועה עושה כשהצילום מוכן.
+  Future<void> applyMock(CrossWindowTabDrag drag) async {
+    drag.applySnapshot(
+      TabWindowPreview(
+        image: await opaqueImage(),
+        targetWidth: 1100,
+        targetHeight: 760,
+      ),
+      1,
+    );
+    // השליחה אסינכרונית, ו-`_snapshotSent` נדלק רק בסופה.
+    await Future<void>.delayed(const Duration(milliseconds: 40));
+  }
+
   test('שחרור מעל החלון עצמו אינו עושה דבר', () async {
     // ⚠️ שחרור בתוך החלון שלא פגע ביעד הפלה. בלי התנאי הזה כל גרירה
     // שהתפספסה הייתה פותחת חלון.
@@ -172,9 +199,7 @@ void main() {
 
   test('הכרטיסיה האחרונה אינה יוצאת לחלון חדש', () async {
     // גרירתה החוצה הייתה משאירה חלון ריק ופותחת חדש — תזוזה בלי תועלת.
-    tabsBloc.emitState(
-      TabsState(tabs: [firstTab()], currentTabIndex: 0),
-    );
+    tabsBloc.emitState(TabsState(tabs: [firstTab()], currentTabIndex: 0));
     runner.cursorTarget = (slot: null, isSelf: false, isShellTray: false);
 
     await drag.handleDroppedOutside(firstTab(), tabsBloc);
@@ -461,6 +486,24 @@ void main() {
       expect(runner.systemDragCalls, 0);
       expect(tabsBloc.events, isEmpty);
     });
+
+    test('תשובת מיקום מגרירה קודמת אינה מוסרת את הגרירה הבאה', () async {
+      final gate = Completer<void>();
+      runner.cursorTarget = (slot: null, isSelf: false, isShellTray: false);
+      runner.cursorGate = gate;
+
+      drag.begin(firstTab(), colors, tabsBloc: tabsBloc);
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      expect(runner.cursorQueries, greaterThan(0));
+
+      drag.end();
+      runner.cursorTarget = (slot: 1, isSelf: true, isShellTray: false);
+      drag.begin(firstTab(), colors, tabsBloc: tabsBloc);
+      gate.complete();
+      await Future<void>.delayed(const Duration(milliseconds: 40));
+
+      expect(runner.systemDragCalls, 0);
+    });
   });
 
   group('צילום הכרטיסיה', () {
@@ -471,18 +514,6 @@ void main() {
     );
 
     /// תמונה אטומה קטנה — `_hasVisiblePixels` דורש פיקסל שאינו שקוף.
-    Future<ui.Image> opaqueImage() {
-      final completer = Completer<ui.Image>();
-      ui.decodeImageFromPixels(
-        Uint8List.fromList(List<int>.filled(4 * 4 * 4, 0xFF)),
-        4,
-        4,
-        ui.PixelFormat.rgba8888,
-        completer.complete,
-      );
-      return completer.future;
-    }
-
     test('⚠️ נשלח מיד ולא נדחה ליציאה מהחלון', () async {
       // ⚠️ זו הגנה על שלושה באגים שדחיית השליחה יצרה בבת אחת:
       //
@@ -501,6 +532,7 @@ void main() {
           targetWidth: 1100,
           targetHeight: 760,
         ),
+        1,
       );
       await Future<void>.delayed(const Duration(milliseconds: 50));
 
@@ -520,6 +552,7 @@ void main() {
           targetWidth: 1100,
           targetHeight: 760,
         ),
+        1,
       );
       await Future<void>.delayed(const Duration(milliseconds: 260));
       gate.complete();
@@ -534,6 +567,346 @@ void main() {
             'את חישוב ה-snapped',
       );
     });
+
+    test('מוק מגרירה קודמת נדחה אחרי שגרירה חדשה התחילה', () async {
+      drag.begin(firstTab(), colors, tabsBloc: tabsBloc);
+      drag.end();
+      drag.begin(firstTab(), colors, tabsBloc: tabsBloc);
+
+      drag.applySnapshot(
+        TabWindowPreview(
+          image: await opaqueImage(),
+          targetWidth: 1100,
+          targetHeight: 760,
+        ),
+        1,
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 40));
+
+      expect(runner.setImageCalls, 0);
+    });
+
+    test('שליחת מוק ישן אינה מאשרת מסירה של גרירה חדשה', () async {
+      final gate = Completer<void>();
+      runner.cursorTarget = (slot: 1, isSelf: true, isShellTray: false);
+      runner.cursorY = 200;
+      runner.imageGate = gate;
+
+      drag.begin(firstTab(), colors, tabsBloc: tabsBloc);
+      drag.applySnapshot(
+        TabWindowPreview(
+          image: await opaqueImage(),
+          targetWidth: 1100,
+          targetHeight: 760,
+        ),
+        1,
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 40));
+      expect(runner.setImageCalls, 1);
+
+      drag.end();
+      drag.begin(firstTab(), colors, tabsBloc: tabsBloc);
+      drag.notePointerLeftStrip();
+      gate.complete();
+      await Future<void>.delayed(const Duration(milliseconds: 40));
+      runner.cursorY = 0;
+      runner.approachingTop = true;
+      await Future<void>.delayed(const Duration(milliseconds: 160));
+
+      expect(runner.systemDragCalls, 0);
+    });
+  });
+
+  group('מסירה מוקדמת בדרך מעלה, בעוד הסמן בתוך החלון', () {
+    // ⚠️ שני דברים שהלוג לימד, ושניהם נגד האינטואיציה הראשונה:
+    //
+    // 1. הסמן **כן** יוצא מחלון המקור בחלון שצמוד לראש המסך — הוא נקרא
+    //    כמי שיצא בדיוק ב-`y == 0`, ולכן המסירה למערכת כן קורית.
+    // 2. ובכל זאת מסדר החלונות לא נפתח: ה-shell פותח אותו כשהחלון הנגרר
+    //    **נכנס** לאזור העליון בזמן לולאת ההזזה, ומסירה בפיקסל האחרון
+    //    אינה משאירה שום נסיעה שתיראה כמו כניסה. יציאה בצד
+    //    (`cursor=(890,134)`) כן קיבלה מסדר חלונות; `(582,0)` לא.
+    //
+    // ⚠️ ומה שמפריד את המסירה מסידור כרטיסיות הוא **יציאה מהרצועה**,
+    // ולא גאומטריית המסך. גרסה ראשונה של התיקון גידרה לפי אזור
+    // ההתקרבות ולפי נסיעה מעלה, בהנחה שהאזור נשאר מעל הרצועה — והנחה
+    // זו שגויה: הרצועה **היא** הסרגל העליון (0..40 יחידות לוגיות),
+    // והאזור (28) יושב בתוכה. סקירה מצאה את זה, והבדיקות כאן שחזרו:
+    // סידור אופקי עם סחיפה מעלה נמסר למערכת והמחווה אבדה.
+
+    /// די לכמה פעימות של 60ms, בזמן אמת.
+    const settle = Duration(milliseconds: 200);
+
+    const colors = DragPreviewColors(
+      tab: Color(0xFF202020),
+      border: Color(0xFF404040),
+      text: Color(0xFFF0F0F0),
+    );
+
+    /// הסמן מעל חלון המקור עצמו — המצב שבו הבאג התקיים.
+    void overSelf() {
+      runner.cursorTarget = (slot: 1, isSelf: true, isShellTray: false);
+    }
+
+    /// מתחיל גרירה מגובה [fromY], ומחזיר האם היא בוטלה.
+    ///
+    /// ⚠️ הגובה נקבע **לפני** ההתחלה: נקודת המוצא נדגמת ב-`begin` עצמו,
+    /// כי הפעימה הראשונה מגיעה 60ms מאוחר מדי — ראו `_captureDragOrigin`.
+    ///
+    /// [withMock] הוא ברירת המחדל כי זה המצב האמיתי: הרצועה מרכיבה את מוק
+    /// החלון ושולחת אותו בתחילת כל גרירה. המסירה המוקדמת ממתינה לו.
+    ///
+    /// [leftStrip] מדמה את מה שהרצועה מדווחת ב-`onLeave` — הסמן משך את
+    /// הכרטיסיה מחוץ לרצועה. ברירת המחדל היא **סידור**, כלומר בלי יציאה,
+    /// כדי שבדיקה שלא הצהירה על יציאה לא תיהנה מהמסירה בשקט.
+    Future<bool Function()> startDragAt(
+      OpenedTab tab,
+      int fromY, {
+      bool withMock = true,
+      bool leftStrip = false,
+    }) async {
+      overSelf();
+      runner.cursorY = fromY;
+      runner.approachingTop = false;
+      var cancelled = false;
+      drag.begin(
+        tab,
+        colors,
+        tabsBloc: tabsBloc,
+        cancelDrag: () => cancelled = true,
+      );
+      if (leftStrip) drag.notePointerLeftStrip();
+      if (withMock) await applyMock(drag);
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      return () => cancelled;
+    }
+
+    /// מזיז את הסמן לגובה [toY] ומדווח שהוא מתקרב לראש הצג.
+    void moveToTop(int toY) {
+      runner.cursorY = toY;
+      runner.approachingTop = true;
+    }
+
+    test('נסיעה מעלה אל אזור ההתקרבות מוסרת את הגרירה למערכת', () async {
+      final cancelled = await startDragAt(firstTab(), 200, leftStrip: true);
+      expect(runner.systemDragCalls, 0, reason: 'ברצועה — אין מסירה');
+
+      moveToTop(20);
+      await Future<void>.delayed(settle);
+
+      expect(
+        runner.systemDragCalls,
+        1,
+        reason: 'בלי המסירה מסדר החלונות אינו נפתח כלל',
+      );
+      expect(cancelled(), isTrue, reason: 'גרירת Flutter מבוטלת במסירה');
+    });
+
+    test('⚠️ המסירה מקדימה את הקצה ומשאירה נסיעה ללולאת ההזזה', () async {
+      // ⚠️ זו כל נקודת התיקון. `y=20` הוא **לא** הקצה: מכאן והלאה
+      // המשתמש ממשיך לנסוע מעלה בתוך לולאת ההזזה של Windows, וזו
+      // הנסיעה שה-shell רואה כ"החלון נכנס לאזור העליון". מסירה
+      // ב-`y=0` — מה שהיה קורה קודם — אינה משאירה כלום.
+      await startDragAt(firstTab(), 200, leftStrip: true);
+      moveToTop(20);
+      await Future<void>.delayed(settle);
+
+      expect(runner.systemDragCalls, 1);
+      expect(
+        runner.cursorY,
+        greaterThan(0),
+        reason: 'מסירה בקצה עצמו היא הבאג, לא התיקון',
+      );
+    });
+
+    test('ההצמדה שנבחרה פותחת חלון במסגרת שלה', () async {
+      // המסלול המלא: נסיעה מעלה → מסירה → מסדר החלונות → בחירת אזור.
+      runner.systemDragTarget = (slot: 1, isSelf: true, isShellTray: false);
+      runner.systemDragResult = (
+        ran: true,
+        snapped: true,
+        left: 960,
+        top: 0,
+        width: 960,
+        height: 1040,
+      );
+
+      await startDragAt(firstTab(), 200, leftStrip: true);
+      moveToTop(20);
+      await Future<void>.delayed(settle);
+
+      expect(runner.openWindowCalls, 1);
+      final bounds = runner.lastOpenArgs?['bounds'] as Map<Object?, Object?>?;
+      expect(bounds?['left'], 960);
+      expect(bounds?['width'], 960);
+      expect(tabsBloc.events.whereType<RemoveTab>(), hasLength(1));
+    });
+
+    test('שחרור בלי הצמדה מעל חלון המקור — הכרטיסיה נשארת במקומה', () async {
+      // ⚠️ זו רשת הביטחון של המסירה המוקדמת: מהרגע שהיא קורית גרירת
+      // Flutter מבוטלת, ולכן חייבת להיות דרך לומר "התחרטתי". שחרור מעל
+      // החלון עצמו הוא היא, וההתנהגות הזו קיימת ממילא בכל מסלול מסירה.
+      runner.systemDragTarget = (slot: 1, isSelf: true, isShellTray: false);
+      runner.systemDragResult = (
+        ran: true,
+        snapped: false,
+        left: 0,
+        top: 0,
+        width: 623,
+        height: 678,
+      );
+
+      await startDragAt(firstTab(), 200, leftStrip: true);
+      moveToTop(20);
+      await Future<void>.delayed(settle);
+
+      expect(runner.systemDragCalls, 1, reason: 'המסירה כן קרתה');
+      expect(runner.openWindowCalls, 0);
+      expect(tabsBloc.events, isEmpty, reason: 'הכרטיסיה לא זזה');
+    });
+
+    test('⚠️ סידור אופקי עם סחיפה מעלה בתוך הרצועה אינו נמסר', () async {
+      // ⚠️ הרגרסיה שהסקירה מצאה, ושהבדיקה הזו שחזרה לפני התיקון.
+      //
+      // הרצועה **היא** הסרגל העליון (0..40 יחידות לוגיות), ואזור
+      // ההתקרבות (28) יושב בתוכה — כלומר תפיסה בשליש התחתון של כרטיסיה
+      // וסחיפה מעלה בזמן סידור נמסרה למערכת, גרירת Flutter בוטלה,
+      // ו-`MoveTab` לא נורה מעולם. הסידור פשוט אבד.
+      //
+      // ‎`leftStrip: false` — סידור אינו יוצא מהרצועה, וזה כל ההבדל.
+      final cancelled = await startDragAt(firstTab(), 35);
+      moveToTop(8);
+      await Future<void>.delayed(settle);
+
+      expect(runner.systemDragCalls, 0, reason: 'הסידור נחטף למסירה');
+      expect(cancelled(), isFalse, reason: 'גרירת Flutter בוטלה באמצע סידור');
+      expect(tabsBloc.events, isEmpty);
+    });
+
+    test('⚠️ סידור ברצועה האנכית — שעולה מעצמו — אינו נמסר', () async {
+      // ⚠️ ברצועה האנכית זה גרוע יותר: שם סידור **הוא** מחווה שעולה,
+      // ומעבר של משבצת אחת (`kVerticalTabHeight` = 38) עובר את סף
+      // הנסיעה בעצמו. גרירה של הכרטיסיה השלישית למקום הראשון בחלון
+      // שצמוד לראש המסך נמסרה למערכת.
+      final cancelled = await startDragAt(firstTab(), 78);
+      moveToTop(20);
+      await Future<void>.delayed(settle);
+
+      expect(runner.systemDragCalls, 0);
+      expect(cancelled(), isFalse);
+      expect(tabsBloc.events, isEmpty);
+    });
+
+    test('⚠️ סידור של כרטיסיה שאינה ניתנת להעברה אינו מציג שגיאה', () async {
+      // ⚠️ `_rejectTransfer` במסלול שבתוך החלון הפך סידור מקומי של
+      // כרטיסיה כזו להודעת שגיאה "אי אפשר להעביר לחלון אחר" — משפט
+      // שאינו נכון על מה שהמשתמש עשה — וגם ביטל את הגרירה. ההודעה
+      // נשארת רק במסלול היציאה מהחלון, שם היא מתארת את הכוונה.
+      tabsBloc.emitState(
+        TabsState(tabs: [_UnserializableTab(), firstTab()], currentTabIndex: 0),
+      );
+
+      final cancelled = await startDragAt(tabsBloc.state.tabs.first, 35);
+      moveToTop(8);
+      await Future<void>.delayed(settle);
+
+      expect(cancelled(), isFalse, reason: 'הסידור בוטל בגלל הודעת שגיאה');
+      expect(runner.systemDragCalls, 0);
+      expect(tabsBloc.events, isEmpty);
+    });
+
+    test('⚠️ כרטיסיה שאינה ניתנת להעברה אינה נמסרת גם אחרי יציאה', () async {
+      tabsBloc.emitState(
+        TabsState(tabs: [_UnserializableTab(), firstTab()], currentTabIndex: 0),
+      );
+
+      await startDragAt(tabsBloc.state.tabs.first, 200, leftStrip: true);
+      moveToTop(20);
+      await Future<void>.delayed(settle);
+
+      expect(runner.systemDragCalls, 0);
+      expect(tabsBloc.events, isEmpty);
+    });
+
+    test('⚠️ סידור כרטיסיות ברצועה אינו נחטף', () async {
+      // ⚠️ הבדיקה שמגנה על המחווה הנפוצה. אזור ההתקרבות חייב להישאר
+      // **מעל** רצועת הכרטיסיות: מסירה שהייתה נוגעת בה מבטלת את גרירת
+      // Flutter באמצע סידור, כלומר הסידור אובד.
+      final cancelled = await startDragAt(firstTab(), 200, leftStrip: true);
+      final moving = Timer.periodic(
+        const Duration(milliseconds: 30),
+        (_) => runner.cursorX += 40,
+      );
+      addTearDown(moving.cancel);
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+      moving.cancel();
+
+      expect(runner.systemDragCalls, 0);
+      expect(cancelled(), isFalse, reason: 'הסידור נשאר בידי Flutter');
+      expect(tabsBloc.events, isEmpty);
+    });
+
+    test('⚠️ תפיסה שכבר ליד ראש המסך, בלי נסיעה, אינה נמסרת', () async {
+      // ⚠️ בלי תנאי הנסיעה כל גרירה שהתחילה ליד ראש המסך הייתה נמסרת
+      // בפעימה הראשונה — כלומר סידור כרטיסיות בחלון שצמוד לראש המסך
+      // היה נעלם מהתוכנה כליל.
+      final cancelled = await startDragAt(firstTab(), 12);
+      runner.approachingTop = true;
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+
+      expect(runner.systemDragCalls, 0);
+      expect(cancelled(), isFalse);
+    });
+
+    test('⚠️ ממתינה למוק החלון, ואינה מוסרת עם שרטוט', () async {
+      // ⚠️ זו הרגרסיה שדווחה: "כשקופץ מסדר החלונות יופיע בעכבר החלון
+      // הממוזער — כרגע מופיע רק סימול של כרטיסייה".
+      //
+      // `SetImage` מדלג על `Compose` בזמן לולאת ההזזה, ולכן מוק שמגיע
+      // אחרי המסירה אינו מוצג לעולם והמשתמש גורר את שרטוט ה-GDI. בגרירה
+      // החוצה זה לא נראה — הצילום מזמן הגיע — אבל המסירה המוקדמת יורה
+      // תוך פעימות בודדות ומקדימה אותו.
+      final cancelled = await startDragAt(
+        firstTab(),
+        200,
+        withMock: false,
+        leftStrip: true,
+      );
+      moveToTop(20);
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+
+      expect(
+        runner.systemDragCalls,
+        0,
+        reason: 'בלי מוק המסירה הייתה גוררת ראש כרטיסיה ב-176×40',
+      );
+      expect(cancelled(), isFalse);
+
+      // ברגע שהמוק בידי הנייטיב, הפעימה הבאה מוסרת.
+      await applyMock(drag);
+      await Future<void>.delayed(settle);
+
+      expect(runner.systemDragCalls, 1);
+      expect(
+        runner.imageArrivedAfterHandOff,
+        isFalse,
+        reason: 'המוק הקדים את לולאת ההזזה — זו כל הנקודה',
+      );
+    });
+
+    test('ירידה לאזור הקריאה וחזרה מעלה נחשבת נסיעה מעלה', () async {
+      // ⚠️ הנסיעה נמדדת מהנקודה **הנמוכה** ביותר ולא מנקודת ההתחלה:
+      // גרירה שירדה לאזור הקריאה וחזרה מעלה היא יציאה מעלה לכל דבר.
+      await startDragAt(firstTab(), 100, leftStrip: true);
+      runner.cursorY = 400;
+      await Future<void>.delayed(const Duration(milliseconds: 150));
+      expect(runner.systemDragCalls, 0, reason: 'למטה — אין מסירה');
+
+      moveToTop(20);
+      await Future<void>.delayed(settle);
+
+      expect(runner.systemDragCalls, 1);
+    });
   });
 
   group('כרטיסיה שאינה שורדת סריאליזציה', () {
@@ -545,10 +918,7 @@ void main() {
 
     setUp(() {
       tabsBloc.emitState(
-        TabsState(
-          tabs: [_UnserializableTab(), firstTab()],
-          currentTabIndex: 0,
-        ),
+        TabsState(tabs: [_UnserializableTab(), firstTab()], currentTabIndex: 0),
       );
       runner.cursorTarget = (slot: null, isSelf: false, isShellTray: false);
     });
@@ -594,11 +964,25 @@ class _FakeRunner {
   bool openWindowResult = true;
   int openWindowCalls = 0;
 
+  /// התקרבות לראש הצג, ומיקום הסמן שמדווח בכל פעימה.
+  ///
+  /// ⚠️ שדות נפרדים ולא הרחבה של [cursorTarget]: הוא נבנה בעשרים מקומות
+  /// בקובץ, וברירות המחדל כאן משאירות את כולם על ההתנהגות הקודמת —
+  /// כלומר אף בדיקה קיימת אינה נכנסת בטעות למסלול המסירה המוקדמת.
+  bool approachingTop = false;
+  int cursorX = 100;
+  int cursorY = 200;
+
+  /// סף הנסיעה מעלה, כפי שהנייטיב מחשב אותו לפי ה-DPI של הצג.
+  int minUpwardTravel = 24;
+
   /// כמה פעימות של המעקב יצאו לנייטיב — מודד שהלולאה נעצרה.
   int cursorQueries = 0;
+  Completer<void>? cursorGate;
 
   /// כמה פעמים נשלח צילום הכרטיסיה, והאם הוא הגיע **אחרי** המסירה למערכת.
   int setImageCalls = 0;
+  Completer<void>? imageGate;
   bool imageArrivedAfterHandOff = false;
   Map<Object?, Object?>? lastOpenArgs;
 
@@ -614,14 +998,7 @@ class _FakeRunner {
   /// המסלול היה מסתיים באותה מיקרו-משימה — כלומר "לא נפתח חלון בזמן
   /// הגרירה" היה עובר גם אם כן נפתח.
   Completer<void>? systemDragGate;
-  ({
-    bool ran,
-    bool snapped,
-    int left,
-    int top,
-    int width,
-    int height,
-  })
+  ({bool ran, bool snapped, int left, int top, int width, int height})
   systemDragResult = (
     ran: true,
     snapped: false,
@@ -642,16 +1019,25 @@ class _FakeRunner {
           switch (call.method) {
             case 'windowAtCursor':
               cursorQueries++;
+              final target = cursorTarget;
+              final isApproachingTop = approachingTop;
+              final minTravel = minUpwardTravel;
+              final x = cursorX;
+              final y = cursorY;
+              await cursorGate?.future;
               return {
-                'slot': cursorTarget.slot,
-                'isSelf': cursorTarget.isSelf,
-                'isShellTray': cursorTarget.isShellTray,
-                'x': 100,
-                'y': 200,
+                'slot': target.slot,
+                'isSelf': target.isSelf,
+                'isShellTray': target.isShellTray,
+                'approachingTop': isApproachingTop,
+                'minUpwardTravel': minTravel,
+                'x': x,
+                'y': y,
               };
             case 'setTabDragImage':
               setImageCalls++;
               if (systemDragCalls > 0) imageArrivedAfterHandOff = true;
+              await imageGate?.future;
               return null;
             case 'dragOutToSystem':
               systemDragCalls++;

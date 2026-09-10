@@ -24,8 +24,22 @@ void main() {
 
   tearDown(LibraryProviderManager.instance.resetForTesting);
 
+  /// HtmlWidget נבנה אסינכרונית; pumpAndSettle עלול להיתקע כשהקובץ רץ ברצף.
+  Future<void> pumpFrames(WidgetTester tester) async {
+    for (var i = 0; i < 10; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+  }
+
   /// מרימה את תוכן החלונית לקישור עם תוכן ארוך, חתוך ל-4 שורות ברוחב צר.
-  Future<void> pumpPreview(WidgetTester tester, {int index2 = 1}) async {
+  /// [alignment] — מיקום התוכן על המסך (ברירת מחדל: מרכז). [path2] — ייחודי
+  /// לבדיקה, כי Link.content שומר מטמון סטטי לפי הנתיב.
+  Future<void> pumpPreview(
+    WidgetTester tester, {
+    int index2 = 1,
+    AlignmentGeometry alignment = Alignment.center,
+    String path2 = 'מפרש א',
+  }) async {
     LibraryProviderManager.instance.seedMappingsForTesting(
       mapping: const {},
       providers: [
@@ -37,14 +51,15 @@ void main() {
         home: BlocProvider<SettingsBloc>.value(
           value: _TestSettingsBloc(SettingsState.initial()),
           child: Scaffold(
-            body: Center(
+            body: Align(
+              alignment: alignment,
               child: SizedBox(
                 width: 240,
                 child: LinkHoverPreviewContent(
                   link: Link(
-                    heRef: 'מפרש א, א',
+                    heRef: '$path2, א',
                     index1: 1,
-                    path2: 'מפרש א',
+                    path2: path2,
                     index2: index2,
                     connectionType: 'commentary',
                   ),
@@ -58,7 +73,7 @@ void main() {
         ),
       ),
     );
-    await tester.pumpAndSettle();
+    await pumpFrames(tester);
   }
 
   testWidgets('תוכן חתוך מציג לחצן "…" ולחיצתו פורשת אותו לתצוגה נגללת', (
@@ -76,6 +91,33 @@ void main() {
     // הלחצן נעלם והתוכן המלא נגלל בתוך החלונית.
     expect(find.text('…'), findsNothing);
     expect(find.byType(Scrollable), findsOneWidget);
+  });
+
+  testWidgets('פרישה ליד תחתית המסך גדלה כלפי מטה בלבד, עד שולי המסך', (
+    tester,
+  ) async {
+    await pumpPreview(
+      tester,
+      alignment: Alignment.bottomCenter,
+      path2: 'מפרש ד',
+    );
+    // ראש התוכן החתוך — משם התוכן הפרוש גדל כלפי מטה.
+    final contentTop = tester.getTopLeft(find.byType(ClipRect).first).dy;
+    final screenHeight =
+        tester.view.physicalSize.height / tester.view.devicePixelRatio;
+
+    await tester.tap(find.text('…'));
+    await pumpFrames(tester);
+
+    final expandedHeight = tester.getSize(find.byType(Scrollable)).height;
+    expect(expandedHeight, greaterThan(0));
+    expect(
+      expandedHeight,
+      lessThanOrEqualTo(screenHeight - contentTop - 24),
+      reason: 'התוכן הפרוש נעצר לפני שולי המסך ולא דוחף את החלונית למעלה',
+    );
+    // ובלי המגבלה היה תופס 60% מגובה המסך.
+    expect(expandedHeight, lessThan(screenHeight * 0.6));
   });
 
   /// מרימה את תוכן החלונית לקישור שמחזיר [content] כמות שהוא.
@@ -114,10 +156,7 @@ void main() {
         ),
       ),
     );
-    // HtmlWidget נבנה אסינכרונית; pumpAndSettle עלול להיתקע כשהקובץ רץ ברצף.
-    for (var i = 0; i < 10; i++) {
-      await tester.pump(const Duration(milliseconds: 100));
-    }
+    await pumpFrames(tester);
   }
 
   testWidgets('תוכן קצר אינו מציג לחצן פרישה', (tester) async {

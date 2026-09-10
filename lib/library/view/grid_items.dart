@@ -631,10 +631,6 @@ class _BookGridActionColumn extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final infoTooltipText = _bookInfoTooltipText(book);
-    // מהדורות (book_version) קיימות רק לספרי הספרייה הרשמית (seforim.db);
-    // תפריט 'גרסאות' מוצג רק כשיש בפועל מהדורה לבחירה (נבדק ב-FutureBuilder).
-    final versionsEligible =
-        book is TextBook && !book.isUserBook && book.categoryId != null;
 
     final infoButton = Container(
       width: 28,
@@ -674,70 +670,87 @@ class _BookGridActionColumn extends StatelessWidget {
             )
           else
             infoButton,
-          FutureBuilder<List<bool>>(
-            future: Future.wait([
-              _canDeleteBookFromLibrary(book),
-              versionsEligible
-                  ? DatabaseLibraryProvider.instance.hasSelectableBookVersions(
-                      book.title,
-                      book.categoryId!,
-                    )
-                  : Future.value(false),
-            ]),
-            builder: (context, snapshot) {
-              // מחיקה מהספרייה מותרת רק לספרי משתמש מסוג "עותק עצמאי"
-              // (התוכן שמור בתוכנה). ספר "קריאה מהקבצים" נמחק רק ע"י מחיקת
-              // הקובץ מהדיסק, והספרייה הרשמית (seforim.db) אינה ניתנת למחיקה.
-              final canDelete = snapshot.data?[0] ?? false;
-              final showVersions = snapshot.data?[1] ?? false;
-              if (!canDelete && !showVersions) {
-                return const SizedBox.shrink();
-              }
-
-              return SizedBox(
-                width: 28,
-                height: 28,
-                child: AppPopupMenuButton<String>(
-                  icon: Icon(
-                    FluentIcons.more_vertical_24_regular,
-                    size: 15,
-                    color: theme.colorScheme.secondary,
-                  ),
-                  tooltip: 'אפשרויות נוספות',
-                  position: PopupMenuPosition.under,
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(
-                    minWidth: 28,
-                    minHeight: 28,
-                  ),
-                  onSelected: (value) {
-                    if (value == 'delete') {
-                      _showDeleteBookDialog(context, book, onBookDeleted);
-                    } else if (value == 'versions') {
-                      showBookVersionsDialog(context, book as TextBook);
-                    }
-                  },
-                  entries: [
-                    if (showVersions)
-                      const AppMenuEntry<String>(
-                        value: 'versions',
-                        label: 'גרסאות',
-                        icon: OtzariaIcons.books_stacked_high_24_regular,
-                      ),
-                    if (canDelete)
-                      const AppMenuEntry<String>(
-                        value: 'delete',
-                        label: 'מחק מהספרייה',
-                        icon: FluentIcons.delete_24_regular,
-                        isDestructive: true,
-                      ),
-                  ],
-                ),
-              );
-            },
-          ),
+          BookActionsMenuButton(book: book, onBookDeleted: onBookDeleted),
         ],
       ),
+    );
+  }
+}
+
+/// תפריט "אפשרויות נוספות" של ספר (גרסאות / מחיקה מהספרייה) — משותף לכרטיס
+/// הרשת ולשורת העץ. מוצג רק כשיש בפועל פעולה זמינה, אחרת נעלם.
+class BookActionsMenuButton extends StatelessWidget {
+  final Book book;
+  final VoidCallback? onBookDeleted;
+
+  const BookActionsMenuButton({
+    super.key,
+    required this.book,
+    required this.onBookDeleted,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    // מהדורות (book_version) קיימות רק לספרי הספרייה הרשמית (seforim.db).
+    final versionsEligible =
+        book is TextBook && !book.isUserBook && book.categoryId != null;
+
+    return FutureBuilder<List<bool>>(
+      future: Future.wait([
+        _canDeleteBookFromLibrary(book),
+        versionsEligible
+            ? DatabaseLibraryProvider.instance.hasSelectableBookVersions(
+                book.title,
+                book.categoryId!,
+              )
+            : Future.value(false),
+      ]),
+      builder: (context, snapshot) {
+        final canDelete = snapshot.data?[0] ?? false;
+        final showVersions = snapshot.data?[1] ?? false;
+        if (!canDelete && !showVersions) {
+          return const SizedBox.shrink();
+        }
+
+        return SizedBox(
+          width: 28,
+          height: 28,
+          child: AppPopupMenuButton<String>(
+            icon: Icon(
+              FluentIcons.more_vertical_24_regular,
+              size: 15,
+              color: theme.colorScheme.secondary,
+            ),
+            tooltip: 'אפשרויות נוספות',
+            position: PopupMenuPosition.under,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+            onSelected: (value) {
+              if (value == 'delete') {
+                _showDeleteBookDialog(context, book, onBookDeleted);
+              } else if (value == 'versions') {
+                showBookVersionsDialog(context, book as TextBook);
+              }
+            },
+            entries: [
+              if (showVersions)
+                const AppMenuEntry<String>(
+                  value: 'versions',
+                  label: 'גרסאות',
+                  icon: OtzariaIcons.books_stacked_high_24_regular,
+                ),
+              if (canDelete)
+                const AppMenuEntry<String>(
+                  value: 'delete',
+                  label: 'מחק מהספרייה',
+                  icon: FluentIcons.delete_24_regular,
+                  isDestructive: true,
+                ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

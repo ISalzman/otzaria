@@ -3,7 +3,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
-import 'package:printing/printing.dart';
+import 'package:otzaria/printing/safer_print_service.dart';
 
 /// עימוד ה-PDF של דף תוסף (`ui.exportPdf` / `ui.print`). המידות במילימטרים;
 /// שדה שלא סופק משאיר את ברירת המחדל של מנוע ההדפסה.
@@ -90,14 +90,14 @@ class PluginPrintService {
   }
 
   /// מדפיס את הדף הנטען ב-[controller] בשם עבודה [jobName].
-  /// מחזיר האם המשתמש אישר את ההדפסה בדיאלוג המערכת.
+  /// מחזיר האם ההדפסה נשלחה (דיאלוג המערכת, או בחירה פנימית במצב סייפר).
   Future<bool> printWebView(
     InAppWebViewController controller, {
     required String jobName,
     PluginPdfLayout? layout,
   }) async {
     final pdf = await createPdf(controller, layout: layout);
-    return Printing.layoutPdf(
+    return printPdfWithSaferMode(
       name: jobName,
       onLayout: (_) => pdf,
       // ה-PDF כבר מעומד ע"י מנוע ה-WebView; אין מה לפרוס מחדש לפי המדפסת.

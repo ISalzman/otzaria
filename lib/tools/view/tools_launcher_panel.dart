@@ -221,6 +221,10 @@ class _ToolsLauncherPanelState extends State<ToolsLauncherPanel> {
   /// הקובייה שמציגה קו "אחרי" כשהגרירה מרחפת בשטח הריק שמתחת לרשת.
   String? _endDropIndicatorId;
 
+  /// דיאלוגי ההתקנה וטעינה מחדש מעבירים את רישום התוספים במצבי ביניים;
+  /// הרשימה האחרונה שנטענה נשארת מוצגת כדי שהתוספים לא ייעלמו מהפאנל.
+  PluginSystemLoaded? _lastLoadedPluginState;
+
   @override
   void initState() {
     super.initState();
@@ -575,10 +579,17 @@ class _ToolsLauncherPanelState extends State<ToolsLauncherPanel> {
         ),
       if (plugin != null)
         ToolTileAction(
+          icon: FluentIcons.arrow_reset_24_regular,
+          label: 'איפוס נתוני התוסף',
+          isDestructive: true,
+          dividerBefore: true,
+          onTap: () => showResetPluginDataDialog(context, plugin),
+        ),
+      if (plugin != null)
+        ToolTileAction(
           icon: FluentIcons.delete_24_regular,
           label: 'מחק תוסף',
           isDestructive: true,
-          dividerBefore: true,
           onTap: () => showDeletePluginDialog(context, plugin),
         ),
     ];
@@ -617,7 +628,11 @@ class _ToolsLauncherPanelState extends State<ToolsLauncherPanel> {
   @override
   Widget build(BuildContext context) {
     final settingsState = context.watch<SettingsBloc>().state;
-    final pluginState = context.watch<PluginSystemBloc>().state;
+    final currentPluginState = context.watch<PluginSystemBloc>().state;
+    if (currentPluginState is PluginSystemLoaded) {
+      _lastLoadedPluginState = currentPluginState;
+    }
+    final pluginState = _lastLoadedPluginState ?? currentPluginState;
     final allEntries = buildToolCatalog(
       hiddenBuiltInToolIds: settingsState.hiddenBuiltInToolIds,
       isOfflineMode: settingsState.isOfflineMode,

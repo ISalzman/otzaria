@@ -283,6 +283,13 @@ POINT OriginForDrop(int origin_x, int origin_y, int width, int height) {
   return POINT{left, top};
 }
 
+// מסירת גרירה חייבת לקרות בתוך אזור זה, בעוד הסמן נע מעלה אל Snap Layouts.
+// Dart מוודא שהסמן כבר יצא מרצועת הכרטיסיות.
+constexpr int kTopApproachLogicalHeight = 28;
+
+// נסיעת מינימום ליציאה מעלה, באותן יחידות לוגיות של אזור ההתקרבות.
+constexpr int kUpwardTravelLogical = 24;
+
 // מתאר את היעד שתחת הסמן, בשפה ש-Dart מבין.
 //
 // ⚠️ עוזר משותף ל-`windowAtCursor` ול-`dragOutToSystem`, ובמכוון: שני
@@ -309,6 +316,27 @@ flutter::EncodableMap DescribeTarget(HWND under, POINT cursor, HWND self) {
       ::wcscmp(class_name, L"TopLevelWindowForOverflowXamlIsland") == 0;
   info[flutter::EncodableValue("isShellTray")] =
       flutter::EncodableValue(is_shell_tray);
+
+  // בודקים את הצג שמתחת לסמן, כולל אזור העבודה לשורת משימות עליונה.
+  bool approaching_top = false;
+  int upward_travel = kUpwardTravelLogical;
+  const HMONITOR monitor = ::MonitorFromPoint(cursor, MONITOR_DEFAULTTONEAREST);
+  MONITORINFO monitor_info{};
+  monitor_info.cbSize = sizeof(monitor_info);
+  if (monitor && ::GetMonitorInfoW(monitor, &monitor_info)) {
+    // גבולות הצג והסף חייבים להשתמש באותו DPI.
+    UINT dpi = FlutterDesktopGetDpiForMonitor(monitor);
+    if (dpi == 0) dpi = self ? ::GetDpiForWindow(self) : 96;
+    if (dpi == 0) dpi = 96;
+    const int band = ::MulDiv(kTopApproachLogicalHeight, dpi, 96);
+    upward_travel = ::MulDiv(kUpwardTravelLogical, dpi, 96);
+    approaching_top = cursor.y - monitor_info.rcMonitor.top <= band ||
+                      cursor.y - monitor_info.rcWork.top <= band;
+  }
+  info[flutter::EncodableValue("approachingTop")] =
+      flutter::EncodableValue(approaching_top);
+  info[flutter::EncodableValue("minUpwardTravel")] =
+      flutter::EncodableValue(upward_travel);
 
   const auto& slots = WindowSlots();
   const auto it = slots.find(under);

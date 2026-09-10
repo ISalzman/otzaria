@@ -38,6 +38,10 @@ class ShortcutHelper {
   static bool? isWindowsForTesting;
 
   static bool get _treatCtrlAsMeta => isMacForTesting ?? _isMac;
+
+  /// האם ה-token הקנוני `ctrl` מתנהג כ-Command — כלומר הקיצורים
+  /// נפתרים לפי מוסכמת מקלדת Mac.
+  static bool get usesMacModifiers => _treatCtrlAsMeta;
   static bool get _treatRightAltAsAltGr =>
       isWindowsForTesting ?? (!kIsWeb && Platform.isWindows);
 

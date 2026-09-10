@@ -73,6 +73,12 @@ class PluginRegistryRepository {
     await _db.deletePlugin(pluginId);
   }
 
+  /// מוחק את כל הנתונים שהתוסף אגר (KV, רשומות שפורסמו, לוג) ומשאיר את
+  /// ההתקנה וההרשאות על כנן.
+  Future<void> clearPluginData(String pluginId) async {
+    await _db.clearPluginData(pluginId);
+  }
+
   Future<List<InstalledPlugin>> getDevelopmentPlugins() async {
     final plugins = await getAllPlugins();
     return plugins.where((p) => p.isDevelopment).toList();

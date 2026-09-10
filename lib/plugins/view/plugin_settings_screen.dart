@@ -38,6 +38,30 @@ Future<bool> showDeletePluginDialog(
   return true;
 }
 
+/// דיאלוג אישור לאיפוס כל הנתונים שהתוסף אגר (KV, אירועי לוח, התראות, קבצים).
+/// התוסף עצמו, הרשאותיו והגדרות התצוגה נשארים.
+///
+/// מחזירה `true` אם המשתמש אישר והאיפוס הופעל, `false` אם ביטל.
+Future<bool> showResetPluginDataDialog(
+  BuildContext context,
+  InstalledPlugin plugin,
+) async {
+  final bloc = context.read<PluginSystemBloc>();
+  final confirmed = await showWarningDialog(
+    context: context,
+    title: 'איפוס נתוני התוסף',
+    content: 'האם לאפס את כל הנתונים של התוסף "${plugin.name}"?',
+    subtitle:
+        'כל המידע שהתוסף שמר יימחק — הגדרות, נתונים, אירועים שהוסיף ללוח השנה '
+        'והתראות שתזמן. התוסף יישאר מותקן. הליך זה סופי.',
+    cancelText: 'ביטול',
+    confirmText: 'אפס',
+  );
+  if (confirmed != true) return false;
+  bloc.add(ResetPluginDataRequested(plugin.pluginId));
+  return true;
+}
+
 /// פונקציה משותפת לפתיחת דיאלוג הגדרות תוסף — קוראת מ-tools_management_panel
 /// ומ-plugin_side_panel.
 Future<bool?> showPluginSettingsDialog(

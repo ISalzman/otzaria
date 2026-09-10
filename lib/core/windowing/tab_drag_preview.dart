@@ -4,7 +4,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
 
-/// גבול הציור של אזור התוכן, לצילומו בגרירת כרטיסיה.
+/// גבול הציור של אזור התוכן.
 ///
 /// ⚠️ מפתח יחיד ולא מפה: יש בדיוק אזור תוכן אחד בכל חלון, וכל חלון הוא
 /// isolate נפרד — כלומר אין התנגשות בין חלונות.
@@ -12,7 +12,35 @@ import 'package:flutter/widgets.dart';
 /// ⚠️ ה-[RepaintBoundary] שמחזיק אותו אינו רק לצילום. אזור התוכן הוא
 /// תת-העץ הכבד בתוכנה, וגבול ציור סביבו מבודד את הצטיירותו מסרגל
 /// הכרטיסיות שמעליו — כלומר הוא משלם על עצמו גם כשאין גרירה.
+///
 final GlobalKey windowContentBoundaryKey = GlobalKey();
+
+/// גבולות ציור לכרטיסיות, לצילום תוכן הכרטיסיה הנגררת.
+/// כרטיסיה שאינה מותקנת משתמשת ב-[composeTabContentPlaceholder].
+class TabContentBoundaries {
+  TabContentBoundaries._();
+
+  static final TabContentBoundaries instance = TabContentBoundaries._();
+
+  /// זהות מונעת מערך שוויון עתידי לאחד שתי כרטיסיות של אותו ספר.
+  final Map<Object, GlobalKey> _keys = Map.identity();
+
+  /// המפתח של [tab], ונוצר בפעם הראשונה שמבקשים אותו.
+  GlobalKey keyFor(Object tab) => _keys.putIfAbsent(tab, GlobalKey.new);
+
+  /// מחזיר מפתח קיים בלבד, כדי שצילום לא ירשום כרטיסיה מחוץ לעץ.
+  GlobalKey? maybeKeyFor(Object tab) => _keys[tab];
+
+  /// מסיר מפתחות של כרטיסיות שנסגרו, כדי למנוע החזקתן בזיכרון.
+  void retainOnly(Iterable<Object> tabs) {
+    if (_keys.isEmpty) return;
+    final live = Set<Object>.identity()..addAll(tabs);
+    _keys.removeWhere((tab, _) => !live.contains(tab));
+  }
+
+  @visibleForTesting
+  void debugClear() => _keys.clear();
+}
 
 /// רוחב התצוגה המוקטנת בגרירה **בתוך** החלון, ביחידות לוגיות.
 ///
@@ -59,6 +87,126 @@ Future<ui.Image?> captureBoundary(GlobalKey key, double pixelRatio) async {
     debugPrint('צילום לגרירה נכשל: $e');
     return null;
   }
+}
+
+const double _kPlaceholderTitleWidthFraction = 0.8;
+
+const int _kPlaceholderTitleMaxLines = 3;
+
+/// מצייר מוק תמונתי לכרטיסיה שאין לה גבול ציור זמין.
+/// התמונה משותפת לתצוגה שבתוך החלון ולתצוגה הנייטיבית.
+Future<ui.Image?> composeTabContentPlaceholder({
+  required String title,
+  required IconData icon,
+  required Color background,
+  required Color foreground,
+  required Size logicalSize,
+  required double captureRatio,
+  required bool rtl,
+}) async {
+  try {
+    final width = (logicalSize.width * captureRatio).round();
+    final height = (logicalSize.height * captureRatio).round();
+    if (width <= 0 || height <= 0) return null;
+
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder);
+    canvas.scale(captureRatio);
+    canvas.drawRect(
+      Rect.fromLTWH(0, 0, logicalSize.width, logicalSize.height),
+      Paint()..color = background,
+    );
+
+    final shortest = logicalSize.shortestSide;
+    final iconSize = math.min(shortest * 0.22, 96.0);
+    final titleSize = math.min(logicalSize.width * 0.045, 28.0);
+    final gap = titleSize * 0.9;
+
+    final iconParagraph = _paragraph(
+      text: String.fromCharCode(icon.codePoint),
+      fontFamily: _iconFontFamily(icon),
+      fontSize: iconSize,
+      color: foreground.withValues(alpha: 0.28),
+      // גליף אייקון חייב להישאר ממורכז גם במוק RTL.
+      textDirection: ui.TextDirection.ltr,
+      maxWidth: logicalSize.width,
+    );
+    final titleParagraph = _paragraph(
+      text: title,
+      fontSize: titleSize,
+      color: foreground.withValues(alpha: 0.75),
+      textDirection: rtl ? ui.TextDirection.rtl : ui.TextDirection.ltr,
+      maxLines: _kPlaceholderTitleMaxLines,
+      ellipsis: '…',
+      height: 1.35,
+      maxWidth: logicalSize.width * _kPlaceholderTitleWidthFraction,
+    );
+
+    // מונע חיתוך בראש כשמוק נמוך מגובה התוכן.
+    final blockHeight = iconParagraph.height + gap + titleParagraph.height;
+    var dy = math.max(0.0, (logicalSize.height - blockHeight) / 2);
+    canvas.drawParagraph(iconParagraph, Offset(0, dy));
+    dy += iconParagraph.height + gap;
+    canvas.drawParagraph(
+      titleParagraph,
+      Offset(
+        logicalSize.width * (1 - _kPlaceholderTitleWidthFraction) / 2,
+        dy,
+      ),
+    );
+
+    final picture = recorder.endRecording();
+    final image = await picture.toImage(width, height);
+    picture.dispose();
+    return image;
+  } catch (e) {
+    debugPrint('בניית מוק לכרטיסיה בלי צילום נכשלה: $e');
+    return null;
+  }
+}
+
+/// שם הגופן של [icon] בפורמט שמנוע הטקסט דורש.
+String? _iconFontFamily(IconData icon) {
+  final package = icon.fontPackage;
+  if (package == null) return icon.fontFamily;
+  return 'packages/$package/${icon.fontFamily}';
+}
+
+/// פסקה ממורכזת, פרוסה לרוחב [maxWidth].
+ui.Paragraph _paragraph({
+  required String text,
+  required double fontSize,
+  required Color color,
+  required ui.TextDirection textDirection,
+  required double maxWidth,
+  String? fontFamily,
+  int? maxLines,
+  String? ellipsis,
+  double? height,
+}) {
+  final builder =
+      ui.ParagraphBuilder(
+        ui.ParagraphStyle(
+          textAlign: TextAlign.center,
+          textDirection: textDirection,
+          fontFamily: fontFamily,
+          fontSize: fontSize,
+          maxLines: maxLines,
+          ellipsis: ellipsis,
+          height: height,
+        ),
+      )..pushStyle(
+        ui.TextStyle(
+          color: color,
+          fontFamily: fontFamily,
+          fontSize: fontSize,
+          height: height,
+        ),
+      );
+  builder.addText(text);
+  final paragraph = builder.build();
+  paragraph.layout(ui.ParagraphConstraints(width: maxWidth));
+  return paragraph;
 }
 
 /// תצוגת הגרירה המורכבת: מוק של החלון שייפתח.

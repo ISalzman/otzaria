@@ -51,6 +51,15 @@ void main() {
     );
   }
 
+  Rect growingPanelRect(WidgetTester tester) => tester.getRect(
+    find
+        .ancestor(
+          of: find.byType(GrowingPreviewContent),
+          matching: find.byType(Material),
+        )
+        .first,
+  );
+
   /// שני פריימים: מדידה סמויה ואז הצבה במקום הסופי.
   Future<void> pumpPanel(WidgetTester tester) async {
     await tester.pump();
@@ -392,6 +401,32 @@ void main() {
     },
   );
 
+  testWidgets('חלונית מקובעת שתוכנה גדל אינה קופצת מעל העוגן', (
+    tester,
+  ) async {
+    // המסך 800x600; העוגן קרוב לתחתית, כך שהתוכן הגדול לא ייכנס מתחתיו.
+    final hostContext = await pumpListHost(tester);
+    LinkPreviewOverlay.showContent(
+      hostContext,
+      contentBuilder: (_) => const GrowingPreviewContent(),
+      globalPosition: const Offset(400, 480),
+      hoverMode: true,
+    );
+    await pumpPanel(tester);
+    final rectBefore = growingPanelRect(tester);
+    expect(rectBefore.top, greaterThan(480));
+
+    // לחיצה בתוכן מקבעת את החלונית ומגדילה את התוכן (כמו לחצן "…").
+    await tester.tap(find.byType(GrowingPreviewContent));
+    await pumpPanel(tester);
+
+    // בלי הקיבוע החלונית הייתה עוברת אל מעל העוגן (תחתיתה ב-470); כעת היא
+    // נדחפת למעלה רק כמידת הצורך — תחתיתה בשולי המסך.
+    final rectAfter = growingPanelRect(tester);
+    expect(rectAfter.bottom, moreOrLessEquals(600 - 8));
+    expect(rectAfter.top, greaterThan(rectBefore.bottom - rectAfter.height));
+  });
+
   testWidgets('לחיצה ימנית מחוץ לחלונית מקובעת סוגרת אותה', (tester) async {
     final hostContext = await pumpListHost(tester);
 
@@ -503,4 +538,28 @@ void main() {
     );
     expect(anchor, isNull);
   });
+}
+
+/// תוכן שגובהו קופץ בלחיצה — מדמה פרישת "…" בתוך חלונית מקובעת.
+class GrowingPreviewContent extends StatefulWidget {
+  const GrowingPreviewContent({super.key});
+
+  @override
+  State<GrowingPreviewContent> createState() => _GrowingPreviewContentState();
+}
+
+class _GrowingPreviewContentState extends State<GrowingPreviewContent> {
+  bool _grown = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () => setState(() => _grown = true),
+      child: SizedBox(
+        width: 200,
+        height: _grown ? 300 : 40,
+        child: const Text('תוכן גדל'),
+      ),
+    );
+  }
 }

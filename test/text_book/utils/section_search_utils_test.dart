@@ -39,6 +39,36 @@ void main() {
       expect(results.length, 3);
     });
 
+    // issue #1229 — שתי הופעות צמודות ("חכם אחכם") פוצלו לקטעים קטומים:
+    // ה-snippet של כל הופעה נחתך באמצע הדרך להופעה השכנה, וכך תוצאה שלמה
+    // הפכה ל"אחכם!" בלבד.
+    test('הופעות צמודות באותה שורה — כל תוצאה מציגה את ההקשר המלא', () async {
+      const line = 'קשיא גוים אגוים, קשיא חכם אחכם! לא קשיא הא במותיב פירקי';
+      final results = await searchInContent(
+        content: [line],
+        query: 'חכם',
+        wholeWord: false,
+        patternSource: literalPatternSource('חכם', wholeWord: false),
+      );
+      expect(results.length, 2);
+      for (final result in results) {
+        expect(result.snippet, contains('קשיא חכם אחכם! לא קשיא'));
+      }
+    });
+
+    test('גבול באמצע מילה בין הופעות — כל תוצאה מציגה הקשר מלא', () async {
+      const line = 'אבג מילה אבג';
+      final results = await searchInContent(
+        content: [line],
+        query: 'אבג',
+        patternSource: literalPatternSource('אבג'),
+      );
+      expect(results.length, 2);
+      for (final result in results) {
+        expect(result.snippet, line);
+      }
+    });
+
     test('היסט ההתאמה מצביע על הופעה בתוך המילה', () async {
       final results = await searchInContent(
         content: ['את השמים'],

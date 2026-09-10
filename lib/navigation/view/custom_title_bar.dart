@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
+
 import 'package:otzaria/core/windowing/app_window_scope.dart';
 import 'package:otzaria/theme/app_tokens.dart';
 import 'package:flutter/foundation.dart';
@@ -15,6 +16,7 @@ import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
 import 'package:otzaria/shortcuts/shortcut_helper.dart';
+import 'package:otzaria/shortcuts/shortcut_validator.dart';
 import 'package:otzaria/navigation/bloc/navigation_state.dart';
 import 'package:otzaria/navigation/view/reading_tab_strip.dart';
 import 'package:otzaria/navigation/view/tab_context_menu.dart';
@@ -132,9 +134,7 @@ final ButtonStyle _kIconButtonStyle = IconButton.styleFrom(
   minimumSize: const Size(32, 32),
   padding: EdgeInsets.zero,
   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-  shape: RoundedRectangleBorder(
-    borderRadius: AppTokens.borderRadiusAll,
-  ),
+  shape: RoundedRectangleBorder(borderRadius: AppTokens.borderRadiusAll),
 );
 
 class _CustomTitleBarState extends State<CustomTitleBar> {
@@ -256,7 +256,9 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
             final useReaderStyle =
                 navState.currentScreen == Screen.search ||
                 (navState.currentScreen == Screen.reading &&
-                    context.select((TabsBloc bloc) => bloc.state.hasOpenTabs));
+                    context.select(
+                      (TabsBloc bloc) => bloc.state.hasOpenTabs,
+                    ));
             // ⚠️ **גובה אחד, בלי "גשר".** גרסה קודמת הוסיפה כאן חמשה
             // פיקסלים כדי שהכרטיסיה תוכל לצייר מתחת לעצמה, והתוצאה הייתה
             // ההפוכה: הסרגל התארך, התוכן נדחף למטה, והרצועה שבין הכרטיסיות
@@ -294,9 +296,7 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
                         // כפתורי פעולה (היסטוריה וכו') - תמיד מוצגים
                         SizedBox(
                           height: 40,
-                          child: Center(
-                            child: _buildActionButtons(context),
-                          ),
+                          child: Center(child: _buildActionButtons(context)),
                         ),
 
                         // תוכן הכותרת (טאבים או כותרת רגילה)
@@ -332,9 +332,7 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
                                       // נלקח לפני ה-await: אחריו ה-context
                                       // עלול כבר לא להיות מותקן.
                                       final window =
-                                          AppWindowScope.controllerOf(
-                                            context,
-                                          );
+                                          AppWindowScope.controllerOf(context);
                                       await FullscreenHelper.toggleFullscreen(
                                         context,
                                         false,
@@ -350,18 +348,15 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
                                     // סגירה מנומסת — עוברת דרך ה-handshake
                                     // של onWindowClose ולא הורגת מיד.
                                     onPressed: () =>
-                                        AppWindowScope.controllerOf(
-                                          context,
-                                        ).close(),
+                                        AppWindowScope.controllerOf(context)
+                                            .close(),
                                   ),
                                 if (!settingsState.isFullscreen)
                                   SizedBox(
                                     width: _kWindowCaptionButtonsWidth,
                                     height: 50,
                                     child: WindowCaption(
-                                      brightness: Theme.of(
-                                        context,
-                                      ).brightness,
+                                      brightness: Theme.of(context).brightness,
                                       backgroundColor: Colors.transparent,
                                     ),
                                   ),
@@ -379,10 +374,7 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
 
             return Column(
               mainAxisSize: MainAxisSize.min,
-              children: [
-                topBar,
-                _buildNarrowTabsRow(context),
-              ],
+              children: [topBar, _buildNarrowTabsRow(context)],
             );
           },
         );
@@ -390,22 +382,23 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
     );
   }
 
+  /// ברירת המחדל תלויה בפלטפורמה, ולכן נלקחת מ-[ShortcutValidator] ולא
+  /// משוכפלת כאן.
+  static String _shortcutOf(String key) =>
+      Settings.getValue<String>(key) ??
+      ShortcutValidator.defaultShortcuts[key] ??
+      '';
+
   Widget _buildActionButtons(BuildContext context) {
-    final historyShortcut =
-        Settings.getValue<String>('key-shortcut-open-history') ?? 'ctrl+h';
-    final bookmarksShortcut =
-        Settings.getValue<String>('key-shortcut-open-bookmarks') ??
-        'ctrl+shift+b';
-    final workspaceShortcut =
-        Settings.getValue<String>('key-shortcut-switch-workspace') ?? 'ctrl+k';
+    final historyShortcut = _shortcutOf('key-shortcut-open-history');
+    final bookmarksShortcut = _shortcutOf('key-shortcut-open-bookmarks');
+    final workspaceShortcut = _shortcutOf('key-shortcut-switch-workspace');
 
     return SizedBox(
       width: _kAppBarControlsWidth,
       child: Stack(
         children: [
-          const DragToMoveArea(
-            child: SizedBox.expand(),
-          ),
+          const DragToMoveArea(child: SizedBox.expand()),
           Center(
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -610,7 +603,6 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
     final tabStrip = ReadingTabStrip(
       stripColor: AppSurfaces.readerBackground(context),
       tabs: state.tabs,
-      activeTabIndex: state.currentTabIndex,
       widths: [
         for (var i = 0; i < state.tabs.length; i++)
           i == state.currentTabIndex
@@ -638,8 +630,10 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
           cancelDrag: cancelDrag,
         );
       },
-      onTabSnapshot: (_, snapshot) => _crossWindowDrag.applySnapshot(snapshot),
+      onTabSnapshot: (_, snapshot, generation) =>
+          _crossWindowDrag.applySnapshot(snapshot, generation),
       onDragFinishedAnywhere: _crossWindowDrag.end,
+      onDragLeftStrip: _crossWindowDrag.notePointerLeftStrip,
       onDroppedOutside: MultiWindowService.isSupported
           ? (tab) => _crossWindowDrag.handleDroppedOutside(
               tab,
@@ -696,19 +690,15 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
             _EmptyAreaDoubleTapRecognizer:
                 GestureRecognizerFactoryWithHandlers<
                   _EmptyAreaDoubleTapRecognizer
-                >(
-                  () => _EmptyAreaDoubleTapRecognizer(debugOwner: this),
-                  (recognizer) {
-                    recognizer.isPointerOnTab = (position) =>
-                        _hitTestTab(context, position);
-                    recognizer.onDoubleTap = _onTabsAreaDoubleTap;
-                  },
-                ),
+                >(() => _EmptyAreaDoubleTapRecognizer(debugOwner: this), (
+                  recognizer,
+                ) {
+                  recognizer.isPointerOnTab = (position) =>
+                      _hitTestTab(context, position);
+                  recognizer.onDoubleTap = _onTabsAreaDoubleTap;
+                }),
           },
-          child: KeyedSubtree(
-            key: tourReadingTabsTargetKey,
-            child: tabStrip,
-          ),
+          child: KeyedSubtree(key: tourReadingTabsTargetKey, child: tabStrip),
         ),
       ),
     );
@@ -752,17 +742,11 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
   // --- Helper Methods ---
 
   void _showHistoryDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) => const HistoryDialog(),
-    );
+    showDialog(context: context, builder: (context) => const HistoryDialog());
   }
 
   void _showBookmarksDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) => const BookmarksDialog(),
-    );
+    showDialog(context: context, builder: (context) => const BookmarksDialog());
   }
 
   void _showSaveWorkspaceDialog(BuildContext context) {
@@ -800,7 +784,7 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
     return GestureDetector(
       onTap: () => context.read<TabsBloc>().add(TogglePinTab(tab)),
       child: Padding(
-        padding: const EdgeInsets.only(right: 4.0),
+        padding: const EdgeInsetsDirectional.only(start: 4.0),
         child: Tooltip(
           message: 'בטל הצמדה',
           child: const Icon(FluentIcons.pin_24_filled, size: 14),
@@ -936,9 +920,9 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
                   child: SizedBox(
                     height: _kTopBarHeight,
                     child: Padding(
-                      padding: EdgeInsets.only(
-                        left: 3,
-                        right: index == 0 ? 0 : 3,
+                      padding: EdgeInsetsDirectional.only(
+                        end: 3,
+                        start: index == 0 ? 0 : 3,
                       ),
                       // הגובה מפורש: ל-CustomPaint ללא ילד אין גודל טבעי,
                       // והוא היה מתכווץ לאפס — גם הציור וגם שטח הלחיצה.
@@ -1122,9 +1106,9 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
             child: SizedBox(
               height: _kTopBarHeight,
               child: Padding(
-                padding: EdgeInsets.only(
-                  left: outerPad,
-                  right: index == 0 ? 0 : outerPad,
+                padding: EdgeInsetsDirectional.only(
+                  end: outerPad,
+                  start: index == 0 ? 0 : outerPad,
                 ),
                 child: CustomPaint(
                   // טאב בבחירה מרובה נצבע ב-secondaryContainer כדי לסמן שהוא
@@ -1497,13 +1481,7 @@ class _CaptionActionButtonState extends State<_CaptionActionButton> {
             minHeight: 32,
           ),
           decoration: BoxDecoration(color: bgColor),
-          child: Center(
-            child: Icon(
-              widget.icon,
-              size: 16,
-              color: iconColor,
-            ),
-          ),
+          child: Center(child: Icon(widget.icon, size: 16, color: iconColor)),
         ),
       ),
     );

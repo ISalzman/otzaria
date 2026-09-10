@@ -110,6 +110,15 @@ class UninstallPluginRequested extends PluginSystemEvent {
   List<Object?> get props => [pluginId];
 }
 
+/// איפוס כל הנתונים שהתוסף אגר (KV, רשומות שפורסמו, התראות, קבצים) בלי להסירו.
+class ResetPluginDataRequested extends PluginSystemEvent {
+  final String pluginId;
+  const ResetPluginDataRequested(this.pluginId);
+
+  @override
+  List<Object?> get props => [pluginId];
+}
+
 class EnablePluginRequested extends PluginSystemEvent {
   final String pluginId;
   const EnablePluginRequested(this.pluginId);
@@ -228,6 +237,15 @@ class DevelopmentPluginManifestChanged extends PluginSystemEvent {
 
   @override
   List<Object?> get props => [pluginId];
+}
+
+/// השוואה חד-פעמית של הגרסה הרשומה לתוספי פיתוח מול manifest.json שבתיקייה.
+/// ה-watcher (`PluginDevWatchService`) מרענן את הרשומה רק בזמן שהתוכנה רצה,
+/// ולכן bump שנעשה כשהיא הייתה סגורה נשאר תקוע — ו-`plugin.listInstalled`
+/// מדווח גרסה ישנה. מכאן העדכון נעשה דרך `DevelopmentPluginManifestChanged`,
+/// אותו נתיב בדיוק של ה-watcher.
+class RescanDevelopmentManifests extends PluginSystemEvent {
+  const RescanDevelopmentManifests();
 }
 
 class ConfirmDevPluginInstall extends PluginSystemEvent {

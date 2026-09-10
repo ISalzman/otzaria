@@ -415,6 +415,21 @@ class _LinkPreviewPanelState extends State<_LinkPreviewPanel> {
     final anchorRect = widget.anchorRect;
 
     setState(() {
+      // חלונית מקובעת שתוכנה גדל (פרישת "…") אינה קופצת מעל העוגן: נשארת
+      // במקומה וגדלה כלפי מטה, ונדחפת למעלה רק כמידת הצורך כדי להיכנס למסך.
+      if (_pinned && _visible) {
+        _offset = Offset(
+          _offset.dx.clamp(
+            _screenPadding,
+            _maxOffset(overlaySize.width, panelSize.width),
+          ),
+          _offset.dy.clamp(
+            _screenPadding,
+            _maxOffset(overlaySize.height, panelSize.height),
+          ),
+        );
+        return;
+      }
       _offset = anchorRect != null
           ? _offsetBesideRect(
               overlayBox.globalToLocal(anchorRect.topLeft) & anchorRect.size,
@@ -520,6 +535,7 @@ class _LinkPreviewPanelState extends State<_LinkPreviewPanel> {
         // נעשית ביציאת הסמן מהעוגן/מהחלונית (scheduleHide).
         if (!widget.hoverMode || _pinned)
           Positioned.fill(
+            key: const ValueKey('link-preview-barrier'),
             child: GestureDetector(
               behavior: widget.barrierBlocksBelow && !_pinned
                   ? HitTestBehavior.opaque
@@ -528,7 +544,10 @@ class _LinkPreviewPanelState extends State<_LinkPreviewPanel> {
               onSecondaryTapDown: (_) => widget.onDismiss(),
             ),
           ),
+        // המפתחות שומרים את אלמנט החלונית כשהמחסום נכנס לפניה בקיבוע; אחרת
+        // מד-הגודל נוצר מחדש ומפספס גדילה שבאותו פריים (פרישת "…").
         Positioned(
+          key: const ValueKey('link-preview-panel'),
           left: position.dx,
           top: position.dy,
           // בזמן המדידה הראשונית (טרם _visible) החלונית יושבת בפינה ב-hit-test

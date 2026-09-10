@@ -2287,6 +2287,59 @@ void main() {
       );
     });
 
+    test(
+      'dedup: TOC ו-AltToc באותו טקסט אך segment שונה — תוצאה אחת (issue #1249)',
+      () async {
+        // ש"ך על שו"ע: כותרת "סעיף ג" ב-TOC מצביעה לשורת הכותרת (4105), ועלה
+        // "סעיף ג" במבנה הסעיפים המסונתז מצביע לשורת התוכן (4106). למשתמש
+        // שתי השורות זהות — נשמרת רק תוצאת ה-TOC.
+        const title = 'שפתי כהן על שולחן ערוך יורה דעה';
+        final repo = FindRefRepository(
+          dataRepository: MockDataRepository(),
+          isReferenceBooksCacheLoaded: () => true,
+          warmUpReferenceBooksCache: () async {},
+          searchReferenceBooks: (query, {int limit = 50}) {
+            if (query == 'שך') {
+              return [
+                _hit(
+                  bookId: 3855,
+                  title: title,
+                  normalizedTitle: title,
+                  matchRank: 3,
+                  matchedTerm: 'שך',
+                ),
+              ];
+            }
+            return const <ReferenceBookHit>[];
+          },
+          getTocEntriesForReference: (id, t, {queryTokens}) async => [
+            {
+              'reference': '$title סימן קי סעיף ג',
+              'segment': 4105,
+              'level': 2,
+              'dbLineId': 2977006,
+            },
+          ],
+          getAltTocEntriesForReference: (id, t, {queryTokens}) async => [
+            {
+              'reference': 'סימן קי סעיף ג',
+              'segment': 4106,
+              'level': 1,
+              'dbLineId': 2977007,
+            },
+          ],
+        );
+
+        final results = await repo.findRefs('שך קי ג');
+        final sameText = results
+            .where((r) => r.reference == '$title סימן קי סעיף ג')
+            .toList();
+        expect(sameText.length, 1);
+        expect(sameText.single.isAltToc, isFalse);
+        expect(sameText.single.segment, 4105);
+      },
+    );
+
     test('פילטר AltToc פר-ספר — מאצ\' חלקי של ספר רפוי נחסם', () async {
       // "נחל שורק" נמצא עבור "נח" כי "נחל".startsWith("נח").
       // AltToc שלו מחזיר "הפטרת נח" שמתאים רק לטוקן "נח" ולא ל-"עליה" ו-"ב".

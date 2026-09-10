@@ -288,7 +288,12 @@ class SettingsRepository {
     // Initialize default settings to disk if needed
     await _initializeDefaultsIfNeeded();
     await removeUnrecognizedShortcuts();
+    return readSettings();
+  }
 
+  /// קריאה סינכרונית של ההגדרות השמורות — למצב ההתחלתי של ה-bloc, כדי
+  /// שהמסך הראשון לא ייבנה מברירות מחדל ויקפוץ אחרי הטעינה (issue #1280).
+  Map<String, dynamic> readSettings() {
     return {
       'isDarkMode': _settings.getValue<bool>(keyDarkMode, defaultValue: false),
       'followSystemTheme': _settings.getValue<bool>(
@@ -426,7 +431,7 @@ class SettingsRepository {
         keySearchShowPreview,
         defaultValue: true,
       ),
-      'shortcuts': await getShortcuts(),
+      'shortcuts': readShortcuts(),
       'enablePerBookSettings': _settings.getValue<bool>(
         keyEnablePerBookSettings,
         defaultValue: false,
@@ -995,7 +1000,9 @@ class SettingsRepository {
     await _settings.setValue(keyCalendarIcsSubscriptions, value);
   }
 
-  Future<Map<String, String>> getShortcuts() async {
+  Future<Map<String, String>> getShortcuts() async => readShortcuts();
+
+  Map<String, String> readShortcuts() {
     // Start with the default shortcuts
     final shortcuts = Map<String, String>.from(
       ShortcutValidator.defaultShortcuts,
@@ -1040,9 +1047,9 @@ class SettingsRepository {
     return Map<String, String>.unmodifiable(shortcuts);
   }
 
-  /// מוחק קיצורים שמורים שהמקש שלהם אינו מוכר, כך שהפעולה חוזרת לקיצור
-  /// ברירת המחדל שעובד. קיצור שהוקלט בפריסה לא-לטינית לפני שההקלטה נורמלה
-  /// נשמר עם התו המקומי (`ctrl+shift+כ`) ולעולם אינו נתפס.
+  /// מוחק קיצורים שמורים שלעולם לא ייתפסו, כך שהפעולה חוזרת לקיצור ברירת
+  /// המחדל שעובד: מקש שאינו מוכר (`ctrl+shift+כ` שהוקלט בפריסה לא-לטינית
+  /// לפני שההקלטה נורמלה), וב-Mac גם מקש שתפריט המערכת בולע.
   Future<void> removeUnrecognizedShortcuts() async {
     final storedRaw = _settings.getValue<Map<dynamic, dynamic>>(
       'shortcuts',
@@ -1058,16 +1065,23 @@ class SettingsRepository {
 
     for (final key in keysToCheck) {
       final value = _settings.getValue<String?>(key, defaultValue: null);
-      if (value != null && !ShortcutHelper.isRecognized(value)) {
+      if (value != null && !_isUsableShortcut(value)) {
         await _settings.remove(key);
       }
     }
 
     final cleaned = Map<String, String>.from(stored)
-      ..removeWhere((_, value) => !ShortcutHelper.isRecognized(value));
+      ..removeWhere((_, value) => !_isUsableShortcut(value));
     if (cleaned.length != stored.length) {
       await _settings.setValue('shortcuts', cleaned);
     }
+  }
+
+  bool _isUsableShortcut(String value) {
+    if (!ShortcutHelper.isRecognized(value)) return false;
+    if (!ShortcutHelper.usesMacModifiers) return true;
+    final normalized = ShortcutHelper.normalizeShortcut(value) ?? '';
+    return !ShortcutValidator.macReservedShortcuts.contains(normalized);
   }
 
   Future<void> resetShortcuts() async {

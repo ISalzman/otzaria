@@ -43,6 +43,12 @@ abstract class PluginMessages {
   static String uninstallPluginError(Object error) =>
       'שגיאה בהסרת התוסף: $error';
 
+  static String pluginDataReset(String pluginName) =>
+      'נתוני התוסף "$pluginName" אופסו';
+
+  static String resetPluginDataError(Object error) =>
+      'שגיאה באיפוס נתוני התוסף: $error';
+
   // ===== ניהול תוספים =====
   static String loadPluginsError(Object error) => 'שגיאה בטעינת תוספים: $error';
 

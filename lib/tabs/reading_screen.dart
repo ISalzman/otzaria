@@ -5,8 +5,8 @@ import 'package:flutter/foundation.dart'
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:otzaria/core/startup_timeline.dart';
 import 'package:otzaria/core/focus_repository.dart';
+import 'package:otzaria/core/windowing/tab_drag_preview.dart';
 import 'package:otzaria/history/bloc/history_bloc.dart';
 import 'package:otzaria/history/bloc/history_event.dart';
 import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
@@ -290,7 +290,6 @@ class _ReadingScreenState extends State<ReadingScreen>
 
   @override
   Widget build(BuildContext context) {
-    StartupTimeline.instance.markOnce('readingScreenBuild');
     return MultiBlocListener(
       listeners: [
         // תוספים שמוצגים בטאב הפעיל ממשיכים לרוץ; השאר מושהים. כולל טאב
@@ -383,6 +382,8 @@ class _ReadingScreenState extends State<ReadingScreen>
           if (state.hasOpenTabs) {
             _ensurePageController(validIndex);
           }
+          // שינוי כרטיסיות באותו אורך אינו מגיע ל-BlocListener.
+          TabContentBoundaries.instance.retainOnly(state.tabs);
           return Theme(
             data: Theme.of(context).copyWith(
               scaffoldBackgroundColor: readerBg,
@@ -450,9 +451,16 @@ class _ReadingScreenState extends State<ReadingScreen>
                                   key: ObjectKey(state.tabs[i]),
                                   child: TickerMode(
                                     enabled: i == validIndex,
-                                    child: _buildTabView(
-                                      state.tabs[i],
-                                      enableTourTargets: i == validIndex,
+                                    // המפתח מאפשר לצלם את הכרטיסיה הנגררת,
+                                    // גם כשהיא אינה הפעילה.
+                                    child: RepaintBoundary(
+                                      key: TabContentBoundaries.instance.keyFor(
+                                        state.tabs[i],
+                                      ),
+                                      child: _buildTabView(
+                                        state.tabs[i],
+                                        enableTourTargets: i == validIndex,
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -545,7 +553,6 @@ class _ReadingScreenState extends State<ReadingScreen>
     int pdfPaneCount = 1,
   }) {
     if (tab is PdfBookTab) {
-      StartupTimeline.instance.markOnce('paneContent:PdfBookTab');
       return PdfBookScreen(
         key: ValueKey(tab),
         tab: tab,

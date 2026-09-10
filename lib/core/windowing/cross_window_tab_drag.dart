@@ -26,7 +26,15 @@ class CrossWindowTabDrag {
   /// ירגיש רציף, ומורידים את התעבורה בסדר גודל.
   static const Duration _pollInterval = Duration(milliseconds: 60);
 
+  /// המסירה המוקדמת משאירה ל-Windows תנועה שתפעיל את Snap Layouts.
+  /// יציאה מהרצועה מבדילה אותה מסידור כרטיסיות מקומי.
   static const MultiWindowService _service = MultiWindowService();
+
+  /// נשמרת יציאה מהרצועה, גם אם הסמן חזר אליה בדרך מעלה.
+  bool _leftStrip = false;
+
+  /// מזהה עולה לכל גרירה, לגידור תשובות אסינכרוניות של גרירה שהסתיימה.
+  int _dragGeneration = 0;
 
   /// כותרת הכרטיסיה הנגררת כרגע, לשליחה לחלון היעד.
   String? _draggedTitle;
@@ -60,8 +68,15 @@ class CrossWindowTabDrag {
   /// ההודעה על כרטיסיה שאינה ניתנת להעברה כבר הוצגה.
   bool _rejectionReported = false;
 
+  /// מוק חייב להישלח לפני המסירה; הנייטיב אינו מעדכנו בתוך גרירת מערכת.
+  bool _snapshotSent = false;
+
   /// מיקום ההכנסה שהחלון היעד דיווח עליו, לשימוש בשחרור.
   int? _remoteDropIndex;
+
+  /// נקודת ה-y הנמוכה ביותר, שממנה נמדדת היציאה מעלה.
+  /// נזרעת בתחילת הגרירה כדי לא לפספס תנועה לפני פעימת המעקב.
+  int? _deepestCursorY;
 
   /// מתחיל את תצוגת הגרירה הנייטיבית ואת המעקב אחרי החלון שתחת הסמן.
   ///
@@ -86,8 +101,15 @@ class CrossWindowTabDrag {
     // ⚠️ מיקום הכנסה של גרירה **קודמת** אינו תקף לזו. בלי האיפוס כרטיסיה
     // נכנסה למקום שאליו כוונה הגרירה שלפניה.
     _remoteDropIndex = null;
+    // מאפס עומק ומוק מהגרירה הקודמת.
+    _deepestCursorY = null;
+    _leftStrip = false;
+    _dragGeneration++;
     // פעם אחת לכל גרירה — ראו [_transferable].
     _transferable = MultiWindowService.canTransfer(tab);
+    _snapshotSent = false;
+    // דוגם לפני פעימת המעקב הראשונה.
+    unawaited(_captureDragOrigin(_dragGeneration));
     final title = tab.title;
     // התצוגה מוצגת רק כשהסמן יוצא מחלון המקור, ולכן אין כפילות מול
     // ה-feedback של `Draggable`.
@@ -112,12 +134,12 @@ class CrossWindowTabDrag {
   ///    כוזב.
   /// 3. `snapped` גובר על היעד שתחת הסמן, ולכן שחרור מעל חלון אוצריא אחר
   ///    פתח חלון **חדש** במסגרת של 176×40 במקום להעביר אליו.
-  void applySnapshot(TabWindowPreview preview) {
-    if (!MultiWindowService.isSupported) {
+  void applySnapshot(TabWindowPreview preview, int generation) {
+    if (!MultiWindowService.isSupported || generation != _dragGeneration) {
       preview.image.dispose();
       return;
     }
-    unawaited(_sendSnapshot(preview));
+    unawaited(_sendSnapshot(preview, generation));
   }
 
   /// שולח את צילום הכרטיסיה, אם הוא באמת מכיל משהו.
@@ -126,7 +148,7 @@ class CrossWindowTabDrag {
   /// השתמשה ב-`toImageSync`, קיבלה תמונה ריקה, והתצוגה הראתה כרטיסיה
   /// שקופה — גרוע מהשרטוט שהיא באה להחליף. כאן ההחלטה היא לפי הפיקסלים
   /// עצמם ולא לפי הנחה על ה-API: אם אין מה להציג, השרטוט נשאר.
-  Future<void> _sendSnapshot(TabWindowPreview preview) async {
+  Future<void> _sendSnapshot(TabWindowPreview preview, int generation) async {
     final image = preview.image;
     try {
       final data = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
@@ -139,6 +161,7 @@ class CrossWindowTabDrag {
         );
         return;
       }
+      if (generation != _dragGeneration) return;
       await _service.setTabDragImage(
         rgba,
         image.width,
@@ -146,6 +169,8 @@ class CrossWindowTabDrag {
         targetWidth: preview.targetWidth,
         targetHeight: preview.targetHeight,
       );
+      // המסירה המוקדמת מותרת רק אחרי שהמוק נשלח.
+      if (generation == _dragGeneration) _snapshotSent = true;
     } catch (e) {
       debugPrint('צילום הכרטיסיה לגרירה נכשל: $e');
     } finally {
@@ -209,14 +234,20 @@ class CrossWindowTabDrag {
     _cancelFlutterDrag = null;
     _lastDragOverSlot = null;
     _remoteDropIndex = null;
+    _deepestCursorY = null;
   }
 
   Future<void> _poll() async {
+    final generation = _dragGeneration;
     final title = _draggedTitle;
     if (title == null || _handedOff) return;
     final target = await _service.windowAtCursor();
     // ⚠️ כשל בירור אינו "שולחן העבודה" — פשוט מדלגים על הפעימה.
     if (target == null) return;
+    // תשובה מאוחרת אינה רשאית לעדכן גרירה שכבר הסתיימה או הוחלפה.
+    if (generation != _dragGeneration || _draggedTitle == null || _handedOff) {
+      return;
+    }
     final slot = target.isSelf ? null : target.slot;
 
     if (_lastDragOverSlot != null && _lastDragOverSlot != slot) {
@@ -225,7 +256,20 @@ class CrossWindowTabDrag {
     }
     _lastDragOverSlot = slot;
 
-    if (target.isSelf) return;
+    final deepest = _trackDepth(target.y);
+
+    if (target.isSelf) {
+      // מסירה מוקדמת דורשת יציאה מהרצועה, תנועה מעלה ומוק זמין.
+      // כרטיסיה לא ניתנת להעברה נשארת במסלול המקומי בלי הודעה מטעה.
+      if (_leftStrip &&
+          _transferable &&
+          _snapshotSent &&
+          target.approachingTop &&
+          deepest - target.y >= target.minUpwardTravel) {
+        await _handOffToSystem();
+      }
+      return;
+    }
 
     // הסמן בחוץ: מכאן והלאה יש למי להציג את התצוגה הנייטיבית.
 
@@ -247,6 +291,27 @@ class CrossWindowTabDrag {
     // וההחלטה לאן הכרטיסיה הולכת נופלת **בשחרור**, לפי מה שתחת הסמן.
     // כלומר אין יותר מה לשמור עליו בהשהיה.
     await _handOffToSystem();
+  }
+
+  /// מסמן יציאה מהרצועה; סידור כרטיסיות מקומי אינו מסמן אותה.
+  void notePointerLeftStrip() => _leftStrip = true;
+
+  /// מעדכן את עומק הסמן לגרירה שירדה ואז חזרה מעלה.
+  int _trackDepth(int y) {
+    final deepest = _deepestCursorY;
+    if (deepest == null || y > deepest) {
+      _deepestCursorY = y;
+      return y;
+    }
+    return deepest;
+  }
+
+  /// דוגם את מיקום הסמן בתחילת הגרירה, לפני פעימת המעקב הראשונה.
+  /// ה-generation מונע מדגימה מאוחרת לזרוע עומק של גרירה קודמת.
+  Future<void> _captureDragOrigin(int generation) async {
+    final target = await _service.windowAtCursor();
+    if (target == null || generation != _dragGeneration) return;
+    _trackDepth(target.y);
   }
 
   /// האם [tab] ניתנת להעברה, בלי לבנות אותה מחדש כשכבר נבדקה.
@@ -491,13 +556,7 @@ class CrossWindowTabDrag {
       // הכרטיסיה נכנסת לחלון קיים — אין מה להחליף את הרוח, והיא מוסתרת
       // מיד כדי שלא תרחף מעל היעד.
       _hidePreview();
-      await _transferToPeer(
-        target.slot!,
-        tab,
-        tabsBloc,
-        target.x,
-        target.y,
-      );
+      await _transferToPeer(target.slot!, tab, tabsBloc, target.x, target.y);
       return;
     }
 

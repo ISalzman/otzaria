@@ -277,7 +277,8 @@ void main() {
       settingsBloc: settingsBloc,
     );
 
-    expect(find.byTooltip('הצג היסטוריה (⌘ + H)'), findsOneWidget);
+    // ⌘H שמור להסתרת היישום ב-Mac, ולכן ההיסטוריה נופלת ל-⌘Y (issue #1269).
+    expect(find.byTooltip('הצג היסטוריה (⌘ + Y)'), findsOneWidget);
     expect(find.byTooltip('הצג סימניות (⌘ + ⇧ + B)'), findsOneWidget);
   });
 

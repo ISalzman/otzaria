@@ -6,6 +6,7 @@ import 'package:otzaria/utils/file/document_format.dart';
 import 'package:otzaria/utils/file/legacy_word_pictures.dart';
 import 'package:otzaria/utils/file/legacy_word_properties.dart';
 import 'package:otzaria/utils/file/text_encoding.dart';
+import 'package:otzaria/utils/file/word_number_format.dart';
 import 'package:otzaria/utils/text/html_escape.dart';
 import 'package:otzaria/utils/text/otzaria_markup.dart';
 
@@ -117,6 +118,14 @@ String legacyWordToText(
     footnotes,
     cfb.readStream('Data'),
     embedImages: embedImages,
+    footnoteNumFmt: wordNumFmtForMsonfc(
+      legacyWordFootnoteNumberFormat(
+        wordDocument,
+        table,
+        plcfSedOffset: fib.fcPlcfSed,
+        plcfSedLength: fib.lcbPlcfSed,
+      ),
+    ),
   );
 
   final output = <String>[
@@ -154,6 +163,10 @@ class _Fib {
   final int fcPlcffndTxt;
   final int lcbPlcffndTxt;
 
+  /// `PlcfSed` — טבלת הסקציות, שממנה נקרא פורמט מספור ההערות.
+  final int fcPlcfSed;
+  final int lcbPlcfSed;
+
   /// מיקומי שכבת העיצוב — טבלת הסגנונות ועמודי ה-PAPX/CHPX.
   final LegacyWordPropertyLocations propertyLocations;
 
@@ -168,6 +181,8 @@ class _Fib {
     required this.lcbPlcffndRef,
     required this.fcPlcffndTxt,
     required this.lcbPlcffndTxt,
+    required this.fcPlcfSed,
+    required this.lcbPlcfSed,
     required this.propertyLocations,
   });
 
@@ -264,6 +279,7 @@ class _Fib {
     final (papxOffset, papxLength) = pair(_plcfBtePapxIndex);
     final (fndRefOffset, fndRefLength) = pair(_plcffndRefIndex);
     final (fndTxtOffset, fndTxtLength) = pair(_plcffndTxtIndex);
+    final (sedOffset, sedLength) = pair(_plcfSedIndex);
 
     // ccpFtn הוא הערך החמישי ב-fibRgLw, מיד אחרי ccpText.
     const ccpFtnIndex = 4;
@@ -284,6 +300,8 @@ class _Fib {
       lcbPlcffndRef: fndRefLength,
       fcPlcffndTxt: fndTxtOffset,
       lcbPlcffndTxt: fndTxtLength,
+      fcPlcfSed: sedOffset,
+      lcbPlcfSed: sedLength,
       propertyLocations: LegacyWordPropertyLocations(
         stshOffset: stshOffset,
         stshLength: stshLength,
@@ -299,6 +317,7 @@ class _Fib {
   static const int _stshfIndex = 1;
   static const int _plcffndRefIndex = 2;
   static const int _plcffndTxtIndex = 3;
+  static const int _plcfSedIndex = 6;
   static const int _plcfBteChpxIndex = 12;
   static const int _plcfBtePapxIndex = 13;
 }
@@ -545,18 +564,62 @@ Map<int, String> _readFootnotes(
   }
 }
 
-/// טקסט נקי מרצף תווים: תווי בקרה מושמטים וגבולות פסקה הופכים לרווח.
+/// טקסט נקי מרצף תווים: תווי בקרה מושמטים, גבולות פסקה הופכים לרווח,
+/// והוראות שדה מושמטות כמו בגוף המסמך.
 String _plainText(List<int> characters) {
   final buffer = StringBuffer();
+  final fields = _FieldState();
   for (final character in characters) {
-    if (character >= 0x20 || character == 0x09) {
-      buffer.writeCharCode(character);
-    } else if (_paragraphBoundaries.contains(character) ||
+    if (fields.consume(character)) continue;
+    if (_paragraphBoundaries.contains(character) ||
         character == _charLineBreak) {
+      fields.reset();
       buffer.write(' ');
+    } else if (!fields.inInstruction &&
+        (character >= 0x20 || character == 0x09)) {
+      buffer.writeCharCode(character);
     }
   }
   return buffer.toString().replaceAll(RegExp(r'\s+'), ' ').trim();
+}
+
+/// מחסנית השדות הפתוחים (`\13 הוראה \14 תוצאה \15`) — מקור יחיד לגוף
+/// המסמך ולטקסט ההערות; בלעדיו `NOTEREF _Ref403498473` זולג לגוף ההערה.
+class _FieldState {
+  /// `true` = השדה נמצא בחלק ההוראה שלו. שדות מקוננים (`IF { PAGE } = …`)
+  /// נפוצים, ודגל בוליאני יחיד נסגר על ה-`\14` הפנימי ומדליף את ההמשך.
+  final List<bool> _open = <bool>[];
+  int _instructions = 0;
+
+  /// האם הקריאה נמצאת בתוך הוראת שדה — טקסט שאינו חלק מהמסמך הנקרא.
+  bool get inInstruction => _instructions > 0;
+
+  /// מעדכן את המחסנית. מחזיר true כש-[character] הוא תו בקרה של שדה.
+  bool consume(int character) {
+    switch (character) {
+      case _charFieldBegin:
+        _open.add(true);
+        _instructions++;
+        return true;
+      case _charFieldSeparator:
+        if (_open.isNotEmpty && _open.last) {
+          _open[_open.length - 1] = false;
+          _instructions--;
+        }
+        return true;
+      case _charFieldEnd:
+        if (_open.isNotEmpty && _open.removeLast()) _instructions--;
+        return true;
+    }
+    return false;
+  }
+
+  /// שדה אינו חוצה גבול פסקה: בלי האיפוס הזה שדה שנפתח ולא נסגר
+  /// (קובץ קטוע) בולע את כל שאר המסמך.
+  void reset() {
+    _open.clear();
+    _instructions = 0;
+  }
 }
 
 /// תווי המסמך וההיסט הפיזי של כל אחד מהם.
@@ -599,6 +662,7 @@ List<String> _buildParagraphs(
   Map<int, String> footnotes,
   Uint8List? dataStream, {
   required bool embedImages,
+  required String footnoteNumFmt,
 }) {
   final characters = text.characters;
   final offsets = text.offsets;
@@ -619,11 +683,7 @@ List<String> _buildParagraphs(
   final rowCells = <String>[];
   final tableRows = <String>[];
 
-  // מחסנית השדות הפתוחים: `true` = השדה נמצא בחלק ההוראה שלו. שדות מקוננים
-  // (`IF { PAGE } = …`) נפוצים, ודגל בוליאני יחיד היה נסגר על ה-`\14` הפנימי
-  // ומדליף את המשך ההוראה החיצונית לגוף הספר.
-  final fields = <bool>[];
-  var openInstructions = 0;
+  final fields = _FieldState();
 
   void flushText() {
     if (raw.isEmpty) return;
@@ -696,33 +756,22 @@ List<String> _buildParagraphs(
     final footnote = footnotes[index];
     if (footnote != null) {
       flushText();
+      // סימון ריק (`numFmt` שמבטל מספור) היה מנתק את גוף ההערה
+      // מהעוגן שלו בשכבת התצוגה, ולכן חוזר לספרות.
+      final number = footnoteNumber++;
+      final label = formatWordNumber(number, footnoteNumFmt);
       html.write(
-        otzariaFootnote('${footnoteNumber++}', escapeHtmlText(footnote)),
+        otzariaFootnote(
+          label.isEmpty ? '$number' : label,
+          escapeHtmlText(footnote),
+        ),
       );
     }
 
-    if (character == _charFieldBegin) {
-      fields.add(true);
-      openInstructions++;
-      continue;
-    }
-    if (character == _charFieldSeparator) {
-      if (fields.isNotEmpty && fields.last) {
-        fields[fields.length - 1] = false;
-        openInstructions--;
-      }
-      continue;
-    }
-    if (character == _charFieldEnd) {
-      if (fields.isNotEmpty && fields.removeLast()) openInstructions--;
-      continue;
-    }
-    // שדה אינו חוצה גבול פסקה. בלי הגבול הזה `\13` ללא סוגר (קובץ קטוע)
-    // היה בולע את כל שאר המסמך.
+    if (fields.consume(character)) continue;
     if (_paragraphBoundaries.contains(character)) {
-      fields.clear();
-      openInstructions = 0;
-    } else if (openInstructions > 0) {
+      fields.reset();
+    } else if (fields.inInstruction) {
       continue;
     }
 

@@ -18,10 +18,12 @@ import 'package:otzaria/settings/engine/settings_state.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
+import 'package:otzaria/text_book/models/commentator_group.dart';
 import 'package:otzaria/text_book/view/page_shape/page_shape_screen.dart';
 import 'package:otzaria/text_book/view/page_shape/page_shape_settings_panel.dart';
 import 'package:otzaria/text_book/view/page_shape/utils/page_shape_settings_manager.dart';
 import 'package:otzaria/widgets/layout/context_overlay_panel.dart';
+import 'package:otzaria/widgets/layout/floating_panel.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
 import '../../../test_helpers/memory_cache_provider.dart';
@@ -201,8 +203,13 @@ void main() {
     expect(settingsPane(tester).isOpen, isTrue);
     expect(find.byType(PageShapeSettingsPanel), findsOneWidget);
 
-    // הפאנל (רוחב 400) יושב בצד הימני; הקשה בקצה השמאלי פוגעת ב-scrim.
-    await tester.tapAt(const Offset(30, 300));
+    final panelRect = tester.getRect(find.byType(FloatingPanel));
+    final screenWidth =
+        tester.view.physicalSize.width / tester.view.devicePixelRatio;
+    final scrimX = panelRect.left > 0
+        ? panelRect.left / 2
+        : panelRect.right + (screenWidth - panelRect.right) / 2;
+    await tester.tapAt(Offset(scrimX, 300));
     await tester.pump();
     await tester.pump();
     expect(settingsPane(tester).isOpen, isFalse);
@@ -493,13 +500,74 @@ void main() {
       isNot(true),
     );
   });
+  testWidgets(
+    'בורר המפרשים של צורת הדף אינו מציע את "הערות" ולא מפרשים נדירים',
+    (tester) async {
+      final openSettingsNotifier = ValueNotifier<int>(0);
+      addTearDown(openSettingsNotifier.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: MultiBlocProvider(
+            providers: [
+              BlocProvider<TextBookBloc>.value(
+                value: _TestTextBookBloc(
+                  _loadedState(
+                    availableCommentators: const [
+                      'רש"י על ספר בדיקה',
+                      kNotesCommentatorTitle,
+                      'דברים',
+                    ],
+                    rareCommentators: const {'דברים'},
+                  ),
+                ),
+              ),
+              BlocProvider<PersonalNotesBloc>.value(
+                value: _TestPersonalNotesBloc(
+                  const PersonalNotesState(
+                    isLoading: false,
+                    bookId: 'ספר בדיקה',
+                    locatedNotes: [],
+                    missingNotes: [],
+                    errorMessage: null,
+                    filteredLocatedNotes: [],
+                    filteredMissingNotes: [],
+                  ),
+                ),
+              ),
+              BlocProvider<SettingsBloc>.value(
+                value: _TestSettingsBloc(SettingsState.initial()),
+              ),
+            ],
+            child: PageShapeScreen(
+              openBookCallback: (_) {},
+              openSettingsNotifier: openSettingsNotifier,
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+
+      openSettingsNotifier.value++;
+      await tester.pumpAndSettle();
+
+      final panel = tester.widget<PageShapeSettingsPanel>(
+        find.byType(PageShapeSettingsPanel),
+      );
+      // 'הערות' הוא מפרש וירטואלי בלי קישורים — טור שנפתח ונעלם (issue #1227);
+      // מפרש "נדיר" הוא בדרך כלל קישור שסווג בטעות (issue #1233).
+      expect(panel.availableCommentators, ['רש"י על ספר בדיקה']);
+    },
+  );
 }
 
 TextBookLoaded _loadedState({
   List<String> availableCommentators = const ['רש"י על ספר בדיקה'],
+  Set<String> rareCommentators = const {},
   TextBook? book,
 }) {
   return TextBookLoaded(
+    rareCommentators: rareCommentators,
     book: book ?? TextBook(title: 'ספר בדיקה'),
     showLeftPane: false,
     content: const ['שורה א'],

@@ -709,8 +709,7 @@ Future<void> _initializeProcessSingletons() async {
   }
 
   // שירות ההתראות (לוח השנה) ושירות דיווחי השגיאות אינם חיוניים להצגת
-  // המסך הראשי. tz.initializeTimeZones + plugin init של flutter_local_notifications
-  // יכולים לקחת מאות מילי-שניות ב-Windows, ודיווחי השגיאות הם רק Timer.periodic.
+  // המסך הראשי, ודיווחי השגיאות הם רק Timer.periodic.
   // ⚠️ פר-תהליך, לא פר-חלון. שירות ההתראות רושם התראות מערכת, ושטיפת
   // דיווחי השגיאות שולחת את אותו תור — חלון משני שמריץ אותם שוב מייצר
   // התראות כפולות ודיווחים כפולים.
@@ -890,7 +889,57 @@ Future<void> _initializeTimeZonesOnly() async {
   }
 }
 
+/// האם נותרו התראות מתוזמנות שיש לשחזר, לפי הערכים השמורים. אין כאלה — אין
+/// סיבה לגעת בתוסף: כל שאר נקודות השימוש מאתחלות אותו לפי דרישה.
+@visibleForTesting
+bool hasScheduledNotificationsToRestore({
+  required String zmanAlertsJson,
+  required String eventNotificationIdsJson,
+}) {
+  bool isEmptyJson(String value) {
+    final trimmed = value.trim();
+    return trimmed.isEmpty ||
+        trimmed == '{}' ||
+        trimmed == '[]' ||
+        trimmed == 'null';
+  }
+
+  return !isEmptyJson(zmanAlertsJson) || !isEmptyJson(eventNotificationIdsJson);
+}
+
+bool _hasScheduledNotificationsToRestore() {
+  return hasScheduledNotificationsToRestore(
+    zmanAlertsJson:
+        Settings.getValue<String>(
+          SettingsRepository.keyCalendarZmanAlerts,
+          defaultValue: '{}',
+        ) ??
+        '{}',
+    eventNotificationIdsJson:
+        Settings.getValue<String>(
+          SettingsRepository.keyCalendarEventNotificationIds,
+          defaultValue: '[]',
+        ) ??
+        '[]',
+  );
+}
+
 Future<void> _runDeferredNotificationService() async {
+  await _initializeTimeZonesOnly();
+
+  // ⚠️ `initialize` של flutter_local_notifications_windows עושה קריאת COM
+  // סינכרונית לשירות ההתראות של המערכת, ובמחשבים מסוימים היא נתקעת 30 שניות
+  // וחוסמת את ה-thread הראשי — שעליו רץ גם ה-UI isolate (issue #1192).
+  if (!_hasScheduledNotificationsToRestore()) return;
+
+  try {
+    await _mainWindowRevealedCompleter.future.timeout(
+      const Duration(seconds: 20),
+    );
+  } on TimeoutException {
+    // החלון עדיין מוסתר — ממשיכים, אחרת ההתראות לא ישוחזרו כלל.
+  }
+
   try {
     await NotificationService().init();
   } catch (error, stackTrace) {
@@ -1093,12 +1142,21 @@ void _sendEarlyInstallAcks(List<String> args) {
     if (uri == null) continue;
     final reportContext = PluginStoreLinkParser.parseUri(uri)?.reportContext;
     if (reportContext != null) {
-      futures.add(PluginInstallReportService.acknowledge(reportContext));
+      futures.add(_acknowledgeAfterCerts(reportContext));
     }
   }
   if (futures.isNotEmpty) {
     _earlyInstallAckFuture = Future.wait(futures);
   }
+}
+
+/// ברשת מסוננת (נטפרי) ה-TLS ל-callback נכשל עד שתעודת ה-CA נטענת —
+/// האישור היה נבלע בשקט והחנות ראתה רק את האישור המאוחר מה-bloc.
+Future<void> _acknowledgeAfterCerts(PluginInstallReportContext context) async {
+  try {
+    await loadCerts();
+  } catch (_) {}
+  await PluginInstallReportService.acknowledge(context);
 }
 
 Future<void> _enqueueExternalActivationArgs(List<String> args) async {
@@ -1288,9 +1346,10 @@ class _AppBootstrapState extends State<AppBootstrap> {
           BlocProvider<SettingsBloc>(
             create: (_) => StartupTimeline.instance.phaseSync(
               'settingsBloc',
-              () =>
-                  SettingsBloc(repository: settingsRepository)
-                    ..add(LoadSettings()),
+              () => SettingsBloc(
+                repository: settingsRepository,
+                initialSettings: settingsRepository.readSettings(),
+              )..add(LoadSettings()),
             ),
           ),
           BlocProvider<LibraryBloc>(
@@ -1561,7 +1620,11 @@ Future<void> initHive() async {
   await TabsRepository.adoptOrphanWindowSessions();
 }
 
-Future<void> loadCerts() async {
+Future<void>? _loadCertsFuture;
+
+Future<void> loadCerts() => _loadCertsFuture ??= _loadCerts();
+
+Future<void> _loadCerts() async {
   final certs = ['assets/ca/netfree_cas.pem'];
   for (var cert in certs) {
     final certBytes = await rootBundle.load(cert);

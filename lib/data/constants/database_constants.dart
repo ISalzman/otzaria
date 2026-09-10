@@ -37,6 +37,17 @@ class DatabaseConstants {
   static String talmudBavliPdfExternalLibraryId(String title) =>
       'talmud-pdf:$title';
 
+  /// האם [externalLibraryId] מזהה מסכת PDF מצורפת — ה-PDF היחיד בספרייה
+  /// שמקבל מזהה בקידומת הזו; PDF אישי אינו מקבל מזהה כלל.
+  static bool isTalmudBavliPdfExternalLibraryId(String? externalLibraryId) =>
+      externalLibraryId != null && externalLibraryId.startsWith('talmud-pdf:');
+
+  /// האם [externalLibraryId] מייצג את ספריית אוצריא עצמה — ללא מזהה, או
+  /// מסכת PDF מצורפת. קטלוג חיצוני אמיתי (כמו 'otzar') אינו כזה.
+  static bool isBundledLibrarySource(String? externalLibraryId) =>
+      externalLibraryId == null ||
+      isTalmudBavliPdfExternalLibraryId(externalLibraryId);
+
   /// שם קובץ הגרסה בתיקיית התלמוד, וערך הסימון בזמן חילוץ שטרם הסתיים.
   static const String talmudBavliVersionFileName = '.version';
   static const String talmudBavliInstallingMarker = 'installing';

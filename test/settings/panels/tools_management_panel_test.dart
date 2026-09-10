@@ -666,6 +666,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(_rowButton('תוסף-A', 'הפעל'), findsOneWidget);
+      expect(_rowButton('תוסף-A', 'איפוס נתוני התוסף'), findsOneWidget);
       expect(_rowButton('תוסף-A', 'מחק תוסף'), findsOneWidget);
       expect(_rowButton('תוסף-A', 'ניהול הרשאות'), findsNothing);
       expect(_rowButton('תוסף-A', 'הסתר מהממשק'), findsNothing);
@@ -945,6 +946,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('ניהול הרשאות'), findsOneWidget);
       expect(find.text('אישור גישה לרשת'), findsOneWidget);
+      expect(find.text('איפוס נתוני התוסף'), findsOneWidget);
       expect(find.text('מחק תוסף'), findsOneWidget);
     },
   );

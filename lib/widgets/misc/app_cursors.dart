@@ -20,6 +20,11 @@ class AppCursors {
       : SystemMouseCursors.grabbing;
   static bool _initStarted = false;
 
+  /// custom_mouse_cursor נכנס לרקורסיה אינסופית מול TestPlatformDispatcher —
+  /// בדיקות אינטגרציה שמעלות את האפליקציה מדליקות את זה לפני main.
+  @visibleForTesting
+  static bool skipForTesting = false;
+
   /// גודל הסמן בפיקסלים לוגיים.
   static const double _size = 18;
 
@@ -35,7 +40,7 @@ class AppCursors {
   /// יוצר את הסמנים המותאמים ברקע (חד-פעמי, Windows בלבד).
   /// עד לסיום — ואם היצירה נכשלת — נשארת יד המערכת (IDC_HAND).
   static Future<void> ensureInitialized() async {
-    if (_initStarted || !Platform.isWindows) return;
+    if (_initStarted || skipForTesting || !Platform.isWindows) return;
     _initStarted = true;
 
     try {

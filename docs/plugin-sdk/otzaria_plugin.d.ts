@@ -1502,12 +1502,22 @@ export interface DatabaseBatchQueryResult {
   results: DatabaseQueryResult[];
 }
 
+/**
+ * Where an installed plugin came from. `packaged` is an archive install (store
+ * or file); the two dev kinds are loaded by a developer from a folder or a local
+ * dev server, so their version does not come from the store and must never be
+ * compared against it. Present from 0.9.98.
+ */
+export type PluginSourceType = 'packaged' | 'development' | 'localhost_dev';
+
 export interface InstalledPlugin {
   pluginId: string;
   name: string;
   version: string;
   enabled: boolean;
   showInTools: boolean;
+  /** Absent before 0.9.98. */
+  sourceType?: PluginSourceType;
   toolTabIconName: string;
 }
 

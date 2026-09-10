@@ -202,5 +202,28 @@ void main() {
 
       expect(xml, contains('<icon name="application-x-otzaria-plugin"/>'));
     });
+
+    test('markOfficeTrustedProtocols יוצר מפתח לכל גרסת אופיס', () {
+      final created = <String>[];
+      PluginProtocolRegistrationService.markOfficeTrustedProtocols(created.add);
+
+      expect(
+        created,
+        PluginProtocolRegistrationService.buildOfficeTrustedProtocolKeys(),
+      );
+    });
+
+    test('כשל הרשאה במפתח מדיניות אינו מפיל את הסימון כולו', () {
+      final created = <String>[];
+      PluginProtocolRegistrationService.markOfficeTrustedProtocols((subkey) {
+        if (subkey.contains('12.0')) {
+          throw Exception('HRESULT(0x80070005): Access is denied.');
+        }
+        created.add(subkey);
+      });
+
+      expect(created, hasLength(3));
+      expect(created.every((key) => !key.contains('12.0')), isTrue);
+    });
   });
 }

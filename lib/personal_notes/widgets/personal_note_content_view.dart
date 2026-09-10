@@ -5,6 +5,7 @@ import 'package:flutter_quill/flutter_quill.dart' as quill;
 import 'package:otzaria/personal_notes/models/personal_note.dart';
 import 'package:otzaria/personal_notes/utils/note_link_detection.dart';
 import 'package:otzaria/widgets/dialogs/app_dialogs.dart';
+import 'package:otzaria/widgets/misc/app_selection_area.dart';
 
 /// מציג את ההערות של שורה בחלון קריאה ממורכז.
 Future<bool?> showPersonalNotesDialog({
@@ -132,11 +133,18 @@ class _PersonalNoteContentViewState extends State<PersonalNoteContentView> {
   Widget build(BuildContext context) {
     final controller = _controller;
     if (controller != null) {
+      // בתוך AppSelectionArea תפריט ההעתקה מגיע ממנו — תפריט Flutter של
+      // העורך היה נפתח לצדו (issue #1271).
+      final hostHasOwnMenu =
+          context.findAncestorWidgetOfExactType<AppSelectionArea>() != null;
       final editor = quill.QuillEditor(
         controller: controller,
         focusNode: _focusNode!,
         scrollController: _scrollController!,
         config: quill.QuillEditorConfig(
+          contextMenuBuilder: hostHasOwnMenu
+              ? (context, _) => const SizedBox.shrink()
+              : null,
           autoFocus: false,
           expands: false,
           padding: EdgeInsets.zero,

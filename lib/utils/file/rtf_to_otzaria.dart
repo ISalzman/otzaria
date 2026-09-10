@@ -540,6 +540,9 @@ class _RtfParser {
       case 'latentstyles':
       case 'datastore':
       case 'xmlnstbl':
+      // הוראת שדה (`NOTEREF _Ref…`) — מטא-דאטה ולא תוכן. התוצאה
+      // יושבת ב-`fldrslt` ונשמרת (issue #1240 במסלול ה-DOC).
+      case 'fldinst':
       // העותק הכפול של תמונה ב-Word; ה-`\*\shppict` שלפניו הוא המקור.
       case 'nonshppict':
         _state.destination = _Destination.skip;

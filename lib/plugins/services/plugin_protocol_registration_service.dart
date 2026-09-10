@@ -57,9 +57,26 @@ class PluginProtocolRegistrationService {
       }
     }
 
-    // המפתחות עצמם הם הסימון — אופיס בודק רק את קיומם, בלי ערך בתוכם.
+    markOfficeTrustedProtocols(
+      (subkey) => CURRENT_USER.create(subkey).close(),
+    );
+  }
+
+  /// המפתחות עצמם הם הסימון — אופיס בודק רק את קיומם, בלי ערך בתוכם.
+  ///
+  /// ⚠️ תוספת קוסמטית בלבד: היא חוסכת אזהרת אבטחה, ולא נדרשת לפתיחת קישורים.
+  /// ב-`HKCU\Software\Policies` אין למשתמש הרשאת כתיבה במחשב מנוהל, ולכן כשל
+  /// שם אינו כשל רישום ואסור לו לזהם את יומן השגיאות בכל הפעלה.
+  @visibleForTesting
+  static void markOfficeTrustedProtocols(void Function(String subkey) create) {
     for (final subkey in buildOfficeTrustedProtocolKeys()) {
-      CURRENT_USER.create(subkey).close();
+      try {
+        create(subkey);
+      } catch (error) {
+        if (kDebugMode) {
+          debugPrint('סימון פרוטוקול מהימן באופיס נכשל עבור $subkey: $error');
+        }
+      }
     }
   }
 

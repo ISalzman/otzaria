@@ -7,6 +7,11 @@ import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 /// חייבים להשתמש באותו ערך כדי שההדגשה תתאים בדיוק למקום שהניווט מוביל אליו.
 const double kReadingAnchorAlignment = 0.05;
 
+/// היישור שבו נפתחת רשימת הקריאה. מעל הפריט הראשון אין תוכן, ולכן קו העוגן
+/// אינו בר-השגה שם: הפתיחה מציגה רווח ריק שנעלם בגלילה הראשונה ואינו חוזר.
+double initialReadingAlignment(int initialIndex) =>
+    initialIndex == 0 ? 0 : kReadingAnchorAlignment;
+
 /// קו העוגן לניווט אל תוצאת חיפוש — ממקם את המילה שנמצאה סביב מרכז-עליון
 /// התצוגה (ולא בראש), כדי שיהיה הקשר גם מעל המילה. זהה לסרגל התוצאות בחלונית
 /// ולפתיחת ספר מהחיפוש הכללי.

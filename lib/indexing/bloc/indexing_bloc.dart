@@ -23,7 +23,6 @@ class IndexingBloc extends Bloc<IndexingEvent, IndexingState> {
   bool _isPaused = false;
   bool _isEconomy = false;
   bool _isFinalizing = false;
-  double? _finalizingProgress;
 
   IndexingBloc(
     this._repository, {
@@ -38,7 +37,6 @@ class IndexingBloc extends Bloc<IndexingEvent, IndexingState> {
     on<SetEconomyIndexing>(_onSetEconomyIndexing, transformer: sequential());
     on<ActualIndexingStarted>(_onActualIndexingStarted);
     on<IndexingFinalizing>(_onFinalizing);
-    on<IndexingFinalizeProgress>(_onFinalizeProgress);
     on<UpdateIndexingProgress>(_onUpdateProgress);
     on<ClearIndex>(_onEraseIndex);
   }
@@ -66,7 +64,6 @@ class IndexingBloc extends Bloc<IndexingEvent, IndexingState> {
     isPaused: _isPaused,
     isEconomy: _isEconomy,
     isFinalizing: _isFinalizing,
-    finalizingProgress: _finalizingProgress,
   );
 
   Future<void> _onIndexingWork(
@@ -84,7 +81,6 @@ class IndexingBloc extends Bloc<IndexingEvent, IndexingState> {
     }
 
     _isFinalizing = false;
-    _finalizingProgress = null;
     // ריצה חדשה מתחילה ללא השהיה; המצב החסכוני נשמר בין ריצות.
     if (_isPaused) {
       _isPaused = false;
@@ -231,9 +227,6 @@ class IndexingBloc extends Bloc<IndexingEvent, IndexingState> {
         onFinalizing: () {
           add(IndexingFinalizing(workId));
         },
-        onFinalizingProgress: (fraction) {
-          add(IndexingFinalizeProgress(workId, fraction));
-        },
         onProgress: (processed, total) {
           // Update progress through event
           add(
@@ -297,23 +290,6 @@ class IndexingBloc extends Bloc<IndexingEvent, IndexingState> {
     final currentState = state;
     if (currentState is! IndexingInProgress) return;
     _isFinalizing = true;
-    emit(
-      _inProgress(
-        booksProcessed: currentState.booksProcessed,
-        totalBooks: currentState.totalBooks,
-        isCreatingIndex: currentState.isCreatingIndex,
-      ),
-    );
-  }
-
-  void _onFinalizeProgress(
-    IndexingFinalizeProgress event,
-    Emitter<IndexingState> emit,
-  ) {
-    if (_activeWorkId != event.workId) return;
-    final currentState = state;
-    if (currentState is! IndexingInProgress) return;
-    _finalizingProgress = event.fraction;
     emit(
       _inProgress(
         booksProcessed: currentState.booksProcessed,

@@ -413,7 +413,18 @@ class MultiWindowService {
   /// הגרסה הקודמת החזירה `(slot: null, isSelf: false)` בכשל — בדיוק הצורה
   /// של "שוחרר על שולחן העבודה". כלומר כשל ערוץ פתח חלון חדש בפינה (0,0)
   /// ומחק את הכרטיסיה מהמקור.
-  Future<({int? slot, bool isSelf, bool isShellTray, int x, int y})?>
+  /// ערכי ההתקרבות מחושבים בנייטיב לפי הצג וה-DPI שמתחת לסמן.
+  Future<
+    ({
+      int? slot,
+      bool isSelf,
+      bool isShellTray,
+      bool approachingTop,
+      int minUpwardTravel,
+      int x,
+      int y,
+    })?
+  >
   windowAtCursor() async {
     if (!isSupported) return null;
     try {
@@ -425,6 +436,9 @@ class MultiWindowService {
         slot: info['slot'] as int?,
         isSelf: info['isSelf'] == true,
         isShellTray: info['isShellTray'] == true,
+        approachingTop: info['approachingTop'] == true,
+        // ערך חסר דורש נסיעה שמרנית יותר.
+        minUpwardTravel: (info['minUpwardTravel'] as int?) ?? 24,
         x: (info['x'] as int?) ?? 0,
         y: (info['y'] as int?) ?? 0,
       );

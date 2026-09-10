@@ -114,6 +114,113 @@ lib/
 ```
 
 
+## Startup Path (MANDATORY)
+
+**The rule: nothing runs during startup unless it must run before the first frame.**
+
+Every `await` added to `main()` is paid by every user on every launch, forever. Startup
+regressions are also the hardest bugs in this app to diagnose: they reproduce only on the
+reporter's machine, and the blocking call is usually invisible from Dart. Issues #343, #989 and
+#1192 were three instances of the same mistake.
+
+### Why Windows startup is different
+
+On Windows the Dart **UI isolate runs on the platform thread**. A synchronous native call — COM /
+WinRT, a registry write, `Process.run`, a plugin's `initialize()` — blocks that thread, and with
+it **every Dart frame and every Dart timer**. In #1192 a notification-plugin init that costs ~50ms
+on a dev machine blocked for **30 seconds** inside one COM call on a reporter's machine.
+
+Two consequences that are easy to get wrong:
+
+- **A `Future.timeout` does not protect you.** The timer that would fire it is queued on the same
+  blocked thread. You cannot defend against synchronous native work with a Dart timeout — you can
+  only avoid making the call.
+- **A slow machine is not a slower version of yours.** Filtering agents, antivirus, managed
+  profiles and roaming registry hives change the *shape* of the cost, not just its size: process
+  spawn becomes ~1s each (#989), a registry subtree becomes unwritable, an OS service stops
+  answering. Never conclude "it's fast" from your own box.
+
+### Before adding anything to `main()` / `AppBootstrap`
+
+Answer all three, in this order:
+
+| Question | If the answer is… |
+|---|---|
+| Is it required to paint the first frame? | No → run it after reveal (below) |
+| Do the call sites already initialize on demand? | Yes → **delete it** — that is the whole fix |
+| Can it be skipped based on stored state? | Yes → gate on that state and run only when needed |
+
+#1192 answered all three: the notification plugin was initialized eagerly, every call site already
+did `if (!isInitialized) await init()`, and the one genuine need — restoring already-scheduled
+alerts — applies only when alerts are actually stored. The fix deleted the call rather than
+speeding it up.
+
+### Running work after the window is revealed
+
+Deferred work lives in a `_runDeferredX()` function in `main.dart`, launched with `unawaited(...)`,
+and waits for the reveal with a timeout so it still runs if the reveal never lands:
+
+```dart
+Future<void> _runDeferredThing() async {
+  // פר-תהליך: חלון משני היה מריץ את זה שוב על אותם משאבים.
+  if (WindowRole.isSecondary) return;
+  try {
+    await _mainWindowRevealedCompleter.future.timeout(const Duration(seconds: 20));
+  } on TimeoutException {
+    // ממשיכים בכל זאת — אחרת המשימה לא תרוץ כלל.
+  }
+  try {
+    await doTheThing();
+  } catch (error, stackTrace) {
+    _logNonFatalInitializationError('Thing', error, stackTrace);
+  }
+}
+```
+
+Three parts, all mandatory:
+
+1. **`WindowRole.isSecondary` guard** for anything per-process or per-machine (registry, system
+   notifications, update checks, error-report flush). Without it every extra window repeats it.
+2. **Reveal gate with a timeout** — never an unguarded `await` on the completer.
+3. **Non-fatal failure** — a startup step must never abort the boot. It logs through
+   `_logNonFatalInitializationError` and returns.
+
+### Forbidden on the startup path
+
+| Never | Instead |
+|---|---|
+| Synchronous COM / WinRT / FFI on the main isolate | Defer past reveal, or don't call it |
+| `Process.run` in a loop (`reg.exe`, `which`, …) | Use the direct API (#989: 10 spawns blew every timeout) |
+| A network call without a timeout | Explicit timeout on every request (#343) |
+| Heavy CPU on the main isolate (parsing, scanning, hashing) | `compute` / `Isolate.run` |
+| Sync file I/O over a directory tree | Async, off the reveal path, memoized |
+| A failure that propagates out of an init step | `_logNonFatalInitializationError` |
+
+**Cosmetic extras are best-effort, and must say so.** A step that only improves polish — a shell
+icon, an Office trusted-protocol key, a cache warm-up — swallows its own failures per item, so one
+denied write does not abort the rest and does not reach the error log. Registering a real handler
+is not cosmetic; marking it trusted is.
+
+### Instrumentation
+
+`StartupTimeline` (`lib/core/startup_timeline.dart`) records phases and marks and writes a
+`=== Slow startup` record to `errors.txt` only when reveal exceeded its threshold. It carries a
+**deliberately small permanent skeleton** — the bootstrap phases, `reveal:*`, `mainScreenInit`,
+`bootstrapDone`/`bootstrapReady` and the stall detector.
+
+- Wrap a new heavy startup step in `StartupTimeline.instance.phase('name', ...)` — that is the
+  skeleton growing correctly.
+- **Never put a mark inside `build()` or a per-frame callback.** Marks added while chasing a
+  specific report are temporary: remove them in the same PR that fixes the cause.
+- A `stall:<ms>` mark means the isolate stopped answering — the blocker is synchronous, and if no
+  Dart mark brackets it, it is **native**.
+
+When Dart-side marks show nothing, use the native stall detector in
+`windows/runner/startup_watchdog.cpp`. It suspends the main thread, unwinds it without dbghelp, and
+appends `=== Startup stall` with module+RVA frames to `errors.txt`. It stops itself at reveal and
+is silent on a healthy launch. That is how #1192 was found after three rounds of Dart instrumentation
+missed it.
+
 ## MANDATORY UI Components
 
 ### 1. Icons - ONLY from `fluentui_system_icons`
@@ -420,7 +527,7 @@ flutter test test/settings/l10n/
 - String interpolation inside the key (`'שמור ${count} ספרים'`) — use `args:` instead
 - A non-Hebrew invented key
 - Editing `settings_catalogs.g.dart` by hand — it is generated, and your edit is lost on the next build
-- `textDirection` or `Directionality` to "fix" the English mode — the app stays RTL; only the settings screen switches locally
+- `textDirection` or `Directionality` to "fix" the English mode — direction is owned by two widgets only (see below); reading content and dialogs stay RTL
 
 **Two traps that make a string render Hebrew even though it looks wrapped:**
 
@@ -430,6 +537,16 @@ flutter test test/settings/l10n/
    ```dart
    showDialog(context: context, builder: settingsDialogBuilder(context, (_) => const MyDialog()));
    ```
+
+**Direction in an LTR interface language** is owned by `ChromeDirectionality` / `ContentDirectionality`
+(`lib/settings/l10n/chrome_directionality.dart`) and by nothing else. `ChromeDirectionality` applies the
+interface language's direction, and wraps exactly the app chrome: the title bar (from *outside*
+`CustomTitleBar` — its `State` reads the direction too, e.g. to tell which half of a split tab the
+pointer is on), the navigation rail, the tabs column and the tools launcher. `ContentDirectionality`
+pins the screens themselves back to RTL, so books, the library and the reader never flip. A new chrome
+widget uses `EdgeInsetsDirectional` / `AlignmentDirectional` and resolves any physical side against
+`Directionality.of(context)` — never a hard-coded `left`/`right`. Covered by
+`test/navigation/chrome_direction_test.dart`.
 
 Strings outside `lib/settings/` are Hebrew-only by design — do **not** wrap them. The exceptions below **do** go through the same catalog (translated text, direction stays RTL — the app-wide `SettingsTextScope` in `lib/app.dart` makes `context.settingsText` work everywhere, dialogs included, with no `settingsDialogBuilder` needed outside settings):
 
@@ -691,7 +808,7 @@ dart format lib/file.dart    # Format ONLY files you modified
 | קאש שורות הספר לחיפוש (שחרור בטאב רקע) | `test/text_book/view/text_book_search_content_cache_test.dart` |
 | TOC navigator UI | `test/text_book/view/toc_navigator_screen_test.dart` |
 | TOC navigator internals | `test/text_book/view/toc_navigator_internals_test.dart` |
-| דיבורי-המתחיל כתתי-כותרות בניווט (שזירה בעץ מועתק, הכותרת הנוכחית נשארת ברמת הכותרת) | `test/text_book/view/toc_dibburim_attach_test.dart`, `test/text_book/view/toc_navigator_dibburim_test.dart` |
+| דיבורי-המתחיל כמבנה מסונתז בלשונית 'כותרות' (בניית הערכים, קיצור מילים, הערך הפעיל) | `test/text_book/utils/dibburim_structure_test.dart`, `test/text_book/view/alt_toc_sidebar_dibburim_test.dart` |
 | Combined view helpers (shouldShow…) | `test/text_book/view/combined_view/combined_book_screen_test.dart` |
 | TabbedCommentaryPanel tab switching / onTabChanged | `test/text_book/view/tabbed_commentary_panel_test.dart` |
 | Page shape commentary selection | `test/text_book/view/page_shape_commentary_selection_test.dart` |
@@ -795,9 +912,7 @@ dart format lib/file.dart    # Format ONLY files you modified
 | Context overlay panel | `test/widgets/context_overlay_panel_test.dart` |
 | Context menu (incl. hover preview + pinning) | `test/widgets/app_context_menu_test.dart` |
 | Link preview panel (placement, pin, scroll anchor) | `test/widgets/link_preview_overlay_test.dart` |
-| Dual adaptive reader pane | `test/widgets/dual_adaptive_reader_pane_test.dart` |
 | Nav rail item | `test/widgets/nav_rail_item_test.dart` |
-| Reader side panel shell | `test/widgets/reader_side_panel_shell_test.dart` |
 | Responsive action bar | `test/widgets/responsive_action_bar_test.dart` |
 | רוחב עמודת הטקסט (בסיס אזור הקריאה, יציב בפתיחת חלונית) | `test/widgets/layout/reading_area_width_test.dart` |
 | Scrollable list scrollbar | `test/widgets/scrollable_positioned_list_scrollbar_test.dart` |
@@ -806,6 +921,7 @@ dart format lib/file.dart    # Format ONLY files you modified
 | פתיחה בכרטיסייה חדשה בלחיצת גלגל (`MiddleClickOpen`) | `test/widgets/middle_click_open_test.dart` |
 | זיהוי קישור `<a>` תחת הסמן (תפריט הקשר / לחיצת גלגל) | `test/widgets/inline_link_targets_test.dart` |
 | Smart text render settings | `test/widgets/smart_text/render_settings_test.dart` |
+| הדגשת חיפוש כששם הוי"ה מוחלף (הדגשה לפני ההחלפה, issue #1248) | `test/widgets/smart_text/text_renderer_holy_name_highlight_test.dart` |
 | Smart text ↔ plugin section sync gate | `test/widgets/smart_text/smart_text_section_sync_gate_test.dart` |
 | קיבוע מדויק של גובה השורה (סימוני הערות, `<big>`) בשלושת מסלולי הרינדור | `test/widgets/smart_text/exact_line_height_test.dart` |
 | Work/indexing status overlays | `test/widgets/work_status_overlay_test.dart`, `…indexing_status_overlay_test.dart` |
@@ -818,8 +934,9 @@ dart format lib/file.dart    # Format ONLY files you modified
 | Area | Test File |
 |------|-----------|
 | Navigation BLoC | `test/navigation/navigation_bloc_test.dart` |
+| כיווניות הכרום בשפת ממשק LTR | `test/navigation/chrome_direction_test.dart` |
 | תפריט ההקשר של כרטיסיה (משותף לרצועה העליונה ולעמודה) | `test/navigation/tab_context_menu_test.dart` |
-| Startup guard / auto-reindex | `test/navigation/startup_work_gate_test.dart`, `…startup_auto_reindex_test.dart`, `…new_books_indexing_guard_test.dart` |
+| Startup guard / auto-reindex | `test/navigation/startup_work_gate_test.dart`, `…startup_auto_reindex_test.dart`, `…refresh_indexing_dedupe_test.dart` |
 
 **Other Features**
 | Area | Test File |
@@ -835,7 +952,8 @@ dart format lib/file.dart    # Format ONLY files you modified
 | Library browser | `test/library/view/library_browser_preview_width_test.dart`, `…grid_items_test.dart`, `…library_browser_flat_tree_test.dart` |
 | שמירת טקסט החיפוש בניווט בספרייה ("חזור"/"בית") | `test/library/bloc/library_navigation_keeps_search_test.dart`, `test/library/view/library_empty_state_navigation_test.dart` |
 | Empty library screen | `test/empty_library/empty_library_screen_test.dart` |
-| PDF isolate / rasterizer | `test/printing/pdf_isolate_test.dart`, `…pdf_text_rasterizer_test.dart` |
+| PDF isolate | `test/printing/pdf_isolate_test.dart` |
+| טקסט מעוצב ב-PDF (גופן Type0 עם גליפים מ-shaper, פריסה ויישור, bidi) | `test/printing/shaped_text/pdf_shaped_font_test.dart`, `…shaped_text_layout_test.dart` |
 | PDF in-book search highlight pattern | `test/pdf_book/pdf_search_highlight_pattern_test.dart` |
 | ניתוב החיפוש בתוך PDF (פשוט מול מנוע) | `test/pdf_book/pdf_search_in_book_routing_test.dart` |
 | Printing models | `test/printing/print_content_models_test.dart` |
@@ -847,6 +965,7 @@ dart format lib/file.dart    # Format ONLY files you modified
 | Plugin links API (`getLinks`, `getRawLinks`, `getCommentators`, `getLinkContent`) | `test/plugins/bridge/plugin_bridge_links_api_test.dart` |
 | דגל שינויים שלא נשמרו בתוסף (`ui.setUnsavedChanges`, רגיסטרי, שומר סגירת כרטיסיה) | `test/plugins/bridge/plugin_bridge_set_unsaved_changes_test.dart`, `test/plugins/services/plugin_unsaved_changes_registry_test.dart`, `test/tabs/utils/confirm_close_tabs_test.dart` |
 | Plugin permission enforcement / rate limiting | `test/plugins/bridge/plugin_bridge_handler_test.dart` |
+| קיצורי ניווט של התוכנה בתוך WebView של תוסף (רשימה מוזרקת, תפיסה ב-JS, הזרקה לצינור המקלדת) | `test/plugins/services/plugin_host_shortcuts_test.dart`, `test/plugins/view/plugin_host_shortcut_script_test.dart` |
 | Plugin highlights / reader section tracking | `test/plugins/services/plugin_highlight_registry_test.dart`, `…reader_section_content_tracker_test.dart`, `…reader_section_sync_gate_test.dart` |
 | Plugin foreground suspend/resume | `test/plugins/services/plugin_runtime_dispatcher_test.dart` |
 | פוקוס מקלדת ל-WebView של תוסף (הקלדה מיד בפתיחה) | `test/plugins/services/plugin_webview_focus_test.dart`, `…plugin_keyboard_focus_test.dart` |
@@ -989,6 +1108,7 @@ if (Platform.isAndroid || Platform.isIOS) {
 16. **Minimal comments** - Few comments, max 2 lines each, for the first-time reader only (explain *why* / prevent regressions) — never document history. Fix violating comments you encounter
 17. **Settings screen text** - Every user-visible string under `lib/settings/` goes through `context.settingsText('<Hebrew>')`, with the Hebrew as the key and the English in `settings_en.arb`; run `dart run tool/generate_settings_l10n.dart` after any change
 18. **Guided tour text** - Same rule for `lib/tour/`: every step title/body and live-tip title/description needs a `settings_en.arb` entry, and a step's `body` stays a literal (variables go in as placeholders)
+19. **Startup path** - Nothing runs before the first frame unless it must. Anything else goes in a `_runDeferred*` function gated on `WindowRole.isSecondary`, awaiting the reveal completer with a timeout, and failing non-fatally. Never make a synchronous native/COM/registry/process call on the main isolate — a `Future.timeout` cannot save you from it
 
 ### Common Mistakes to Avoid
 - Fixing a bug by adding code instead of finding and removing the root cause
@@ -1024,6 +1144,10 @@ if (Platform.isAndroid || Platform.isIOS) {
 - Opening a dialog from settings without `settingsDialogBuilder` — it inherits neither language nor direction
 - Passing a variable to `settingsText` without a case in `settings_variable_labels_test.dart` — the validator only sees literals
 - Adding too many comments, long comments (over 2 lines), or comments that document history ("used to be X", "changed in commit Y") instead of explaining *why* for a first-time reader
+- Adding an `await` to `main()` or `AppBootstrap` for work the first frame does not need
+- Wrapping a synchronous native call in `Future.timeout` and believing it is now bounded — the timer is queued on the same blocked thread
+- Letting a cosmetic startup step (a shell key, an icon, a warm-up) throw and reach the error log
+- Leaving `StartupTimeline` marks added to chase one report, or putting a mark inside `build()`
 
 ---
 

@@ -1,18 +1,20 @@
 import 'dart:async';
+import 'dart:collection';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:isolate';
 import 'package:flutter/foundation.dart' hide Category;
+import 'package:otzaria/core/info/personal_folders_info.dart';
 import 'package:otzaria/core/messages/library_messages.dart';
 import 'package:otzaria/core/messages/window_messages.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/core/windowing/window_role.dart';
 import 'package:otzaria/data/cache/generation_cache.dart';
+import 'package:otzaria/data/constants/database_constants.dart';
 import 'package:otzaria/data/data_providers/tantivy_data_provider.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/data/data_providers/user_books_database_holder.dart';
 import 'package:otzaria/find_ref/repository/reference_books_cache.dart';
-import 'package:otzaria/core/app_paths.dart';
-import 'package:otzaria/indexing/services/index_merge_progress.dart';
 import 'package:otzaria/indexing/utils/book_facet_metadata_cache.dart';
 import 'package:otzaria/indexing/utils/pdf_extraction_prefetcher.dart';
 import 'package:otzaria/indexing/models/catalogue_order_resolver.dart';
@@ -22,6 +24,7 @@ import 'package:otzaria/pdf_book/utils/pdf_viewer_activity.dart';
 import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/search/book_facet.dart';
+import 'package:otzaria/settings/services/custom_folders/custom_folder.dart';
 import 'package:otzaria/search/utils/search_catalogue_order_helper.dart';
 import 'package:otzaria/search/utils/foundational_book_classifier.dart';
 import 'package:otzaria/utils/text/ref_helper.dart';
@@ -255,15 +258,13 @@ class IndexingRepository {
   /// [library] The library containing books to index
   /// [onProgress] Callback function to report progress
   /// [onFinalizing] נקרא כשכל הספרים אונדקסו והמנוע ניגש לאחד את קבצי
-  /// האינדקס.
-  /// [onFinalizingProgress] מדווח את התקדמות האיחוד כשבר בין 0 ל-1.
+  /// האינדקס — שלב ארוך וללא התקדמות מדידה.
   /// מבצע אינדוקס ומחזיר תוצאה מפורטת, כולל ביטול וכשלים פר-ספר.
   Future<IndexingRunResult> indexAllBooks(
     Library library, {
     void Function()? onActualIndexingStarted,
     required void Function(int processed, int total) onProgress,
     void Function()? onFinalizing,
-    void Function(double fraction)? onFinalizingProgress,
     bool includePdfBooks = true,
   }) async {
     if (WindowRole.isSecondary) {
@@ -281,9 +282,12 @@ class IndexingRepository {
       );
     }
 
-    final allBooks = orderBooksForIndexing(
-      library.getAllBooks(),
-    ).where((book) => includePdfBooks || book is! PdfBook).toList();
+    final allBooks = orderBooksForIndexing(library.getAllBooks())
+        .where(
+          (book) =>
+              isIndexableBook(book) && (includePdfBooks || book is! PdfBook),
+        )
+        .toList();
     final totalBooks = allBooks.length;
 
     if (await requiresManualReindex(library)) {
@@ -327,11 +331,6 @@ class IndexingRepository {
 
     try {
       await _setDbReadBoost(true);
-      // מצב bulk: בלי מיזוגי-רקע של סגמנטים בזמן הבנייה — ה-optimize בסוף
-      // ממזג הכול ממילא, והמיזוגים תוך-כדי רק גוזלים CPU מהאינדוקס עצמו
-      // (נמדד כ-~0.2ms למסמך של האטה בקריאות המנוע).
-      final engineForBulk = await _tantivyDataProvider.engine;
-      await engineForBulk.setBulkIndexing(enabled: true);
 
       final catalogueOrder = buildCatalogueOrderResolver(library);
       await Future.wait([
@@ -503,10 +502,8 @@ class IndexingRepository {
           }
 
           processedBooks++;
-          // כל commit יוצר סגמנט לכל thread של המנוע, וכולם ממוזגים
-          // בסוף ב-optimize סדרתי אחד — כך שסף נמוך מייקר את הסיום פי
-          // כמה. ה-commit הוא רק נקודת שמירה להתאוששות: קריסה מאבדת את
-          // הספרים שאונדקסו מאז האחרון, ולכן הסף חוסם גם מלמעלה.
+          // ה-commit הוא נקודת שמירה להתאוששות (קריסה מאבדת את הספרים שאונדקסו
+          // מאז האחרון), אך סף נמוך עולה בזמן commit ובסגמנטים קטנים.
           if (indexedSinceCommit >= 200) {
             commitStopwatch
               ..reset()
@@ -579,33 +576,13 @@ class IndexingRepository {
         debugPrint('💾 commit סופי: ${commitStopwatch.elapsedMilliseconds}ms');
         _stampCatalogueOrderAfterCommit();
         final optimizeStopwatch = Stopwatch()..start();
-        final mergeProgress = onFinalizingProgress == null
-            ? null
-            : IndexMergeProgress.start(
-                _tantivyDataProvider.activeIndexPath ??
-                    await AppPaths.getIndexPath(),
-                onFinalizingProgress,
-              );
-        try {
-          await optimizeIndexBestEffort(index.optimize);
-        } finally {
-          mergeProgress?.stop();
-        }
+        await optimizeIndexBestEffort(index.optimize);
         debugPrint('⚙️ optimize: ${optimizeStopwatch.elapsedMilliseconds}ms');
         debugPrint('⏱️ סה"כ אינדוקס: ${totalStopwatch.elapsed}');
       }
     } finally {
       prefetcher.dispose();
       await _setDbReadBoost(false);
-      // החזרת מדיניות המיזוג הרגילה — גם בביטול/שגיאה, כדי שאינדוקס
-      // אינקרמנטלי עתידי ימשיך למזג כרגיל. best-effort: כשל כאן לא
-      // מסכן את האינדקס (שכבר עבר commit).
-      try {
-        final engine = await _tantivyDataProvider.engine;
-        await engine.setBulkIndexing(enabled: false);
-      } catch (e) {
-        debugPrint('⚠️ כיבוי מצב bulk נכשל: $e');
-      }
       _tantivyDataProvider.isIndexing.value = false;
     }
     return cancelled
@@ -997,46 +974,88 @@ class IndexingRepository {
         onTimeout: () => <PdfOutlineNode>[],
       );
 
+      final extracted = await extractPageTextsWithRetry(
+        pageCount: document.pages.length,
+        loadPageText: (i) async {
+          final text = await document.pages[i].loadText().timeout(
+            const Duration(seconds: 5),
+            onTimeout: () => null,
+          );
+          return text?.fullText;
+        },
+        beforeEachPage: () async {
+          if (!_tantivyDataProvider.isIndexing.value) return false;
+          await PdfViewerActivity.instance.waitUntilIdle();
+          return true;
+        },
+      );
+      if (extracted == null) return empty;
+
       final pages = <({String reference, String text, int pageIndex})>[];
-      var droppedPages = 0;
-
-      // סדרתי בכוונה: כל קריאות pdfium מסורלות דרך worker isolate יחיד, כך
-      // שטעינת מקבץ לא מאיצה — אבל מפעילה את כל טיימרי ה-timeout יחד ומפילה
-      // עמודים תקינים שרק ממתינים בתור.
-      final pageCount = document.pages.length;
-      for (int i = 0; i < pageCount; i++) {
-        if (!_tantivyDataProvider.isIndexing.value) return empty;
-        await PdfViewerActivity.instance.waitUntilIdle();
-
-        final pageText = await document.pages[i].loadText().timeout(
-          const Duration(seconds: 5),
-          onTimeout: () => null,
-        );
-        if (pageText == null) {
-          droppedPages++;
-          continue;
-        }
-
+      for (final entry in extracted.texts.entries) {
+        final i = entry.key;
         final bookmark = referenceFromPageNumber(i + 1, outline, book.title);
         final ref = bookmark.isNotEmpty
             ? '${book.title}, $bookmark, עמוד ${i + 1}'
             : '${book.title}, עמוד ${i + 1}';
-
-        pages.add((reference: ref, text: pageText.fullText, pageIndex: i));
+        pages.add((reference: ref, text: entry.value, pageIndex: i));
       }
 
-      if (droppedPages > 0) {
+      if (extracted.droppedPages > 0) {
         debugPrint(
-          '⚠️ "${book.title}": $droppedPages עמודים נשמטו מהחילוץ (timeout)',
+          '⚠️ "${book.title}": ${extracted.droppedPages} עמודים נשמטו '
+          'מהחילוץ (timeout)',
         );
       }
 
-      return (pages: pages, outline: outline, droppedPages: droppedPages);
+      return (
+        pages: pages,
+        outline: outline,
+        droppedPages: extracted.droppedPages,
+      );
     } finally {
       // בלי סגירה מפורשת המסמך נשאר פתוח ב-pdfium עד סוף התהליך: אין
       // Finalizer על העטיפה, ו-FPDF_CloseDocument נקרא רק מ-dispose.
       await document.dispose();
     }
+  }
+
+  /// טקסט העמודים לפי אינדקס, בסדר עולה. עמוד שחרג מה-timeout (null) מנוסה
+  /// שוב פעם אחת בסוף הספר, כשה-worker של pdfium כבר פנוי.
+  ///
+  /// סדרתי בכוונה: כל קריאות pdfium מסורלות דרך worker יחיד, ותקיעה של עמוד
+  /// אחד מפילה את הטיימרים של העמודים שממתינים אחריו בתור — הניסיון החוזר
+  /// מחזיר אותם. מחזיר null כשה-[beforeEachPage] ביטל את האינדוקס.
+  @visibleForTesting
+  static Future<({Map<int, String> texts, int droppedPages})?>
+  extractPageTextsWithRetry({
+    required int pageCount,
+    required Future<String?> Function(int pageIndex) loadPageText,
+    required Future<bool> Function() beforeEachPage,
+  }) async {
+    final texts = SplayTreeMap<int, String>();
+    final timedOut = <int>[];
+    for (int i = 0; i < pageCount; i++) {
+      if (!await beforeEachPage()) return null;
+      final text = await loadPageText(i);
+      if (text == null) {
+        timedOut.add(i);
+      } else {
+        texts[i] = text;
+      }
+    }
+
+    var droppedPages = 0;
+    for (final i in timedOut) {
+      if (!await beforeEachPage()) return null;
+      final text = await loadPageText(i);
+      if (text == null) {
+        droppedPages++;
+      } else {
+        texts[i] = text;
+      }
+    }
+    return (texts: texts, droppedPages: droppedPages);
   }
 
   Future<List<({String reference, String text, int pageIndex})>>
@@ -1141,6 +1160,82 @@ class IndexingRepository {
       c == 0x2E || // .
       c == 0x2D; // -
 
+  /// מעל הסף הזה (בייטים או תווים) עבודת ה-data URI מפסיקה לרוץ ברצף על
+  /// ה-thread שמצייר פריימים. נמדד על ספר מצויר (226MiB): סריקה + פענוח +
+  /// בנייה מחדש = 1.4 שניות. מתחת לסף הכול יחד הוא מילישניות בודדות.
+  static const int _dataUriOffFrameThreshold = 1 << 20;
+
+  /// מנת הסריקה. נמדד 0.72ms/MiB, ולכן 4MiB ≈ 4.4ms — בתוך תקציב פריים גם
+  /// ב-120Hz, בלי לפרק את הסריקה ליותר מדי סבבי event loop.
+  static const int _dataUriScanChunk = 4 << 20;
+
+  /// זהה ל-[bytesContainDataUriScheme] + [stripDataUrisForIndex], בלי לחסום
+  /// פריים בספר גדול: הסריקה נפרסת למנות על ה-thread הקורא, ורק כשנמצא
+  /// `data:` הפענוח והבנייה מחדש עוברים ל-isolate. [bytes] נשמר רק כשהוא
+  /// נקי; אחרת [text] מחזיק את המקור המנוקה.
+  ///
+  /// הסריקה רצה **פעם אחת**, וכאן — תוצאתה היא שמכריעה אם צריך isolate
+  /// בכלל. גרסה שסרקה כאן וגם שוב בתוך ה-isolate הכפילה את החסימה.
+  @visibleForTesting
+  static Future<({Uint8List? bytes, String? text})> cleanDataUrisOffFrame(
+    Uint8List bytes,
+  ) async {
+    if (bytes.length < _dataUriOffFrameThreshold) {
+      final cleaned = _cleanDataUris(bytes);
+      return (bytes: cleaned == null ? bytes : null, text: cleaned);
+    }
+    if (!await _containsDataUriInChunks(bytes)) {
+      return (bytes: bytes, text: null);
+    }
+    // מעבירים בעלות על הבתים במקום ללכוד Uint8List ב-closure: שליחת רשימה
+    // mutable ל-isolate מעתיקה אותה, ובספר מצויר גדול מוסיפה עותק שלם לשיא
+    // הזיכרון. אחרי הסריקה החיובית אין עוד צורך להחזיק במסלול ה-bytes.
+    final transferable = TransferableTypedData.fromList([bytes]);
+    return (
+      bytes: null,
+      text: await Isolate.run(
+        () => _stripTransferredDataUrisForIndex(transferable),
+      ),
+    );
+  }
+
+  static String _stripTransferredDataUrisForIndex(
+    TransferableTypedData transferable,
+  ) => stripDataUrisForIndex(
+    utf8.decode(transferable.materialize().asUint8List(), allowMalformed: true),
+  );
+
+  /// המנות חופפות ב-4 בייטים — בלי החפיפה `data:` שיושב על תפר בין מנות
+  /// נעלם, וספר מצויר נחשב נקי.
+  static Future<bool> _containsDataUriInChunks(Uint8List bytes) async {
+    const overlap = 4; // 'data:'.length - 1
+    for (var start = 0; start < bytes.length; start += _dataUriScanChunk) {
+      var end = start + _dataUriScanChunk + overlap;
+      if (end > bytes.length) end = bytes.length;
+      if (bytesContainDataUriScheme(Uint8List.sublistView(bytes, start, end))) {
+        return true;
+      }
+      await Future<void>.delayed(Duration.zero);
+    }
+    return false;
+  }
+
+  static String? _cleanDataUris(Uint8List bytes) =>
+      bytesContainDataUriScheme(bytes)
+      ? stripDataUrisForIndex(utf8.decode(bytes, allowMalformed: true))
+      : null;
+
+  /// [stripDataUrisForIndex] בלי לחסום פריים בספר גדול. כאן, בשונה ממסלול
+  /// ה-bytes, גם הסריקה עוברת ל-isolate: מחרוזת אינה מועתקת בהעברה (נמדד
+  /// 0ms על 20M תווים), ולכן בדיקה מקדימה כאן רק הייתה מכפילה את החסימה.
+  @visibleForTesting
+  static Future<String> stripDataUrisOffFrame(String text) {
+    if (text.length < _dataUriOffFrameThreshold) {
+      return Future.value(stripDataUrisForIndex(text));
+    }
+    return Isolate.run(() => stripDataUrisForIndex(text));
+  }
+
   /// מקור הספר בדיוק כפי שנמסר למנוע באינדוקס: bytes גולמיים מה-DB כשאפשר
   /// (בלי פענוח/קידוד על ה-UI isolate), וירידה לטקסט מפוענח ומנוקה רק
   /// כשחייבים (תמונות מוטמעות, פורמט מומר, ספר בלי categoryId). משותף
@@ -1160,9 +1255,14 @@ class IndexingRepository {
       );
       // ניקוי תמונות מוטמעות חייב לרוץ בשני הצדדים — אחרת חתימת האינדוקס
       // לעולם לא תתאים לאימות ו-reconcile יאנדקס את הספר מחדש בכל ריצה.
-      if (bytes != null && bytesContainDataUriScheme(bytes)) {
-        text = stripDataUrisForIndex(utf8.decode(bytes, allowMalformed: true));
+      if (bytes != null) {
+        // כשהמקור מצויר, cleanDataUrisOffFrame מעביר אותו ל-isolate. מאפסים
+        // את ההפניה המקומית לפני ה-await; במקרה הנקי היא מוחזרת בתוצאה.
+        final rawBytes = bytes;
         bytes = null;
+        final cleaned = await cleanDataUrisOffFrame(rawBytes);
+        bytes = cleaned.bytes;
+        text = cleaned.text;
       }
     }
     if ((bytes == null || bytes.isEmpty) && (text == null || text.isEmpty)) {
@@ -1195,7 +1295,7 @@ class IndexingRepository {
     }
 
     // עקבי עם מסלול האינדוקס — טביעת האצבע מחושבת על הטקסט המנוקה.
-    return stripDataUrisForIndex(text);
+    return stripDataUrisOffFrame(text);
   }
 
   /// טוען את טקסט הספר לאינדוקס, בלי להטמיע תמונות כשהממיר תומך בכך.
@@ -1214,7 +1314,7 @@ class IndexingRepository {
         return convertDocumentForIndex(file, book.title, format);
       }
     }
-    return stripDataUrisForIndex(await book.text);
+    return stripDataUrisOffFrame(await book.text);
   }
 
   /// ממדי ה-facet הנוספים של הספר (מחבר/תקופה/ספר-יסוד) — משותף לכל
@@ -1672,7 +1772,11 @@ class IndexingRepository {
   /// הספרייה הרשמית לא תגרור מחיקת אינדקס המונית ואינדוקס-מחדש של שעות.
   ///
   /// מחזיר את מספר הספרים שהוסרו.
-  Future<int> dropOrphanedIndexEntries(Library library) async {
+  Future<int> dropOrphanedIndexEntries(
+    Library library, {
+    @visibleForTesting List<CustomFolder>? customFolders,
+    @visibleForTesting Set<String>? preservedHiddenUserBookKeys,
+  }) async {
     if (WindowRole.isSecondary) return 0;
     final books = library.getAllBooks();
     if (books.isEmpty) return 0;
@@ -1684,13 +1788,37 @@ class IndexingRepository {
       for (final book in books) buildIndexedBookFilePath(book),
     };
 
+    // כונן חיצוני מנותק: השורש אינו קיים, ולכן הקבצים שתחתיו אינם יתומים
+    // אלא בלתי-נגישים — מחיקתם הייתה מאנדקסת אותם מחדש בכל חיבור.
+    final folders =
+        customFolders ?? PersonalFoldersInfo.readConfiguredFolders();
+    final unreachableRoots = <String>[];
+    for (final folder in folders) {
+      if (!await Directory(folder.path).exists()) {
+        unreachableRoots.add(folder.path);
+      }
+    }
+
+    // תיקייה מוסתרת אינה נכנסת לעץ, אבל הספרים שלה נשארים ב-user_books.db.
+    // מפתחות `uid:` של ספר קיים מאותה תיקייה נשמרים; מפתח של ספר שנמחק
+    // באמת אינו מופיע במסד ולכן ממשיך להימחק כיתום.
+    final hiddenUserBookKeys =
+        preservedHiddenUserBookKeys ??
+        await _hiddenUserBookIndexKeys(folders);
+
     final orphans = <String>{};
     // snapshot — הלולאה מכילה await ואסור שהסט החי ישתנה תחתיה.
     for (final key in _tantivyDataProvider.indexedFilePaths.toList()) {
       if (libraryKeys.contains(key)) continue;
       if (key.startsWith('uid:')) {
-        orphans.add(key);
-      } else if (p.isAbsolute(key) && !await File(key).exists()) {
+        // null = כשל בקריאת user_books.db: נשארים שמרניים ולא מוחקים ספרי
+        // תיקייה מוסתרת שעלולים לחזור לעץ בלי אינדוקס מחדש.
+        if (hiddenUserBookKeys == null || !hiddenUserBookKeys.contains(key)) {
+          orphans.add(key);
+        }
+      } else if (p.isAbsolute(key) &&
+          !unreachableRoots.any((root) => p.isWithin(root, key)) &&
+          !await File(key).exists()) {
         orphans.add(key);
       }
     }
@@ -1701,6 +1829,64 @@ class IndexingRepository {
     if (!await _deleteIndexedFilePaths(orphans)) return 0;
     debugPrint('🧹 נוקו ${orphans.length} ספרים יתומים מהאינדקס');
     return orphans.length;
+  }
+
+  /// מפתחות האינדקס של ספרים שקיימים רק בתיקיות שמוסתרות מהעץ.
+  ///
+  /// ל-`uid:` אין נתיב, ולכן הקריאה נשענת על `source` של user_books.db
+  /// במקום לדלג על כל המפתחות ברגע שקיימת תיקייה מוסתרת אחת.
+  Future<Set<String>?> _hiddenUserBookIndexKeys(
+    List<CustomFolder> folders,
+  ) async {
+    final hiddenFolderNames = CustomFoldersManager.hiddenFolderNames(folders);
+    if (hiddenFolderNames.isEmpty) return const {};
+
+    final hiddenFolders = folders
+        .where((folder) => hiddenFolderNames.contains(folder.name))
+        .toList(growable: false);
+    final hiddenSources = {
+      for (final folder in hiddenFolders)
+        CustomFolderSource.nameForFolder(folder.path),
+    };
+
+    try {
+      final repository = await UserBooksDatabaseHolder.instance.repository;
+      final books = await repository.getAllBooksLean();
+      final sourceNames = <int, String?>{};
+      for (final sourceId in books.map((book) => book.sourceId).toSet()) {
+        sourceNames[sourceId] = (await repository.getSourceById(sourceId))?.name;
+      }
+
+      return {
+        for (final book in books)
+          if (_isHiddenFolderBook(
+            sourceName: sourceNames[book.sourceId],
+            filePath: book.filePath,
+            hiddenSources: hiddenSources,
+            hiddenFolders: hiddenFolders,
+          ))
+            userBookKey(book.id),
+      };
+    } catch (error) {
+      debugPrint('⚠️ לא ניתן לזהות ספרי תיקיות מוסתרות באינדקס: $error');
+      return null;
+    }
+  }
+
+  static bool _isHiddenFolderBook({
+    required String? sourceName,
+    required String? filePath,
+    required Set<String> hiddenSources,
+    required List<CustomFolder> hiddenFolders,
+  }) {
+    if (sourceName != CustomFolderSource.legacyExternalSourceName) {
+      return hiddenSources.contains(sourceName);
+    }
+    if (filePath == null || filePath.isEmpty) return false;
+    return hiddenFolders.any(
+      (folder) =>
+          p.equals(folder.path, filePath) || p.isWithin(folder.path, filePath),
+    );
   }
 
   /// מסיר מהאינדקס רשומות של ספרי-קובץ שנתיבם השתנה בהעברת הספרייה.
@@ -1935,7 +2121,17 @@ class IndexingRepository {
   /// `toTextBook()`, ו-`book.text` כבר יודע לחלץ את התוכן דרך הממיר
   /// המתאים (ראה DatabaseLibraryProvider.getBookText).
   static bool isIndexableBook(Book book) =>
-      book is TextBook || book is PdfBook || book is ConvertibleDocumentBook;
+      book is TextBook ||
+      (book is PdfBook && !isBundledTalmudBavliPdf(book)) ||
+      book is ConvertibleDocumentBook;
+
+  /// מסכת PDF מצורפת אינה מאונדקסת: הטקסט המלא שלה כבר באינדקס, ותוצאת
+  /// טקסט נפתחת ב-PDF לפי הגדרת פורמט הפתיחה — האינדוקס רק הכפיל תוצאות.
+  static bool isBundledTalmudBavliPdf(PdfBook book) =>
+      !book.isUserBook &&
+      DatabaseConstants.isTalmudBavliPdfExternalLibraryId(
+        book.externalLibraryId,
+      );
 
   /// ממפה ספר לזרימת האינדוקס של TextBook; null לסוגים שאינם טקסטואליים.
   static TextBook? _asTextBookForIndex(Book book) => switch (book) {

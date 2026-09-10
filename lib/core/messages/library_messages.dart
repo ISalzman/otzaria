@@ -44,6 +44,10 @@ abstract class LibraryMessages {
   static String indexingCompletedWithFailures(int count) =>
       'האינדוקס הסתיים עם $count בעיות. לחץ לפתיחת קובץ השגיאות.';
 
+  static String indexingCompletedWithWarnings(int count) =>
+      'האינדוקס הושלם. ב-$count ספרי PDF נשמטו עמודים בודדים מהחיפוש. '
+      'לחץ לפרטים.';
+
   static const String emptySearchQuery = 'נא להזין טקסט לחיפוש';
 
   static String categoryOrBookNotFound(List<String> names) =>
@@ -88,6 +92,9 @@ abstract class LibraryMessages {
 
   static const String updateDiskSpaceError =
       'אין מספיק מקום פנוי בדיסק לעדכון הספרייה';
+
+  static const String updateNetworkInterrupted =
+      'החיבור לרשת נקטע במהלך ההורדה';
 
   static const String deltaApplyFailed = 'החלת עדכון הדלתא נכשלה';
 

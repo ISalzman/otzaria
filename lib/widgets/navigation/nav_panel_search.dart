@@ -201,10 +201,13 @@ const double kNavPanelSearchHoistMinWidth = 600.0;
 /// עזר לזיהוי המצב: בתוך חלונית ניווט שדה החיפוש עולה לסרגל שמעליה, ולכן
 /// הלשונית אינה מציירת שדה מקומי. מחוץ לחלונית (דיאלוג, מסך אחר) היא כן.
 abstract final class NavPanelSearch {
-  /// האם המסך רחב דיו כדי ששדה החיפוש יעלה לסרגל העליון. במסך צר הוא נשאר
-  /// בתוך החלונית, ששם יש לו את מלוא רוחבה.
+  /// האם החלונית רחבה דיה כדי ששדה החיפוש יעלה לסרגל העליון. בחלונית צרה הוא
+  /// נשאר בתוכה, ששם יש לו את מלוא רוחבה. בתצוגה מפוצלת החלון רחב אך החלונית
+  /// צרה — ולכן נמדדת החלונית ([NavPanelPaneWidthScope]), לא החלון (issue #1268).
   static bool canHoist(BuildContext context) =>
-      MediaQuery.sizeOf(context).width >= kNavPanelSearchHoistMinWidth;
+      (NavPanelPaneWidthScope.maybeOf(context) ??
+          MediaQuery.sizeOf(context).width) >=
+      kNavPanelSearchHoistMinWidth;
 
   static bool isHoisted(BuildContext context) =>
       canHoist(context) &&
@@ -217,6 +220,27 @@ abstract final class NavPanelSearch {
     BuildContext context, {
     required bool autoSelected,
   }) => !autoSelected || canHoist(context);
+}
+
+/// רוחב החלונית (הטאב) שבה מוצג הספר — מסופק ע"י מארח החלוניות, כדי שהחלטות
+/// רוחב יתייחסו לחלונית ולא לחלון כולו.
+class NavPanelPaneWidthScope extends InheritedWidget {
+  final double width;
+
+  const NavPanelPaneWidthScope({
+    super.key,
+    required this.width,
+    required super.child,
+  });
+
+  static double? maybeOf(BuildContext context) => context
+      .dependOnInheritedWidgetOfExactType<NavPanelPaneWidthScope>()
+      ?.width;
+
+  @override
+  bool updateShouldNotify(NavPanelPaneWidthScope oldWidget) =>
+      (oldWidget.width >= kNavPanelSearchHoistMinWidth) !=
+      (width >= kNavPanelSearchHoistMinWidth);
 }
 
 /// מסמן את אינדקס הלשונית שבתוכה יושב התוכן — כדי שהפרסום יגיע לסרגל רק
@@ -423,67 +447,83 @@ class _NavPanelSearchBarState extends State<NavPanelSearchBar> {
         // IntrinsicHeight: ה-OverflowBox דורש גובה חסום, וסרגל עליון עשוי לתת
         // גובה חופשי (Row בתוך Column).
         return IntrinsicHeight(
-          child: AnimatedContainer(
+          // מונפש שיעור הפתיחה ולא הרוחב עצמו: כך שינוי רוחב החלונית (גרירת
+          // המפריד, מעבר תפריט צפוף) עובר מיד, בלי פריימי חיתוך על סרגל פתוח.
+          child: TweenAnimationBuilder<double>(
             duration: AppTokens.animPanelSlide,
             curve: Curves.easeInOut,
-            width: widget.isOpen ? effectiveWidth : 0,
-            child: ClipRect(
-              child: OverflowBox(
-                maxWidth: effectiveWidth,
-                minWidth: 0,
-                alignment: AlignmentDirectional.centerStart,
-                child: SizedBox(
-                  width: effectiveWidth,
-                  child: Row(
-                    children: [
-                      // רק תוכן השדה מתחלף לפי הלשונית — הסרגל עצמו נשאר מוצג
-                      // ומורכב כל עוד החלונית פתוחה, ואינו נבנה מחדש.
-                      Expanded(
-                        child: Padding(
-                          padding: EdgeInsetsDirectional.only(
-                            start: fieldStartInset,
-                            end: fieldEndInset,
-                          ),
-                          // חץ למטה/למעלה מעביר את הפוקוס אל שורות החלונית; ימין
-                          // ושמאל נשארים לעריכת הטקסט. ה-handler יושב מעל השדה
-                          // ולכן הוא מקבל את המקש לפני קיצורי עריכת הטקסט.
-                          child: Focus(
-                            canRequestFocus: false,
-                            onKeyEvent: _handleFieldKey,
-                            child: ListenableBuilder(
-                              listenable: widget.host,
-                              builder: (context, _) {
-                                final delegate = widget.host.active;
-                                return OtzariaSearchField(
-                                  controller:
-                                      delegate?.controller ?? _idleController,
-                                  focusNode: delegate?.focusNode,
-                                  enabled: delegate != null,
-                                  hintText:
-                                      delegate?.hintText ??
-                                      'אין חיפוש בלשונית זו',
-                                  onChanged: delegate?.onChanged,
-                                  onSubmitted: delegate?.onSubmitted,
-                                  onClear: delegate?.onClear,
-                                  trailingActions:
-                                      delegate == null ||
-                                          delegate.trailingActions.isEmpty
-                                      ? null
-                                      : delegate.trailingActions,
-                                );
-                              },
-                            ),
-                          ),
-                        ),
-                      ),
-                      if (hasPin)
-                        NavPanelPinButton(
-                          isPinned: widget.isPinned,
-                          onToggle: widget.onTogglePin,
-                        ),
-                    ],
+            tween: Tween<double>(end: widget.isOpen ? 1.0 : 0.0),
+            builder: (context, openFraction, child) {
+              // ה-ClipRect מסתיר את הציור אך לא את ה-Semantics ואת ה-hit
+              // testing, ולכן בפריימי הפתיחה/הסגירה כפתור שגולש ממנו נכנס
+              // לעץ הנגישות במלבן הפוך וזורק "Invisible SemanticsNodes".
+              final isFull = widget.isOpen && openFraction >= 1.0;
+              return SizedBox(
+                width: effectiveWidth * openFraction,
+                child: ClipRect(
+                  child: OverflowBox(
+                    maxWidth: effectiveWidth,
+                    minWidth: 0,
+                    alignment: AlignmentDirectional.centerStart,
+                    child: ExcludeSemantics(
+                      excluding: !isFull,
+                      child: IgnorePointer(ignoring: !isFull, child: child),
+                    ),
                   ),
                 ),
+              );
+            },
+            // התוכן עובר דרך child ולכן ה-builder רק עוטף אותו: השדה נשאר
+            // אותו ווידג'ט מורכב ואינו נבנה מחדש בכל פריים של האנימציה.
+            child: SizedBox(
+              width: effectiveWidth,
+              child: Row(
+                children: [
+                  // רק תוכן השדה מתחלף לפי הלשונית — הסרגל עצמו נשאר מוצג
+                  // ומורכב כל עוד החלונית פתוחה, ואינו נבנה מחדש.
+                  Expanded(
+                    child: Padding(
+                      padding: EdgeInsetsDirectional.only(
+                        start: fieldStartInset,
+                        end: fieldEndInset,
+                      ),
+                      // חץ למטה/למעלה מעביר את הפוקוס אל שורות החלונית; ימין
+                      // ושמאל נשארים לעריכת הטקסט. ה-handler יושב מעל השדה
+                      // ולכן הוא מקבל את המקש לפני קיצורי עריכת הטקסט.
+                      child: Focus(
+                        canRequestFocus: false,
+                        onKeyEvent: _handleFieldKey,
+                        child: ListenableBuilder(
+                          listenable: widget.host,
+                          builder: (context, _) {
+                            final delegate = widget.host.active;
+                            return OtzariaSearchField(
+                              controller:
+                                  delegate?.controller ?? _idleController,
+                              focusNode: delegate?.focusNode,
+                              enabled: delegate != null,
+                              hintText:
+                                  delegate?.hintText ?? 'אין חיפוש בלשונית זו',
+                              onChanged: delegate?.onChanged,
+                              onSubmitted: delegate?.onSubmitted,
+                              onClear: delegate?.onClear,
+                              trailingActions:
+                                  delegate == null ||
+                                      delegate.trailingActions.isEmpty
+                                  ? null
+                                  : delegate.trailingActions,
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                  ),
+                  if (hasPin)
+                    NavPanelPinButton(
+                      isPinned: widget.isPinned,
+                      onToggle: widget.onTogglePin,
+                    ),
+                ],
               ),
             ),
           ),
