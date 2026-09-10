@@ -587,6 +587,64 @@ Future<void> main() async {
     expect(tocOffset(), greaterThan(0));
   });
 
+  testWidgets(
+    'ניקוי חיפוש בין תזמון הגלילה לביצועה אינו זורק (מסלול שהוחלף)',
+    (tester) async {
+      // ספר גדול (מסלול וירטואלי) שחיפוש מצמצם למסלול הרקורסיבי. הגלילה
+      // לפריט הפעיל מתוזמנת שני frames קדימה; ניקוי החיפוש בינתיים מחזיר
+      // את הרשימה הוירטואלית ובקר הגלילה של המסלול הרקורסיבי מתנתק, בעוד
+      // ה-GlobalKey של הפריט (משותף לשני המסלולים) עדיין מוצא הקשר חי.
+      // היעד קרוב לראש, כך שהרשימה הוירטואלית בונה אותו ומפתחו חי.
+      final toc = List.generate(
+        600,
+        (i) => TocEntry(
+          text: i == 5 ? 'unique-target' : 'item $i',
+          index: i,
+          level: 1,
+        ),
+      );
+      final initial = _loadedState(toc: toc, visibleIndices: const [0]);
+      final bloc = _TestTextBookBloc(initial);
+      addTearDown(bloc.close);
+      final focusNode = FocusNode();
+      addTearDown(focusNode.dispose);
+
+      await tester.pumpWidget(
+        _wrap(
+          TocViewer(
+            scrollController: ItemScrollController(),
+            closeLeftPaneCallback: () {},
+            focusNode: focusNode,
+          ),
+          bloc,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.enterText(find.byType(TextField), 'unique');
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.byType(SingleChildScrollView), findsOneWidget);
+
+      // שינוי הפריט הפעיל מתזמן גלילה במסלול הרקורסיבי.
+      bloc.emitState(initial.copyWith(selectedIndex: 5));
+      await tester.pump();
+
+      // ניקוי מיידי — לפני שה-callback השני רץ.
+      // הקלט הגולמי — WidgetTester.enterText מריץ frame ביניים משלו,
+      // וה-callback השני היה רץ בו לפני שהניקוי מוחל.
+      tester.testTextInput.enterText('');
+      await tester.pump();
+      for (var i = 0; i < 4; i++) {
+        tester.binding.scheduleFrame();
+        await tester.pump(const Duration(milliseconds: 150));
+      }
+
+      expect(tester.takeException(), isNull);
+      expect(find.byType(SingleChildScrollView), findsNothing);
+    },
+    skip: !engineReady,
+  );
+
   testWidgets('emit חוזר עם אותו state לא קורס ולא משכפל פריטים', (
     tester,
   ) async {
