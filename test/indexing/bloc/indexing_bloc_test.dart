@@ -706,6 +706,7 @@ class _FakeIndexingRepository extends IndexingRepository {
   Future<int> dropOrphanedIndexEntries(
     Library library, {
     List<CustomFolder>? customFolders,
+    Set<String>? preservedHiddenUserBookKeys,
   }) async {
     dropOrphanedCalls++;
     return 0;

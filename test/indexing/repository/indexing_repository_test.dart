@@ -624,9 +624,10 @@ void main() {
       expect(provider.indexedFilePaths, isEmpty);
     });
 
-    test('תיקייה אישית מוסתרת — מפתחות uid: אינם נמחקים', () async {
+    test('תיקייה אישית מוסתרת — נשמרים רק מפתחותיה', () async {
       // ספרי תיקייה מוסתרת מדולגים בבניית העץ ולכן נראים יתומים; מחיקתם
-      // הייתה גוררת אינדוקס מלא בהחזרת התיקייה.
+      // הייתה גוררת אינדוקס מלא בהחזרת התיקייה. ספר שנמחק מתיקייה גלויה
+      // אינו שייך לתיקייה המוסתרת וחייב להימחק גם באותו מצב.
       final engine = _RecordingSearchEngine();
       final provider = _RecordingTantivyDataProvider(engine);
       final library = _buildLibrary(bavliBooks: const [('שבת', 1)]);
@@ -641,11 +642,12 @@ void main() {
         customFolders: [
           CustomFolder(path: root.path, hidden: true, addedAt: DateTime(2026)),
         ],
+        preservedHiddenUserBookKeys: {'uid:99'},
       );
 
-      expect(removed, 0);
-      expect(engine.removedFilePaths, isEmpty);
-      expect(provider.indexedFilePaths, {'uid:99', 'uid:100'});
+      expect(removed, 1);
+      expect(engine.removedFilePaths, ['uid:100']);
+      expect(provider.indexedFilePaths, {'uid:99'});
     });
 
     test('ספרייה ריקה — לא נוגע באינדקס', () async {

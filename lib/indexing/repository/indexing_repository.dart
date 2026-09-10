@@ -1775,6 +1775,7 @@ class IndexingRepository {
   Future<int> dropOrphanedIndexEntries(
     Library library, {
     @visibleForTesting List<CustomFolder>? customFolders,
+    @visibleForTesting Set<String>? preservedHiddenUserBookKeys,
   }) async {
     if (WindowRole.isSecondary) return 0;
     final books = library.getAllBooks();
@@ -1798,16 +1799,23 @@ class IndexingRepository {
       }
     }
 
-    // תיקייה מוסתרת מדולגת בבניית העץ, ולכן ספריה אינם ב-getAllBooks ונראים
-    // יתומים — מחיקתם הייתה שוברת את ההבטחה שההחזרה אינה דורשת אינדוקס מחדש.
-    final hasHiddenFolder = folders.any((folder) => folder.hidden);
+    // תיקייה מוסתרת אינה נכנסת לעץ, אבל הספרים שלה נשארים ב-user_books.db.
+    // מפתחות `uid:` של ספר קיים מאותה תיקייה נשמרים; מפתח של ספר שנמחק
+    // באמת אינו מופיע במסד ולכן ממשיך להימחק כיתום.
+    final hiddenUserBookKeys =
+        preservedHiddenUserBookKeys ??
+        await _hiddenUserBookIndexKeys(folders);
 
     final orphans = <String>{};
     // snapshot — הלולאה מכילה await ואסור שהסט החי ישתנה תחתיה.
     for (final key in _tantivyDataProvider.indexedFilePaths.toList()) {
       if (libraryKeys.contains(key)) continue;
       if (key.startsWith('uid:')) {
-        if (!hasHiddenFolder) orphans.add(key);
+        // null = כשל בקריאת user_books.db: נשארים שמרניים ולא מוחקים ספרי
+        // תיקייה מוסתרת שעלולים לחזור לעץ בלי אינדוקס מחדש.
+        if (hiddenUserBookKeys == null || !hiddenUserBookKeys.contains(key)) {
+          orphans.add(key);
+        }
       } else if (p.isAbsolute(key) &&
           !unreachableRoots.any((root) => p.isWithin(root, key)) &&
           !await File(key).exists()) {
@@ -1821,6 +1829,64 @@ class IndexingRepository {
     if (!await _deleteIndexedFilePaths(orphans)) return 0;
     debugPrint('🧹 נוקו ${orphans.length} ספרים יתומים מהאינדקס');
     return orphans.length;
+  }
+
+  /// מפתחות האינדקס של ספרים שקיימים רק בתיקיות שמוסתרות מהעץ.
+  ///
+  /// ל-`uid:` אין נתיב, ולכן הקריאה נשענת על `source` של user_books.db
+  /// במקום לדלג על כל המפתחות ברגע שקיימת תיקייה מוסתרת אחת.
+  Future<Set<String>?> _hiddenUserBookIndexKeys(
+    List<CustomFolder> folders,
+  ) async {
+    final hiddenFolderNames = CustomFoldersManager.hiddenFolderNames(folders);
+    if (hiddenFolderNames.isEmpty) return const {};
+
+    final hiddenFolders = folders
+        .where((folder) => hiddenFolderNames.contains(folder.name))
+        .toList(growable: false);
+    final hiddenSources = {
+      for (final folder in hiddenFolders)
+        CustomFolderSource.nameForFolder(folder.path),
+    };
+
+    try {
+      final repository = await UserBooksDatabaseHolder.instance.repository;
+      final books = await repository.getAllBooksLean();
+      final sourceNames = <int, String?>{};
+      for (final sourceId in books.map((book) => book.sourceId).toSet()) {
+        sourceNames[sourceId] = (await repository.getSourceById(sourceId))?.name;
+      }
+
+      return {
+        for (final book in books)
+          if (_isHiddenFolderBook(
+            sourceName: sourceNames[book.sourceId],
+            filePath: book.filePath,
+            hiddenSources: hiddenSources,
+            hiddenFolders: hiddenFolders,
+          ))
+            userBookKey(book.id),
+      };
+    } catch (error) {
+      debugPrint('⚠️ לא ניתן לזהות ספרי תיקיות מוסתרות באינדקס: $error');
+      return null;
+    }
+  }
+
+  static bool _isHiddenFolderBook({
+    required String? sourceName,
+    required String? filePath,
+    required Set<String> hiddenSources,
+    required List<CustomFolder> hiddenFolders,
+  }) {
+    if (sourceName != CustomFolderSource.legacyExternalSourceName) {
+      return hiddenSources.contains(sourceName);
+    }
+    if (filePath == null || filePath.isEmpty) return false;
+    return hiddenFolders.any(
+      (folder) =>
+          p.equals(folder.path, filePath) || p.isWithin(folder.path, filePath),
+    );
   }
 
   /// מסיר מהאינדקס רשומות של ספרי-קובץ שנתיבם השתנה בהעברת הספרייה.
