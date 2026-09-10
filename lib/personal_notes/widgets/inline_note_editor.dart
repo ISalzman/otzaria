@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import 'package:otzaria/personal_notes/models/personal_note.dart';
 import 'package:otzaria/personal_notes/services/personal_note_draft_service.dart';
+import 'package:otzaria/personal_notes/widgets/note_draft_decision_dialog.dart';
 import 'package:otzaria/personal_notes/widgets/personal_note_editor.dart';
 import 'package:otzaria/settings/services/safer_mode_guard.dart';
 import 'package:otzaria/core/ui_snack.dart';
@@ -137,17 +138,7 @@ class _InlineNoteEditorState extends State<InlineNoteEditor> {
   Future<void> _persistDraft() async {
     if (_isDone) return;
     final result = _controller.buildResult();
-    final normalizedInitialContent = _initialResult.content.trimRight();
-    final normalizedCurrentContent = result.content.trimRight();
-    final normalizedInitialPlain = _initialResult.contentPlain.trim();
-    final normalizedCurrentPlain = result.contentPlain.trim();
-
-    final matchesInitial =
-        normalizedInitialContent == normalizedCurrentContent &&
-        normalizedInitialPlain == normalizedCurrentPlain &&
-        _initialResult.contentFormat == result.contentFormat;
-
-    if (matchesInitial || normalizedCurrentPlain.isEmpty) {
+    if (_matchesInitial(result) || result.contentPlain.trim().isEmpty) {
       await _clearDraft();
       return;
     }
@@ -169,6 +160,12 @@ class _InlineNoteEditorState extends State<InlineNoteEditor> {
     );
   }
 
+  bool _matchesInitial(PersonalNoteEditorResult result) {
+    return _initialResult.content.trimRight() == result.content.trimRight() &&
+        _initialResult.contentPlain.trim() == result.contentPlain.trim() &&
+        _initialResult.contentFormat == result.contentFormat;
+  }
+
   Future<void> _clearDraft() {
     return _draftService.clearDraft(
       bookId: widget.bookId,
@@ -180,9 +177,24 @@ class _InlineNoteEditorState extends State<InlineNoteEditor> {
 
   Future<void> _handleCancel() async {
     if (_isDone) return;
+    if (_hasUnsavedChanges()) {
+      final decision = await showNoteDraftDecisionDialog(context);
+      if (decision == null || decision == NoteDraftDecision.cancel) return;
+      if (decision == NoteDraftDecision.saveDraft) {
+        await _persistDraft();
+        _isDone = true;
+        widget.onCancel();
+        return;
+      }
+    }
     _isDone = true;
     await _clearDraft();
     widget.onCancel();
+  }
+
+  bool _hasUnsavedChanges() {
+    final current = _controller.buildResult();
+    return current.contentPlain.trim().isNotEmpty && !_matchesInitial(current);
   }
 
   void _handleCancelRequest() {
