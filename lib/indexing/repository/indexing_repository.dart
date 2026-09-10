@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:isolate';
 import 'package:flutter/foundation.dart' hide Category;
+import 'package:otzaria/core/info/personal_folders_info.dart';
 import 'package:otzaria/core/messages/library_messages.dart';
 import 'package:otzaria/core/messages/window_messages.dart';
 import 'package:otzaria/core/ui_snack.dart';
@@ -23,6 +24,7 @@ import 'package:otzaria/pdf_book/utils/pdf_viewer_activity.dart';
 import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/search/book_facet.dart';
+import 'package:otzaria/settings/services/custom_folders/custom_folder.dart';
 import 'package:otzaria/search/utils/search_catalogue_order_helper.dart';
 import 'package:otzaria/search/utils/foundational_book_classifier.dart';
 import 'package:otzaria/utils/text/ref_helper.dart';
@@ -1770,7 +1772,11 @@ class IndexingRepository {
   /// הספרייה הרשמית לא תגרור מחיקת אינדקס המונית ואינדוקס-מחדש של שעות.
   ///
   /// מחזיר את מספר הספרים שהוסרו.
-  Future<int> dropOrphanedIndexEntries(Library library) async {
+  Future<int> dropOrphanedIndexEntries(
+    Library library, {
+    @visibleForTesting List<CustomFolder>? customFolders,
+    @visibleForTesting Set<String>? preservedHiddenUserBookKeys,
+  }) async {
     if (WindowRole.isSecondary) return 0;
     final books = library.getAllBooks();
     if (books.isEmpty) return 0;
@@ -1782,13 +1788,37 @@ class IndexingRepository {
       for (final book in books) buildIndexedBookFilePath(book),
     };
 
+    // כונן חיצוני מנותק: השורש אינו קיים, ולכן הקבצים שתחתיו אינם יתומים
+    // אלא בלתי-נגישים — מחיקתם הייתה מאנדקסת אותם מחדש בכל חיבור.
+    final folders =
+        customFolders ?? PersonalFoldersInfo.readConfiguredFolders();
+    final unreachableRoots = <String>[];
+    for (final folder in folders) {
+      if (!await Directory(folder.path).exists()) {
+        unreachableRoots.add(folder.path);
+      }
+    }
+
+    // תיקייה מוסתרת אינה נכנסת לעץ, אבל הספרים שלה נשארים ב-user_books.db.
+    // מפתחות `uid:` של ספר קיים מאותה תיקייה נשמרים; מפתח של ספר שנמחק
+    // באמת אינו מופיע במסד ולכן ממשיך להימחק כיתום.
+    final hiddenUserBookKeys =
+        preservedHiddenUserBookKeys ??
+        await _hiddenUserBookIndexKeys(folders);
+
     final orphans = <String>{};
     // snapshot — הלולאה מכילה await ואסור שהסט החי ישתנה תחתיה.
     for (final key in _tantivyDataProvider.indexedFilePaths.toList()) {
       if (libraryKeys.contains(key)) continue;
       if (key.startsWith('uid:')) {
-        orphans.add(key);
-      } else if (p.isAbsolute(key) && !await File(key).exists()) {
+        // null = כשל בקריאת user_books.db: נשארים שמרניים ולא מוחקים ספרי
+        // תיקייה מוסתרת שעלולים לחזור לעץ בלי אינדוקס מחדש.
+        if (hiddenUserBookKeys == null || !hiddenUserBookKeys.contains(key)) {
+          orphans.add(key);
+        }
+      } else if (p.isAbsolute(key) &&
+          !unreachableRoots.any((root) => p.isWithin(root, key)) &&
+          !await File(key).exists()) {
         orphans.add(key);
       }
     }
@@ -1799,6 +1829,64 @@ class IndexingRepository {
     if (!await _deleteIndexedFilePaths(orphans)) return 0;
     debugPrint('🧹 נוקו ${orphans.length} ספרים יתומים מהאינדקס');
     return orphans.length;
+  }
+
+  /// מפתחות האינדקס של ספרים שקיימים רק בתיקיות שמוסתרות מהעץ.
+  ///
+  /// ל-`uid:` אין נתיב, ולכן הקריאה נשענת על `source` של user_books.db
+  /// במקום לדלג על כל המפתחות ברגע שקיימת תיקייה מוסתרת אחת.
+  Future<Set<String>?> _hiddenUserBookIndexKeys(
+    List<CustomFolder> folders,
+  ) async {
+    final hiddenFolderNames = CustomFoldersManager.hiddenFolderNames(folders);
+    if (hiddenFolderNames.isEmpty) return const {};
+
+    final hiddenFolders = folders
+        .where((folder) => hiddenFolderNames.contains(folder.name))
+        .toList(growable: false);
+    final hiddenSources = {
+      for (final folder in hiddenFolders)
+        CustomFolderSource.nameForFolder(folder.path),
+    };
+
+    try {
+      final repository = await UserBooksDatabaseHolder.instance.repository;
+      final books = await repository.getAllBooksLean();
+      final sourceNames = <int, String?>{};
+      for (final sourceId in books.map((book) => book.sourceId).toSet()) {
+        sourceNames[sourceId] = (await repository.getSourceById(sourceId))?.name;
+      }
+
+      return {
+        for (final book in books)
+          if (_isHiddenFolderBook(
+            sourceName: sourceNames[book.sourceId],
+            filePath: book.filePath,
+            hiddenSources: hiddenSources,
+            hiddenFolders: hiddenFolders,
+          ))
+            userBookKey(book.id),
+      };
+    } catch (error) {
+      debugPrint('⚠️ לא ניתן לזהות ספרי תיקיות מוסתרות באינדקס: $error');
+      return null;
+    }
+  }
+
+  static bool _isHiddenFolderBook({
+    required String? sourceName,
+    required String? filePath,
+    required Set<String> hiddenSources,
+    required List<CustomFolder> hiddenFolders,
+  }) {
+    if (sourceName != CustomFolderSource.legacyExternalSourceName) {
+      return hiddenSources.contains(sourceName);
+    }
+    if (filePath == null || filePath.isEmpty) return false;
+    return hiddenFolders.any(
+      (folder) =>
+          p.equals(folder.path, filePath) || p.isWithin(folder.path, filePath),
+    );
   }
 
   /// מסיר מהאינדקס רשומות של ספרי-קובץ שנתיבם השתנה בהעברת הספרייה.

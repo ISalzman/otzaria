@@ -21,7 +21,10 @@ import 'package:otzaria/personal_notes/repository/personal_notes_repository.dart
 import 'package:otzaria/printing/print_content_models.dart';
 import 'package:otzaria/printing/serial_latest_runner.dart';
 import 'package:otzaria/printing/printing_helpers.dart';
-import 'package:otzaria/printing/pdf_text_rasterizer.dart';
+import 'package:opentype_shaper/opentype_shaper.dart';
+import 'package:otzaria/printing/shaped_text/pdf_shaped_font.dart';
+import 'package:otzaria/printing/shaped_text/shaped_text_layout.dart';
+import 'package:otzaria/printing/shaped_text/shaped_text_widget.dart';
 import 'package:otzaria/printing/export_restriction_service.dart';
 import 'package:otzaria/printing/safer_print_service.dart';
 import 'package:otzaria/printing/word_export_service.dart';
@@ -1029,23 +1032,38 @@ class _PrintingScreenState extends State<PrintingScreen> {
   }) async {
     // אם הגופן לא מוטמע, השתמש בגופן ברירת מחדל
     final fontPath = fonts[fontName] ?? fonts.values.first;
-    final font = pw.Font.ttf(await rootBundle.load(fontPath));
-    final fullBackFont = pw.Font.ttf(
-      await rootBundle.load('fonts/NotoSerifHebrew-VariableFont_wdth,wght.ttf'),
-    );
-    final contentWidth = max(1.0, format.width - pageMargin * 2);
-    final rasterizedNikudBlocks = await _rasterizeNikudBlocks(
-      blocks: blocks,
-      fontName: fontName,
-      fontSize: fontSize,
-      contentWidth: contentWidth,
-    );
+    final primaryBytes = (await rootBundle.load(fontPath)).buffer.asUint8List();
+    final fallbackBytes = (await rootBundle.load(
+      'fonts/NotoSerifHebrew-VariableFont_wdth,wght.ttf',
+    )).buffer.asUint8List();
+    final font = pw.Font.ttf(primaryBytes.buffer.asByteData());
+    final fullBackFont = pw.Font.ttf(fallbackBytes.buffer.asByteData());
+
+    // Body text is shaped so nikud and te'amim come out as vector text. The
+    // registry is process-wide, so the isolate attaches by handle rather than
+    // parsing the fonts again.
+    final primaryShaper = ShaperFont.register(primaryBytes);
+    final fallbackShaper = ShaperFont.register(fallbackBytes);
+    final primaryHandle = primaryShaper.handle;
+    final fallbackHandle = fallbackShaper.handle;
 
     final result = await Isolate.run(() async {
       final pdfData = pw.Document(
         compress: false,
         pageMode: PdfPageMode.outlines,
       );
+      final shapedFonts = [
+        PdfShapedFont(
+          pdfData.document,
+          shaper: ShaperFont.attach(primaryHandle),
+          fontBytes: primaryBytes,
+        ),
+        PdfShapedFont(
+          pdfData.document,
+          shaper: ShaperFont.attach(fallbackHandle),
+          fontBytes: fallbackBytes,
+        ),
+      ];
       pdfData.addPage(
         pw.MultiPage(
           theme: pw.ThemeData.withFont(
@@ -1082,9 +1100,7 @@ class _PrintingScreenState extends State<PrintingScreen> {
             );
           },
           build: (pw.Context context) {
-            return blocks.asMap().entries.expand((entry) {
-              final blockIndex = entry.key;
-              final b = entry.value;
+            return blocks.expand((b) {
               final kind = b['kind'];
               final title = b['title'];
               final text = (b['text'] ?? '').replaceAll('\n', '');
@@ -1169,40 +1185,15 @@ class _PrintingScreenState extends State<PrintingScreen> {
                 ),
                 _ => const pw.EdgeInsets.all(8.0),
               };
-              final rasterizedLines = rasterizedNikudBlocks[blockIndex];
-              if (rasterizedLines != null && rasterizedLines.isNotEmpty) {
-                final lineWidth = max(
-                  1.0,
-                  contentWidth - padding.left - padding.right,
-                );
-                return rasterizedLines.asMap().entries.map((lineEntry) {
-                  final isFirst = lineEntry.key == 0;
-                  final isLast = lineEntry.key == rasterizedLines.length - 1;
-                  return pw.Padding(
-                    padding: pw.EdgeInsets.only(
-                      top: isFirst ? padding.top : 0,
-                      bottom: isLast ? padding.bottom : 0,
-                      right: padding.right,
-                      left: padding.left,
-                    ),
-                    child: pw.Image(
-                      pw.MemoryImage(lineEntry.value),
-                      width: lineWidth,
-                    ),
-                  );
-                });
-              }
-
               return [
                 pw.Padding(
                   padding: padding,
-                  child: pw.Paragraph(
-                    text: text,
-                    textAlign: pw.TextAlign.justify,
-                    style: pw.TextStyle(
-                      fontSize: effectiveFontSize,
-                      font: font,
-                    ),
+                  child: ShapedText(
+                    text,
+                    fonts: shapedFonts,
+                    fontSize: effectiveFontSize,
+                    align: ShapedTextAlign.justify,
+                    heightFactor: 1.35,
                   ),
                 ),
               ];
@@ -1214,56 +1205,9 @@ class _PrintingScreenState extends State<PrintingScreen> {
       return await pdfData.save();
     });
 
+    primaryShaper.dispose();
+    fallbackShaper.dispose();
     return result;
-  }
-
-  Future<Map<int, List<Uint8List>>> _rasterizeNikudBlocks({
-    required List<Map<String, String>> blocks,
-    required String fontName,
-    required double fontSize,
-    required double contentWidth,
-  }) async {
-    if (_removeNikud) return const {};
-
-    final images = <int, List<Uint8List>>{};
-    for (var i = 0; i < blocks.length; i++) {
-      final block = blocks[i];
-      final kind = block['kind'];
-      if (kind == 'commentaryTitle' ||
-          kind == 'commentaryGroupTitle' ||
-          kind == 'noteTitle') {
-        continue;
-      }
-
-      final text = (block['text'] ?? '').replaceAll('\n', '');
-      if (!PdfTextRasterizer.containsHebrewMarks(text)) continue;
-
-      final effectiveFontSize = switch (kind) {
-        'commentary' || 'note' => max(10.0, fontSize * 0.9),
-        _ => fontSize,
-      };
-
-      final paddingHorizontal = switch (kind) {
-        'commentary' || 'note' => 26.0,
-        'commentaryGroupTitle' => 20.0,
-        _ => 16.0,
-      };
-
-      final lines = await PdfTextRasterizer.renderRtlTextLines(
-        text: text,
-        maxWidth: max(1.0, contentWidth - paddingHorizontal),
-        style: TextStyle(
-          color: Colors.black,
-          fontFamily: fontName,
-          fontSize: effectiveFontSize,
-          height: 1.35,
-        ),
-      );
-      if (lines.isNotEmpty) {
-        images[i] = lines;
-      }
-    }
-    return images;
   }
 
   Future<List<Link>> _loadLinksForPrintRange(
