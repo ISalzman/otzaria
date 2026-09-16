@@ -46,6 +46,7 @@ import 'package:otzaria/plugins/view/plugin_dev_error_view.dart';
 import 'package:otzaria/plugins/view/webview_environment_holder.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_bloc.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_event.dart';
+import 'package:otzaria/plugins/services/plugin_asset_scheme.dart';
 import 'package:otzaria/plugins/services/plugin_crash_guard.dart';
 import 'package:otzaria/plugins/services/plugin_deep_link_policy.dart';
 import 'package:otzaria/plugins/services/plugin_host_shortcuts.dart';
@@ -135,20 +136,36 @@ const String _sdkStub = r'''
     }
     return null;
   };
+  var _nonTextInputTypes = ['button', 'checkbox', 'radio', 'submit', 'reset',
+    'range', 'color', 'file', 'image'];
+  window.__otzariaIsEditableTarget = function (e) {
+    var t = e.composedPath ? e.composedPath()[0] : e.target;
+    if (!t) return false;
+    if (t.isContentEditable) return true;
+    if (t.tagName === 'TEXTAREA') return true;
+    return t.tagName === 'INPUT' &&
+        _nonTextInputTypes.indexOf(String(t.type).toLowerCase()) === -1;
+  };
   window.addEventListener('keydown', function (e) {
     if (!window.flutter_inappwebview) return;
     if (e.key === 'Escape') {
       window.flutter_inappwebview.callHandler('otzaria_escape_pressed');
-      return;
-    }
-    if (e.repeat) return;
-    var match = window.__otzariaMatchHostShortcut(e, window.__otzariaHostShortcuts);
-    if (match) {
-      e.preventDefault();
-      e.stopImmediatePropagation();
-      window.flutter_inappwebview.callHandler('otzaria_host_shortcut', match.id);
     }
   }, true);
+  // שלב bubble: קיצור שהתוסף טיפל בו (preventDefault) נשאר שלו. בשדה עריכה
+  // מועברים רק הקיצורים הקבועים, כדי לא לגנוב קיצורי עריכה (Ctrl+K, Ctrl+H).
+  window.addEventListener('keydown', function (e) {
+    if (!window.flutter_inappwebview || e.key === 'Escape') return;
+    if (e.repeat || e.defaultPrevented) return;
+    var match = window.__otzariaMatchHostShortcut(e, window.__otzariaHostShortcuts);
+    if (!match) return;
+    if (match.id.indexOf('fixed:') !== 0 && window.__otzariaIsEditableTarget(e)) {
+      return;
+    }
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    window.flutter_inappwebview.callHandler('otzaria_host_shortcut', match.id);
+  });
 })();
 ''';
 
@@ -196,6 +213,9 @@ InAppWebViewSettings buildPluginTabWebViewSettings({
     pinchZoomEnabled: false,
     cacheEnabled: !isDevelopment,
     isInspectable: isDevelopment || kDebugMode,
+    resourceCustomSchemes: pluginAssetSchemeEnabled
+        ? const [pluginAssetScheme]
+        : const [],
   );
 }
 
@@ -566,7 +586,7 @@ class _PluginTabPageState extends State<PluginTabPage> {
       }
 
       await webViewController?.loadUrl(
-        urlRequest: URLRequest(url: WebUri.uri(Uri.file(localHtmlPath))),
+        urlRequest: URLRequest(url: _entrypointUri),
       );
     } catch (e) {
       webViewController = null;
@@ -604,10 +624,20 @@ class _PluginTabPageState extends State<PluginTabPage> {
     setState(() => _creationFailure = failure.error.toString());
   }
 
+  /// ה-URI של נקודת הכניסה — `file://` ברוב הפלטפורמות, ובמק דרך
+  /// [pluginAssetScheme] (ראה [pluginAssetSchemeEnabled]).
+  WebUri get _entrypointUri => widget.plugin.isLocalhostDev
+      ? WebUri(localHtmlPath)
+      : pluginAssetSchemeEnabled
+      ? pluginAssetUri(
+          pluginId: widget.plugin.pluginId,
+          rootPath: widget.plugin.resolvedRootPath,
+          filePath: localHtmlPath,
+        )
+      : WebUri.uri(Uri.file(localHtmlPath));
+
   /// ה-URL שהטאב הזה ביקש ליצור — מפתח ההתאמה מול אירוע כשל.
-  String _expectedCreationUrl() => widget.plugin.isLocalhostDev
-      ? WebUri(localHtmlPath).toString()
-      : WebUri.uri(Uri.file(localHtmlPath)).toString();
+  String _expectedCreationUrl() => _entrypointUri.toString();
 
   Future<void> _ensurePackageInfo() async {
     _cachedPackageInfo ??= await PackageInfo.fromPlatform();
@@ -854,14 +884,15 @@ class _PluginTabPageState extends State<PluginTabPage> {
         _onCreationFailure,
       );
     }
-    final initialUrl = widget.plugin.isLocalhostDev
-        ? WebUri(localHtmlPath)
-        : WebUri.uri(Uri.file(localHtmlPath));
-
     final webView = InAppWebView(
       key: _webViewKey,
       webViewEnvironment: WebViewEnvironmentHolder.environment,
-      initialUrlRequest: URLRequest(url: initialUrl),
+      initialUrlRequest: URLRequest(url: _entrypointUri),
+      onLoadResourceWithCustomScheme: (controller, request) => servePluginAsset(
+        url: request.url,
+        pluginId: widget.plugin.pluginId,
+        rootPath: widget.plugin.resolvedRootPath,
+      ),
       initialSettings: buildPluginTabWebViewSettings(
         isDevelopment: widget.plugin.isDevelopment,
       ),
@@ -968,6 +999,10 @@ class _PluginTabPageState extends State<PluginTabPage> {
           if (uri.scheme == 'otzaria') {
             await _dispatchPluginDeepLink(uri, navigationAction);
             return NavigationActionPolicy.CANCEL;
+          }
+
+          if (uri.scheme == pluginAssetScheme) {
+            return NavigationActionPolicy.ALLOW;
           }
 
           if (uri.scheme == 'file') {
@@ -1338,7 +1373,8 @@ class _PluginTabPageState extends State<PluginTabPage> {
       },
       onReceivedError: (controller, request, error) {
         // only fail the view for the entrypoint file load itself
-        if (request.url.scheme == 'file') {
+        if (request.url.scheme == 'file' ||
+            request.url.scheme == pluginAssetScheme) {
           // שגיאת רשת/קובץ נתפסה ב-Dart — התהליך חי, לא קריסה native.
           // מנקים את ה-canary כדי שלא נחסום שגיאה רגילה כ"קריסה".
           unawaited(

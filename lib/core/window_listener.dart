@@ -12,7 +12,6 @@ import 'package:otzaria/core/windowing/window_manager_app_window_controller.dart
 import 'package:otzaria/core/windowing/last_active_window.dart';
 import 'package:otzaria/core/windowing/multi_window_service.dart';
 import 'package:otzaria/core/windowing/window_bus.dart';
-import 'package:otzaria/core/windowing/window_role.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/data/data_providers/user_books_database_holder.dart';
 import 'package:otzaria/plugins/services/plugin_crash_guard.dart';
@@ -99,6 +98,32 @@ class AppWindowListener extends WindowListener {
     'otzaria/process_control',
   );
 
+  static const MethodChannel _macTerminationChannel = MethodChannel(
+    'otzaria/macos_termination',
+  );
+
+  /// מפעיל ב-runner את ניתוב ⌘Q למסלול הסגירה של Dart.
+  ///
+  /// נקרא רק אחרי ש-`setPreventClose(true)` כבר הותקן: לפני כן סגירה
+  /// שמנותבת ל-`performClose` עלולה לעקוף את ה-listener עצמו.
+  static Future<void> enableMacOSCloseHandling() async {
+    if (kIsWeb || !Platform.isMacOS) return;
+    try {
+      await _macTerminationChannel.invokeMethod<void>('enableCloseHandling');
+    } on MissingPluginException {
+      // בינארי ישן עם Dart חדש שומר על ההתנהגות הקודמת, בלי לחסום עלייה.
+    } on PlatformException catch (error) {
+      debugPrint('Could not enable macOS close handling: $error');
+    }
+  }
+
+  /// מתיר ל-AppKit להשלים `NSApplication.terminate` אחרי שכל רצף הסגירה
+  /// של Dart הסתיים. בלי ההיתר, ⌘Q הבא היה חוזר ל-`performClose`.
+  static Future<void> allowMacOSApplicationTermination() async {
+    if (kIsWeb || !Platform.isMacOS) return;
+    await _macTerminationChannel.invokeMethod<void>('allowTermination');
+  }
+
   /// סטטוס קונטיינמנט ה-Job Object מה-runner (Windows בלבד):
   /// כשההקמה נכשלה [failure] מתאר את השלב שנכשל ואת קוד השגיאה.
   static Future<({bool ready, String? failure})> jobObjectStatus() async {
@@ -113,6 +138,21 @@ class AppWindowListener extends WindowListener {
   /// נקרא לאחר אירועי מצב חלון דיסקרטיים שעלולים לגרום לאיבוד פוקוס:
   /// maximize, unmaximize, restore, כניסה/יציאה ממסך מלא.
   VoidCallback? onWindowStateChanged;
+
+  /// נקרא כשהחלון חזר ממיזעור — וזה בלבד.
+  ///
+  /// החזרה מגיעה כ-`restore`, ואם החלון היה מוגדל לפני המיזעור היא מגיעה
+  /// כ-`maximize`; שניהם נספרים, ורק אם קדם להם מיזעור.
+  VoidCallback? onWindowRestoredFromMinimize;
+
+  /// האם החלון מוזער ועדיין לא חזר.
+  bool _minimized = false;
+
+  void _notifyRestoredFromMinimize() {
+    if (!_minimized) return;
+    _minimized = false;
+    onWindowRestoredFromMinimize?.call();
+  }
 
   /// נקרא בכל אירוע resize רציף — מיועד ל-debounced restore.
   VoidCallback? onWindowResizeOccurred;
@@ -249,18 +289,6 @@ class AppWindowListener extends WindowListener {
       // דגל שנשאר דלוק לחיצה על X פשוט לא הייתה עושה כלום.
       _isClosing = false;
     }
-  }
-
-  /// סוגר חלון משני שנותר בלי כרטיסיות, כמו כרטיסייה אחרונה בדפדפן.
-  ///
-  /// ⚠️ לא כשזה החלון הגלוי האחרון: [handleWindowClose] היה מזהה אותו כאחרון
-  /// ומכבה את התהליך, בעוד המשתמש רק רוקן חלון וציפה לראות את הספרייה.
-  Future<void> closeIfEmptied({bool Function()? isStillEmpty}) async {
-    if (!WindowRole.isSecondary || _isClosing) return;
-    // `null` הוא "לא ידוע" — חלון ריק עדיף על סגירה בניחוש.
-    final info = await const MultiWindowService().windowCount();
-    if (info == null || info.count <= 1) return;
-    await handleWindowClose(canClose: isStillEmpty);
   }
 
   /// הצעדים שקודמים ל-flush — כולם פר-תהליך.
@@ -461,6 +489,7 @@ class AppWindowListener extends WindowListener {
         await windowManager.setPreventClose(false);
         // ⚠️ macOS/Linux בלבד. ב-Windows המסלול הסתיים ב-`exit(0)` שמעל —
         // ראו האזהרה בתיעוד של `quitApplication`.
+        await allowMacOSApplicationTermination();
         await _window.quitApplication();
       }
     } catch (e) {
@@ -527,6 +556,7 @@ class AppWindowListener extends WindowListener {
     if (kDebugMode) {
       debugPrint('Window minimized');
     }
+    _minimized = true;
   }
 
   @override
@@ -534,6 +564,7 @@ class AppWindowListener extends WindowListener {
     if (kDebugMode) {
       debugPrint('Window restored');
     }
+    _notifyRestoredFromMinimize();
     onWindowStateChanged?.call();
   }
 
@@ -563,6 +594,8 @@ class AppWindowListener extends WindowListener {
     if (kDebugMode) {
       debugPrint('Window maximized');
     }
+    // חלון שהיה מוגדל לפני המיזעור חוזר כ-maximize ולא כ-restore.
+    _notifyRestoredFromMinimize();
     if (WindowPersistence.isRestoring) return;
     WindowPersistence.scheduleSave();
     onWindowStateChanged?.call();

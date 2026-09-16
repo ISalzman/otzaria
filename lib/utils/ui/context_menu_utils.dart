@@ -4,6 +4,7 @@ import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:super_clipboard/super_clipboard.dart';
 import 'package:otzaria/core/messages/common_messages.dart';
+import 'package:otzaria/core/windowing/multi_window_service.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/models/links.dart';
@@ -40,6 +41,24 @@ bool showCopyWithoutNikud(String? selectedText) =>
     utils.hasNikud(selectedText);
 
 class ContextMenuUtils {
+  static TextBookTab _targetTabFromLink(Link link) => TextBookTab(
+    book: _targetBookFromLink(link),
+    index: link.index2 - 1,
+    openLeftPane:
+        (Settings.getValue<bool>('key-pin-sidebar') ?? false) ||
+        (Settings.getValue<bool>('key-default-sidebar-open') ?? false),
+  );
+
+  static Future<void> _openLinkTargetInNewWindow(Link link) async {
+    const service = MultiWindowService();
+    // ⚠️ נבדק לפני הפעולה: `openWindow` ממתין עד 20 שניות, והמשתמש היה מקבל
+    // את הודעת התקרה רק בסופן.
+    if (!await service.canOpenAnotherWindow() ||
+        !await service.openWindow(tab: _targetTabFromLink(link))) {
+      await service.reportOpenWindowFailure();
+    }
+  }
+
   static TextBook _targetBookFromLink(Link link) {
     return TextBook(
       title: utils.getTitleFromPath(link.path2),
@@ -165,26 +184,21 @@ class ContextMenuUtils {
       ],
       const AppContextMenuEntry.divider(),
       AppContextMenuEntry(
-        label: 'פתח ספר זה בחלון נפרד',
+        label: 'פתח ועבור לכרטיסיה',
         icon: FluentIcons.open_24_regular,
-        onTap: () {
-          openBookCallback(
-            TextBookTab(
-              book: _targetBookFromLink(link),
-              index: link.index2 - 1,
-              openLeftPane:
-                  (Settings.getValue<bool>('key-pin-sidebar') ?? false) ||
-                  (Settings.getValue<bool>('key-default-sidebar-open') ??
-                      false),
-            ),
-          );
-        },
+        onTap: () => openBookCallback(_targetTabFromLink(link)),
       ),
       AppContextMenuEntry(
         label: kOpenInNewTabLabel,
         icon: FluentIcons.tab_add_24_regular,
         onTap: () => openLinkTargetInBackground(context, link),
       ),
+      if (MultiWindowService.isSupported)
+        AppContextMenuEntry(
+          label: 'פתח בחלון חדש',
+          icon: FluentIcons.window_new_24_regular,
+          onTap: () => _openLinkTargetInNewWindow(link),
+        ),
     ];
 
     // קישור עומק דורש מזהה מסד; source=user מבחין בספרי משתמש בעלי ID חופף.
@@ -299,10 +313,12 @@ class ContextMenuUtils {
 
   /// ממפה מפרש ([link] + תוכנו [rawContent]) לפרמטרי דיווח הטעות: הדיווח מופנה
   /// לספר המפרש עצמו (path2/index2), וללא בחירת טקסט מדווחים על כל פסקת המפרש.
+  /// `reportLine` null בקישור-טווח: התוכן הוא כמה שורות מחוברות, לא שורה אחת ב-DB.
   static ({
     TextBook book,
     List<String> content,
     int lineIndex,
+    String? reportLine,
     String bookTitle,
     String selectedText,
   })
@@ -317,6 +333,9 @@ class ContextMenuUtils {
       book: _targetBookFromLink(link),
       content: [rawContent],
       lineIndex: link.index2 - 1,
+      reportLine: (link.index2End ?? link.index2) == link.index2
+          ? rawContent
+          : null,
       bookTitle: utils.getTitleFromPath(link.path2),
       selectedText: hasSelection
           ? savedSelectedText
@@ -356,6 +375,7 @@ class ContextMenuUtils {
       savedSelectedIndex: args.lineIndex,
       reportContent: args.content,
       reportBook: args.book,
+      reportLine: args.reportLine,
     );
   }
 
