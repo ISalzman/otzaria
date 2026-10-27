@@ -742,7 +742,7 @@ class AppPaths {
 
   /// שם תיקיית ברירת המחדל לגיבויים תחת מסמכי המשתמש בדסקטופ.
   //static const String _documentsBackupFolderName = 'אוצריא - גיבויים';
-  //static const String _documentsBackupFolderName = 'otzaria_backups';
+  static const String _documentsBackupFolderName = 'otzaria_backups';
   static const String _legacyBackupMigrationMarker =
       '.otzaria-legacy-migration-complete';
 
