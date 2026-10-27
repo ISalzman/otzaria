@@ -644,6 +644,25 @@ void main() {
     expect(moves, isEmpty);
   });
 
+  testWidgets(
+    'לחיצה ארוכה במגע על ה-X פותחת את תפריט הכרטיסיה (issue #2518)',
+    (tester) async {
+      await pumpPanel(tester);
+
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.byTooltip('סגור כרטיסיה')),
+        kind: PointerDeviceKind.touch,
+      );
+      await tester.pump(kLongPressTimeout + const Duration(milliseconds: 100));
+      await gesture.up();
+      await tester.pumpAndSettle();
+
+      expect(find.text('הצמד כרטיסיה'), findsOneWidget);
+      expect(tabsBloc.addedEvents.whereType<RemoveTab>(), isEmpty);
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.windows),
+  );
+
   testWidgets('גרירה קצרה במגע אינה מסדרת מחדש', (tester) async {
     debugDefaultTargetPlatformOverride = TargetPlatform.android;
     await pumpPanel(tester);
