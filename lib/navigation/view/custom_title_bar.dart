@@ -1237,15 +1237,6 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
   }
 
   /// כפתור ה-X של כרטיסיה, או של חלונית בתוך כרטיסיה מפוצלת.
-  ///
-  /// ה-tooltip ניתן לכפתור עצמו (`IconButton.tooltip`) ולא עוטף אותו מבחוץ:
-  /// IconButton בונה את ה-Tooltip *בתוך* מכולת הסמנטיקה שלו, ולכן ההודעה
-  /// ועוגן ה-OverlayPortal של הבלון שייכים לצומת הסמנטיקה של הכפתור. Tooltip
-  /// חיצוני אינו יוצר צומת משלו — הוא מתמזג לצומת הסמנטיקה הקרוב, כאן צומת
-  /// הכרטיסיה, שכבר נושא את ה-tooltip של הכותרת. לצומת יש מקום לעוגן אחד
-  /// בלבד (`traversalParentIdentifier`), ולכן עוגן ה-X נשמט; כשהבלון שלו נפתח
-  /// הוא נשלח למערכת ההפעלה בלי אב, Windows דוחה את עדכון עץ הנגישות והעץ
-  /// קופא — עד קריסה של התוכנה במעבר הפוקוס הבא (issue #1399).
   Widget _tabCloseButton({
     required String tooltip,
     required double width,
@@ -1253,27 +1244,12 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
   }) {
     return MetaData(
       metaData: _kTabCloseButtonHitMarker,
-      child: TooltipTheme(
-        // במגע לחיצה ארוכה פותחת את תפריט הכרטיסיה, כמו לחיצה ימנית על ה-X.
-        data: TooltipTheme.of(context).copyWith(
-          preferBelow: false,
-          triggerMode: TooltipTriggerMode.manual,
-        ),
-        child: IconButton(
-          tooltip: tooltip,
-          // shrinkWrap + padding אפס: בלעדיהם שטח-המגע ברירת-המחדל (48px)
-          // גולש בטאב צר.
-          style: IconButton.styleFrom(
-            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            padding: EdgeInsets.zero,
-          ),
-          constraints: BoxConstraints.tightFor(
-            width: width,
-            height: _kTabCloseExtent,
-          ),
-          onPressed: onPressed,
-          icon: const Icon(FluentIcons.dismiss_24_regular, size: 10),
-        ),
+      child: TabCloseButton(
+        tooltip: tooltip,
+        size: Size(width, _kTabCloseExtent),
+        iconSize: 10,
+        preferBelow: false,
+        onPressed: onPressed,
       ),
     );
   }
