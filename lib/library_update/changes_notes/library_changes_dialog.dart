@@ -160,6 +160,9 @@ class LibraryChangesDialog extends StatefulWidget {
 
 class _LibraryChangesDialogState extends State<LibraryChangesDialog> {
   final _search = TextEditingController();
+  // בדסקטופ הרשימה אינה יורשת את PrimaryScrollController — בלי בקר משותף
+  // אי אפשר לגרור את פס הגלילה.
+  final _scroll = ScrollController();
   List<List<LibraryChangesLine>>? _parsed;
   List<LibraryChangesLine> _visible = const [];
   Timer? _debounce;
@@ -187,6 +190,7 @@ class _LibraryChangesDialogState extends State<LibraryChangesDialog> {
   void dispose() {
     _debounce?.cancel();
     _search.dispose();
+    _scroll.dispose();
     super.dispose();
   }
 
@@ -226,11 +230,13 @@ class _LibraryChangesDialogState extends State<LibraryChangesDialog> {
                   ? Center(child: Text(context.settingsText('לא נמצאו ספרים')))
                   : ContentDirectionality(
                       child: Scrollbar(
+                        controller: _scroll,
                         // שורות בגובה משתנה: ListView רגיל בונה בקפיצת פס
                         // הגלילה את כל השורות שבדרך (#3022). מפתח לכל סינון,
                         // כדי שהגבהים שנמדדו לא יעברו לשורות אחרות.
                         child: SuperListView.builder(
                           key: ObjectKey(_visible),
+                          controller: _scroll,
                           itemCount: _visible.length,
                           itemBuilder: (context, index) =>
                               _LineView(line: _visible[index]),
