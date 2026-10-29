@@ -284,15 +284,11 @@ class _VerticalTabRow extends StatelessWidget {
   }
 
   Widget _buildCloseButton(BuildContext context, {required double extent}) {
-    return IconButton(
-      style: IconButton.styleFrom(
-        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-        padding: EdgeInsets.zero,
-      ),
-      constraints: BoxConstraints.tight(Size.square(extent)),
+    return TabCloseButton(
       tooltip: context.settingsText('סגור כרטיסיה'),
+      size: Size.square(extent),
+      iconSize: 12,
       onPressed: onClose,
-      icon: const Icon(FluentIcons.dismiss_24_regular, size: 12),
     );
   }
 }
