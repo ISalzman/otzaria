@@ -78,6 +78,7 @@ Future<_TestTextBookBloc> _pumpContinuousView(
   WidgetTester tester,
   TextBookLoaded state, {
   bool simple = false,
+  bool preview = false,
   bool isMainText = true,
   double textMaxWidth = -1,
   double textScale = 1,
@@ -127,6 +128,7 @@ Future<_TestTextBookBloc> _pumpContinuousView(
                   openLeftPaneTab: (_, {searchText}) {},
                   textSize: 18,
                   showCommentaryAsExpansionTiles: true,
+                  isPreviewMode: preview,
                   tab: tab,
                 ),
         ),
@@ -225,12 +227,23 @@ void main() {
   });
 
   // issue #2554 — הקו צויר בתוך רוחב הטקסט, על האותיות שבקצה השורה.
-  for (final simple in [false, true]) {
+  // issue #3446 — כשרוחב הטקסט מוגבל, הקו צויר בקצה הפריט ליד פס הגלילה.
+  for (final (simple, preview) in [
+    (false, false),
+    (true, false),
+    (false, true),
+  ]) {
     for (final continuous in [false, true]) {
-      for (final textScale in [1.0, 2.0]) {
+      for (final (textScale, textMaxWidth) in [
+        (1.0, 0.0),
+        (2.0, 0.0),
+        (1.0, -10.0),
+        (2.0, -10.0),
+      ]) {
         testWidgets(
-          'קו הבחירה מצויר בשוליים ולא על הטקסט (issue #2554), '
-          'צורת הדף=$simple, רציף=$continuous, הגדלה=$textScale',
+          'קו הבחירה צמוד לטקסט ואינו עולה עליו (issues #2554, #3446), '
+          'צורת הדף=$simple, תצוגה מקדימה=$preview, רציף=$continuous, '
+          'הגדלה=$textScale, רוחב טקסט=$textMaxWidth',
           (tester) async {
             final font = File(
               'fonts/FrankRuehlCLM-Medium.ttf',
@@ -266,7 +279,8 @@ void main() {
                   linksByLine: const {},
                 ).copyWith(continuousReadingMode: continuous),
                 simple: simple,
-                textMaxWidth: 0,
+                preview: preview,
+                textMaxWidth: textMaxWidth,
                 textScale: textScale,
               );
               await tester.pump(const Duration(milliseconds: 300));
@@ -308,6 +322,11 @@ void main() {
               barLeft - inkRight,
               greaterThanOrEqualTo(4),
               reason: 'בין הקו לאות הקרובה נשאר רווח',
+            );
+            expect(
+              barLeft - inkRight,
+              lessThanOrEqualTo(2 * kSelectionGutterWidth),
+              reason: 'הקו צמוד לטקסט ולא לקצה הפריט',
             );
           },
         );
