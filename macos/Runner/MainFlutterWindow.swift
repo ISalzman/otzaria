@@ -10,6 +10,12 @@ final class OtzariaDartProject: FlutterDartProject {
   // דורס getter פנימי (FlutterDartProject_Internal.h); זו נקודת ההחלטה היחידה של המנוע.
   @objc var enableImpeller: Bool { OtzariaDartProject.useImpeller }
 
+  // המנוע מחפש את icudtl.dat ב-bundle של [self class], שב-subclass הוא Runner.app.
+  // בלי ICU אין הזדמנויות שבירה, והשורות נחתכות באמצע מילה (#3546).
+  @objc var ICUDataPath: String? {
+    Bundle(for: FlutterDartProject.self).path(forResource: "icudtl.dat", ofType: nil)
+  }
+
   static let useImpeller: Bool = {
     assert(
       class_getInstanceMethod(FlutterDartProject.self, NSSelectorFromString("enableImpeller"))
