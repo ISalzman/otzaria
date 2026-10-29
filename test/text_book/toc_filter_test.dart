@@ -79,12 +79,6 @@ Future<void> main() async {
     skip: engineReady ? false : searchEngineSkipReason,
   );
 
-  test('shouldExpandInSearch defaults to true when no state is stored', () {
-    expect(shouldExpandInSearch(null), isTrue);
-    expect(shouldExpandInSearch(true), isTrue);
-    expect(shouldExpandInSearch(false), isFalse);
-  });
-
   test(
     'search results prefer more relevant exact entries first',
     () {

@@ -465,8 +465,6 @@ class TextBookLoaded extends TextBookState {
       showPageShapeView ? TextView.pageShape : TextView.regular;
 
   /// כל השכבות מהספציפי לכללי, בסדר שהרזולבר מצפה לו.
-  List<TextDisplayLayer> get displayLayers => _layersWith(displayPolicy);
-
   List<TextDisplayLayer> _layersWith(TextDisplayPolicy policy) => [
     displayOverrides,
     bookDisplayLayer,
