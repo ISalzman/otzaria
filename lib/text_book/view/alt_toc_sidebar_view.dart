@@ -1000,7 +1000,9 @@ class _AltTocSidebarViewState extends State<AltTocSidebarView>
   Widget _buildStructureItem(AltTocStructure structure) {
     final isExpanded = _structureExpanded[structure.id] ?? false;
     final roots = _structureRoots[structure.id] ?? [];
+    // הכותרות נטענות רק בפתיחה, ולכן מבנה שעוד לא נטען מציג חץ.
     final hasChildren =
+        !_structureRoots.containsKey(structure.id) ||
         roots.isNotEmpty ||
         (structure.id == kDibburimStructureId && _hasDibburimEntries);
 
