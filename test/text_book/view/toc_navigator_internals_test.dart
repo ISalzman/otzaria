@@ -14,52 +14,6 @@ TocEntry _e(String text, int index, int level, {List<TocEntry>? children}) {
 }
 
 void main() {
-  group('countAllTocEntries', () {
-    test('רשימה ריקה - 0', () {
-      expect(countAllTocEntries(const []), 0);
-    });
-
-    test('רמה אחת בלבד', () {
-      final entries = [
-        _e('א', 0, 1),
-        _e('ב', 1, 1),
-        _e('ג', 2, 1),
-      ];
-      expect(countAllTocEntries(entries), 3);
-    });
-
-    test('עץ מקונן רקורסיבי', () {
-      final entries = [
-        _e(
-          'root',
-          0,
-          1,
-          children: [
-            _e(
-              'a',
-              1,
-              2,
-              children: [
-                _e('a1', 2, 3),
-                _e('a2', 3, 3),
-              ],
-            ),
-            _e('b', 4, 2),
-          ],
-        ),
-      ];
-      // 1 + 2 + 2 + 0 = 5? Let me recount: root + a + a1 + a2 + b = 5
-      expect(countAllTocEntries(entries), 5);
-    });
-
-    test('סופר את כל הרמות, גם עמוקות', () {
-      // עץ עם 1 אב + 100 ילדים
-      final children = List.generate(100, (i) => _e('c$i', i + 1, 2));
-      final entries = [_e('root', 0, 1, children: children)];
-      expect(countAllTocEntries(entries), 101);
-    });
-  });
-
   group('flattenVisibleToc - ברירת מחדל (מפת expanded ריקה)', () {
     test('עלים בלבד מוחזרים עם isExpanded=false', () {
       final entries = [
@@ -337,7 +291,7 @@ void main() {
       expect(flatBothCollapsed.map((f) => f.entry.text).toList(), ['a', 'b']);
     });
 
-    test('כשכל הערכים מורחבים, אורך הפלט שווה ל-countAllTocEntries', () {
+    test('כשכל הערכים מורחבים, כל ערכי העץ בפלט', () {
       // אינווריאנט: ה"כל מורחב" צריך להיות שווה לסך כל הערכים בעץ.
       final entries = [
         _e(
@@ -372,7 +326,7 @@ void main() {
         for (final e in [0, 1, 4, 5, 6, 8]) e: true,
       };
       final flat = flattenVisibleToc(entries, allExpanded);
-      expect(flat.length, countAllTocEntries(entries));
+      expect(flat.length, 9);
     });
 
     test('הסדר תמיד DFS מקדים, ללא תלות במצב expanded', () {
@@ -414,7 +368,6 @@ void main() {
       });
       final entries = [_e('book', -1, 0, children: simanim)];
       // -1 ייחודי כדי לא להתנגש עם ילדים שמתחילים מ-0
-      expect(countAllTocEntries(entries), 1 + 100 + 100 * 99);
       // כל simanim ברמה 1 מורחבים כברירת מחדל, וגם root ברמה 0
       // נכריח expanded על root כדי לכלול את הכל
       final flat = flattenVisibleToc(entries, const {-1: true});
@@ -426,39 +379,6 @@ void main() {
       // השניות חוסכות tests, אבל החשוב: כל הילדים נמצאים
       // root + 100 simanim + 100 * 99 seif-im
       expect(flat.length, 1 + 100 + 100 * 99);
-    });
-  });
-
-  // טסטים אינטגרטיביים על השפעת הסף - מוודאים שהלוגיקה הטהורה תומכת
-  // בהחלטה "האם להפעיל וירטואליזציה" שבמסך עצמו.
-  group('סף וירטואליזציה (countAllTocEntries מול ספרים אמיתיים)', () {
-    test('ספר עם 700 ערכי רמה 1 בלבד - מעל סף 500', () {
-      final entries = List.generate(700, (i) => _e('siman $i', i, 1));
-      expect(countAllTocEntries(entries), 700);
-      expect(countAllTocEntries(entries) > 500, isTrue);
-    });
-
-    test('ספר עם 1 רמה 1 ו-300 ילדים - מתחת לסף 500', () {
-      final children = List.generate(300, (i) => _e('c$i', i + 1, 2));
-      final entries = [_e('root', 0, 1, children: children)];
-      expect(countAllTocEntries(entries), 301);
-      expect(countAllTocEntries(entries) > 500, isFalse);
-    });
-
-    test('מבנה עמוק כמו כף החיים: 1 + 134 + 8420 - מעל הסף', () {
-      // מדמה את המבנה האמיתי של "כף החיים על שו"ע יורה דעה"
-      // 134 simanim, כל אחד ~63 se'ifim
-      final simanim = List.generate(134, (s) {
-        final seifim = List.generate(
-          63,
-          (sf) => _e('seif $sf', s * 100 + sf, 2),
-        );
-        return _e('siman $s', s * 100, 1, children: seifim);
-      });
-      final entries = [_e('book', 0, 1, children: simanim)];
-      final count = countAllTocEntries(entries);
-      expect(count, greaterThan(500));
-      expect(count, 1 + 134 + 134 * 63);
     });
   });
 

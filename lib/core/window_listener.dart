@@ -436,7 +436,11 @@ class AppWindowListener extends WindowListener {
       timeout: const Duration(seconds: 1),
     );
 
-    IndexingCrashCanary.current?.finish();
+    await _runBestEffortShutdownStep(
+      'finishIndexingCanary',
+      () async => IndexingCrashCanary.current?.finish(),
+      timeout: const Duration(seconds: 1),
+    );
 
     // סוגרים את כל ה-HTTP clients המתמשכים לפני כל ניקוי אחר. כל socket
     // פתוח מחזיק handle של kernel + state של TLS; ב-Windows admin install
@@ -512,6 +516,12 @@ class AppWindowListener extends WindowListener {
     //     hive_ce שורד dirty shutdown מעיצוב (checksum על כל record).
     //     `PreCloseRegistry.runAll()` ב-step2 כבר flushed את ההיסטוריה.
     try {
+      // סשני החלונות נכתבים ב-isolate; בלי ההמתנה exit חותך את הכתיבה האחרונה.
+      await _runBestEffortShutdownStep(
+        'flushUserStateWrites',
+        UserStateDatabase.instance.flushWrites,
+        timeout: const Duration(seconds: 10),
+      );
       // אחרי ה-flush, שכותב ל-user_state.db — אחרת הוא היה פותח אותו מחדש.
       await _runBestEffortShutdownStep(
         'closeWritableDatabases',

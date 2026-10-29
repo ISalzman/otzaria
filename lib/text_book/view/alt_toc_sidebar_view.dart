@@ -1,3 +1,5 @@
+import 'package:otzaria/core/ui_snack.dart';
+import 'package:otzaria/core/messages/text_book_messages.dart';
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
@@ -805,9 +807,7 @@ class _AltTocSidebarViewState extends State<AltTocSidebarView>
           await _openLink(link, markerTitle: linkEntry.text);
         }
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('לא נמצא קישור לכותרת זו')),
-        );
+        UiSnack.show(TextBookMessages.headingLinkNotFound);
       }
     } catch (e) {
       debugPrint('Error handling leaf click: $e');
@@ -831,9 +831,7 @@ class _AltTocSidebarViewState extends State<AltTocSidebarView>
       // Navigate to the first root entry
       _handleLeafClick(structure.id, roots.first);
     } else {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('לא נמצאו כותרות למבנה זה')));
+      UiSnack.show(TextBookMessages.structureHeadingsNotFound);
     }
   }
 
@@ -846,7 +844,11 @@ class _AltTocSidebarViewState extends State<AltTocSidebarView>
     }
 
     if (_structures.isEmpty) {
-      return const Center(child: Text('אין כותרות חלופיות זמינות'));
+      return const OtzariaEmptyState(
+        isCompact: true,
+        icon: OtzariaIcons.text_bullet_list_tree_24_regular,
+        title: 'אין כותרות חלופיות זמינות',
+      );
     }
 
     final isSearching = _searchController.text.isNotEmpty;
@@ -998,7 +1000,9 @@ class _AltTocSidebarViewState extends State<AltTocSidebarView>
   Widget _buildStructureItem(AltTocStructure structure) {
     final isExpanded = _structureExpanded[structure.id] ?? false;
     final roots = _structureRoots[structure.id] ?? [];
+    // הכותרות נטענות רק בפתיחה, ולכן מבנה שעוד לא נטען מציג חץ.
     final hasChildren =
+        !_structureRoots.containsKey(structure.id) ||
         roots.isNotEmpty ||
         (structure.id == kDibburimStructureId && _hasDibburimEntries);
 

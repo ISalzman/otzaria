@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <initializer_list>
 #include <memory>
 #include <string>
 #include <thread>
@@ -27,6 +28,9 @@ constexpr int kMaxCaptures = 6;
 constexpr DWORD kHeartbeatIntervalMs = 250;
 constexpr ULONGLONG kMaxLifetimeMs = 300000;
 constexpr int kMaxFrames = 48;
+constexpr size_t kMaxStackCopyBytes = 256 * 1024;
+// אפסים אחרי העותק: פרישת המסגרת האחרונה קוראת מעבר לקצהו.
+constexpr size_t kStackCopyPaddingBytes = 64 * 1024;
 
 struct ModuleRange {
   ULONG_PTR base = 0;
@@ -166,6 +170,94 @@ std::string DartBuildId(ULONG_PTR base) {
   return "";
 }
 
+// "<pdb> <GUID><age>" מרשומת CodeView RSDS — המפתח בשרת הסמלים של Microsoft,
+// שבלעדיו אין PDB לפריים ב-DLL של המערכת.
+std::string ModulePdbKey(HMODULE module) {
+  const auto base = reinterpret_cast<ULONG_PTR>(module);
+  IMAGE_DOS_HEADER dos = {};
+  if (!ReadBytes(base, &dos, sizeof(dos)) || dos.e_magic != IMAGE_DOS_SIGNATURE ||
+      dos.e_lfanew <= 0 || dos.e_lfanew > 0x10000) {
+    return "";
+  }
+  IMAGE_NT_HEADERS nt = {};
+  if (!ReadBytes(base + dos.e_lfanew, &nt, sizeof(nt)) ||
+      nt.Signature != IMAGE_NT_SIGNATURE ||
+      nt.OptionalHeader.Magic != IMAGE_NT_OPTIONAL_HDR_MAGIC ||
+      nt.OptionalHeader.NumberOfRvaAndSizes <= IMAGE_DIRECTORY_ENTRY_DEBUG) {
+    return "";
+  }
+  const DWORD image_size = nt.OptionalHeader.SizeOfImage;
+  const IMAGE_DATA_DIRECTORY dir =
+      nt.OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_DEBUG];
+  if (dir.VirtualAddress == 0 || dir.VirtualAddress >= image_size ||
+      dir.Size > image_size - dir.VirtualAddress) {
+    return "";
+  }
+  const DWORD count = (std::min)(
+      static_cast<DWORD>(dir.Size / sizeof(IMAGE_DEBUG_DIRECTORY)), DWORD{32});
+  for (DWORD i = 0; i < count; ++i) {
+    IMAGE_DEBUG_DIRECTORY entry = {};
+    if (!ReadBytes(base + dir.VirtualAddress + i * sizeof(entry), &entry,
+                   sizeof(entry))) {
+      return "";
+    }
+    if (entry.Type != IMAGE_DEBUG_TYPE_CODEVIEW || entry.AddressOfRawData == 0 ||
+        entry.SizeOfData < 25 || entry.SizeOfData > 1024 ||
+        entry.AddressOfRawData >= image_size ||
+        entry.SizeOfData > image_size - entry.AddressOfRawData) {
+      continue;
+    }
+    // RSDS: חתימה, GUID, age, ונתיב ה-PDB מסתיים ב-0.
+    unsigned char data[1024] = {};
+    if (!ReadBytes(base + entry.AddressOfRawData, data, entry.SizeOfData) ||
+        memcmp(data, "RSDS", 4) != 0) {
+      continue;
+    }
+    GUID guid = {};
+    DWORD age = 0;
+    memcpy(&guid, data + 4, sizeof(guid));
+    memcpy(&age, data + 20, sizeof(age));
+    const char* path = reinterpret_cast<const char*>(data + 24);
+    const size_t path_len = strnlen(path, entry.SizeOfData - 24);
+    if (path_len == 0 || path_len == entry.SizeOfData - 24) continue;
+    std::string pdb(path, path_len);
+    const size_t slash = pdb.find_last_of("\\/");
+    if (slash != std::string::npos) pdb = pdb.substr(slash + 1);
+    if (pdb.empty() || pdb.find(' ') != std::string::npos) continue;
+    char key[64];
+    snprintf(key, sizeof(key),
+             "%08lX%04X%04X%02X%02X%02X%02X%02X%02X%02X%02X%lX", guid.Data1,
+             guid.Data2, guid.Data3, guid.Data4[0], guid.Data4[1],
+             guid.Data4[2], guid.Data4[3], guid.Data4[4], guid.Data4[5],
+             guid.Data4[6], guid.Data4[7], age);
+    return pdb + " " + key;
+  }
+  return "";
+}
+
+// שורת "Module PDB:" לכל מודול PE שמופיע בפריימים; app.so אינו PE.
+void AppendModulePdbLines(const std::vector<ULONG_PTR>& frames,
+                          std::string* report) {
+  std::vector<HMODULE> seen;
+  for (const ULONG_PTR frame : frames) {
+    if (DartImageBase(frame) != 0) continue;
+    HMODULE module = nullptr;
+    if (!::GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
+                                  GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                              reinterpret_cast<LPCWSTR>(frame), &module) ||
+        std::find(seen.begin(), seen.end(), module) != seen.end()) {
+      continue;
+    }
+    seen.push_back(module);
+    const std::string key = ModulePdbKey(module);
+    if (key.empty()) continue;
+    wchar_t path[MAX_PATH] = {0};
+    const DWORD length = ::GetModuleFileNameW(module, path, MAX_PATH);
+    if (length == 0 || length >= MAX_PATH) continue;
+    *report += "Module PDB: " + NarrowPathTail(path) + " " + key + "\n";
+  }
+}
+
 std::string DescribeAddress(ULONG_PTR address) {
   char buffer[160];
   const auto modules =
@@ -216,7 +308,7 @@ std::string DescribeAddress(ULONG_PTR address) {
 #define WD_SP(ctx) ((ctx).Sp)
 #endif
 
-// קריאת מילה מהמחסנית של ה-thread המושהה — כתובת פגומה תפיל את התהליך בלי זה.
+// קריאת מילה מהמחסנית שהועתקה — כתובת פגומה תפיל את התהליך בלי זה.
 bool ReadStackWord(ULONG_PTR address, ULONG_PTR* out) {
   __try {
     *out = *reinterpret_cast<ULONG_PTR*>(address);
@@ -226,18 +318,38 @@ bool ReadStackWord(ULONG_PTR address, ULONG_PTR* out) {
   }
 }
 
-// פורשת את מחסנית הקריאות של ה-thread המושהה. רק RtlVirtualUnwind ומפת מודולים
-// שנקראה מראש — כל קריאה שנוטלת את נעילת ה-loader תיתקע כאן.
-void UnwindSuspendedThread(CONTEXT* context, std::vector<ULONG_PTR>* frames) {
+// עותק שנחתך או מודול שנפרק אחרי החידוש מסתיימים במחסנית קטועה, לא בקריסה.
+bool UnwindFrame(CONTEXT* context, bool* has_function) {
+  __try {
+    DWORD64 image_base = 0;
+    PRUNTIME_FUNCTION function =
+        ::RtlLookupFunctionEntry(WD_PC(*context), &image_base, nullptr);
+    *has_function = function != nullptr;
+    if (function == nullptr) return true;
+    PVOID handler_data = nullptr;
+    DWORD64 establisher_frame = 0;
+    ::RtlVirtualUnwind(UNW_FLAG_NHANDLER, image_base, WD_PC(*context), function,
+                       context, &handler_data, &establisher_frame, nullptr);
+    return true;
+  } __except (EXCEPTION_EXECUTE_HANDLER) {
+    return false;
+  }
+}
+
+// פורשת מחסנית שהועתקה; RtlLookupFunctionEntry נוטלת נעילות של ה-loader, ולכן
+// רצה רק אחרי שה-thread חודש.
+void UnwindCopiedStack(CONTEXT* context, ULONG_PTR stack_begin,
+                       ULONG_PTR stack_end, std::vector<ULONG_PTR>* frames) {
   for (int i = 0; i < kMaxFrames; ++i) {
     const ULONG_PTR pc = static_cast<ULONG_PTR>(WD_PC(*context));
     if (pc == 0) break;
     frames->push_back(pc);
+    const ULONG_PTR sp = static_cast<ULONG_PTR>(WD_SP(*context));
+    if (sp < stack_begin || sp >= stack_end) break;
 
-    DWORD64 image_base = 0;
-    PRUNTIME_FUNCTION function =
-        ::RtlLookupFunctionEntry(WD_PC(*context), &image_base, nullptr);
-    if (function == nullptr) {
+    bool has_function = false;
+    if (!UnwindFrame(context, &has_function)) break;
+    if (!has_function) {
 #if defined(_M_X64)
       ULONG_PTR return_address = 0;
       if (!ReadStackWord(static_cast<ULONG_PTR>(WD_SP(*context)),
@@ -252,33 +364,84 @@ void UnwindSuspendedThread(CONTEXT* context, std::vector<ULONG_PTR>* frames) {
 #endif
       continue;
     }
-
-    PVOID handler_data = nullptr;
-    DWORD64 establisher_frame = 0;
-    ::RtlVirtualUnwind(UNW_FLAG_NHANDLER, image_base, WD_PC(*context), function,
-                       context, &handler_data, &establisher_frame, nullptr);
     if (WD_PC(*context) == 0) break;
   }
 }
 
-bool CaptureMainThreadStack(std::vector<ULONG_PTR>* frames) {
-  if (g_main_thread == nullptr) return false;
-  if (::SuspendThread(g_main_thread) == static_cast<DWORD>(-1)) return false;
+bool CopyStackBytes(ULONG_PTR from, void* to, size_t size) {
+  __try {
+    memcpy(to, reinterpret_cast<const void*>(from), size);
+    return true;
+  } __except (EXCEPTION_EXECUTE_HANDLER) {
+    return false;
+  }
+}
+
+// מצביע לתוך המחסנית המקורית מצביע אחרי הפרישה לתוך העותק.
+void Relocate(ULONG_PTR* value, ULONG_PTR from, size_t size, ULONG_PTR to) {
+  if (*value >= from && *value - from < size) *value = *value - from + to;
+}
+
+// בזמן ההשהיה רק syscalls ו-memcpy: thread מושהה שמחזיק נעילה שה-watcher
+// צריך היה נשאר מושהה לתמיד.
+bool CaptureSuspendedStack(HANDLE thread, std::vector<ULONG_PTR>* frames) {
+  if (thread == nullptr) return false;
+  std::vector<ULONG_PTR> copy(
+      (kMaxStackCopyBytes + kStackCopyPaddingBytes) / sizeof(ULONG_PTR));
+  if (::SuspendThread(thread) == static_cast<DWORD>(-1)) return false;
 
   CONTEXT context = {};
   context.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
-  const bool got_context = ::GetThreadContext(g_main_thread, &context) != FALSE;
-  if (got_context) UnwindSuspendedThread(&context, frames);
+  const bool got_context = ::GetThreadContext(thread, &context) != FALSE;
+  const ULONG_PTR sp = static_cast<ULONG_PTR>(WD_SP(context));
+  size_t copied = 0;
+  MEMORY_BASIC_INFORMATION info = {};
+  if (got_context &&
+      ::VirtualQuery(reinterpret_cast<LPCVOID>(sp), &info, sizeof(info)) != 0 &&
+      info.State == MEM_COMMIT) {
+    const ULONG_PTR end =
+        reinterpret_cast<ULONG_PTR>(info.BaseAddress) + info.RegionSize;
+    copied = (std::min)(static_cast<size_t>(end - sp), kMaxStackCopyBytes) &
+             ~(sizeof(ULONG_PTR) - 1);
+    if (!CopyStackBytes(sp, copy.data(), copied)) copied = 0;
+  }
+  ::ResumeThread(thread);
+  if (!got_context) return false;
+  if (copied == 0) {
+    frames->push_back(static_cast<ULONG_PTR>(WD_PC(context)));
+    return true;
+  }
 
-  ::ResumeThread(g_main_thread);
-  return got_context;
+  const ULONG_PTR to = reinterpret_cast<ULONG_PTR>(copy.data());
+  for (size_t i = 0; i < copied / sizeof(ULONG_PTR); ++i) {
+    Relocate(&copy[i], sp, copied, to);
+  }
+#if defined(_M_X64)
+  for (DWORD64* reg : {&context.Rbp, &context.Rbx, &context.Rsi, &context.Rdi,
+                       &context.R12, &context.R13, &context.R14,
+                       &context.R15}) {
+    Relocate(reinterpret_cast<ULONG_PTR*>(reg), sp, copied, to);
+  }
+#else
+  for (int i = 19; i <= 28; ++i) {
+    Relocate(reinterpret_cast<ULONG_PTR*>(&context.X[i]), sp, copied, to);
+  }
+  Relocate(reinterpret_cast<ULONG_PTR*>(&context.Fp), sp, copied, to);
+#endif
+  WD_SP(context) = to;
+  UnwindCopiedStack(&context, to, to + copied, frames);
+  return true;
 }
 
 #else  // ארכיטקטורה בלי פרישת מחסנית מבוססת-טבלאות (x86)
 
-bool CaptureMainThreadStack(std::vector<ULONG_PTR>*) { return false; }
+bool CaptureSuspendedStack(HANDLE, std::vector<ULONG_PTR>*) { return false; }
 
 #endif
+
+bool CaptureMainThreadStack(std::vector<ULONG_PTR>* frames) {
+  return CaptureSuspendedStack(g_main_thread, frames);
+}
 
 std::wstring ResolveLogPath() {
   wchar_t exe_path[MAX_PATH] = {0};
@@ -364,8 +527,9 @@ void AppendBuildIdentitySection(const std::vector<ULONG_PTR>& frames,
     if (base == 0) continue;
     const std::string build_id = DartBuildId(base);
     if (!build_id.empty()) *report += "Dart build-id: " + build_id + "\n";
-    return;
+    break;
   }
+  AppendModulePdbLines(frames, report);
 }
 
 void ReportStall(int capture_index, ULONGLONG stalled_for_ms,
@@ -407,9 +571,7 @@ void WatcherLoop() {
     if (captures >= kMaxCaptures) continue;
     if (last_capture != 0 && now - last_capture < kCaptureIntervalMs) continue;
 
-    // הקצאה מראש: הקצאה בזמן שה-thread הראשי מושהה עלולה להיתקע על נעילת ה-heap.
     std::vector<ULONG_PTR> frames;
-    frames.reserve(kMaxFrames);
     CaptureMainThreadStack(&frames);
     last_capture = now;
     ++captures;
@@ -422,6 +584,12 @@ void WatcherLoop() {
 bool CaptureMainStack(std::vector<ULONG_PTR>* frames) {
   return CaptureMainThreadStack(frames);
 }
+
+bool CaptureThreadStack(HANDLE thread, std::vector<ULONG_PTR>* frames) {
+  return CaptureSuspendedStack(thread, frames);
+}
+
+bool IsDartFrame(ULONG_PTR address) { return DartImageBase(address) != 0; }
 
 void AppendStack(const std::vector<ULONG_PTR>& frames, std::string* report) {
   AppendStackSection(frames, report);

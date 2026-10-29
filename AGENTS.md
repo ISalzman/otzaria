@@ -199,10 +199,10 @@ Three parts, all mandatory:
    started from a per-window widget (e.g. `MainWindowScreen`) is gated with
    `ProcessDuties.of(context).isProcessOwner`, or every Dart window repeats it.
 2. **Reveal gate with a timeout** — never an unguarded `await` on the completer.
-   **Exception:** a step that makes a synchronous native call (e.g. loading `sentry.dll` in
+   **Exception:** a step that makes a synchronous native call (e.g. building the Sentry options over FFI in
    `_initializeSentry`) awaits the reveal with **no** timeout. Running it before reveal is the
-   #1192 block itself, and it would hit exactly the machines whose reveal is slow. `sentry_init`
-   itself runs on a helper isolate in our sentry_flutter fork, not on the UI thread.
+   #1192 block itself, and it would hit exactly the machines whose reveal is slow. Our
+   sentry_flutter fork loads `sentry.dll` and runs `sentry_init` on helper isolates (#3422).
 3. **Non-fatal failure** — a startup step must never abort the boot. It logs through
    `_logNonFatalInitializationError` and returns.
 
@@ -253,6 +253,8 @@ Name those frames with the release asset `otzaria-dart-symbols-windows-<arch>.de
 whose `Dart build-id` does not match the file. `Build commit` identifies a dev build, and those have no
 published symbols. To name `flutter_windows.dll` frames, use its PDB from
 `flutter_infra_release/flutter/<engine.version>/windows-x64-release/windows-x64-flutter.zip`.
+For system-DLL frames, fetch the PDB from the Microsoft symbol server using the record's `Module PDB`
+line (the tool prints the URL).
 
 ## Developer diagnostics (measuring the real app)
 

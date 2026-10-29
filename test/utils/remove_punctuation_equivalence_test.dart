@@ -7,6 +7,17 @@ final RegExp _oracleHtmlEntity = RegExp(
   r'&(#x?[0-9a-fA-F]+|[a-zA-Z][a-zA-Z0-9]*);',
 );
 
+/// המימוש הקודם של isHeadingLine, בשני RegExp-ים לכל שורה.
+bool _oracleIsHeadingLine(String line) {
+  final trimmedLine = line.trim();
+  if (trimmedLine.isEmpty) return false;
+  return RegExp(
+        r'^<h[1-6][^>]*>.*?</h[1-6]>$',
+        caseSensitive: false,
+      ).hasMatch(trimmedLine) ||
+      RegExp(r'^#{1,6}\s').hasMatch(trimmedLine);
+}
+
 /// עותק של המימוש הקודם, שעבר תו-תו כמחרוזות. הקלטים בלי גרשיים:
 /// הם מוכרעים לפני הלולאה ב-_stripQuotesOutsideTags ונבדקים ב-remove_punctuation_quotes_test.
 String _oracleRemovePunctuation(String text) {
@@ -33,7 +44,7 @@ String _oracleRemovePunctuation(String text) {
 
     originalEndsWithAllowed.add(RegExp(r'[.:](\s*)$').hasMatch(line));
 
-    if (isHeadingLine(line.trim())) {
+    if (_oracleIsHeadingLine(line.trim())) {
       processedLines.add(line);
       continue;
     }
@@ -113,8 +124,9 @@ String _oracleRemovePunctuation(String text) {
     final line = processedLines[i];
     final shouldKeepNewline =
         originalEndsWithAllowed[i] ||
-        isHeadingLine(line) ||
-        (i < processedLines.length - 1 && isHeadingLine(processedLines[i + 1]));
+        _oracleIsHeadingLine(line) ||
+        (i < processedLines.length - 1 &&
+            _oracleIsHeadingLine(processedLines[i + 1]));
 
     if (line.trim().isEmpty) {
       if (finalResult.isNotEmpty) {
@@ -154,7 +166,8 @@ const List<String> _fragments = [
   '<', '>', '<b>', '</b>', '<a href="x:y.z?a=1;b">', '<br>', '<BR />', //
   '&', '&nbsp;', '&#1488;', '&#x05B4;', '&amp', '&;', '\n', '\r', '\r\n', //
   '# ', '<h2>', '</h2>', '😀', '\uD83D', '\uDE00', '\u{10FFFF}', '\uFFFF', //
-  '\u0000',
+  '\u0000', '\u000B', '\u00A0', '\u2028', '\u3000', '\uFEFF', '\u0085', //
+  '\u200B',
 ];
 
 String _randomInput(Random random) {
@@ -204,6 +217,9 @@ void main() {
       'א\r\nב.\rג<br>ד, <BR/>ה',
       '<b',
       'א<b.,>ב,',
+      'א, ב.\u00A0\u3000\uFEFF\nג; ד:\u2028',
+      'א, ב.\u0085\nג; ד:\u200B',
+      'א.<b>ב:</b> \t',
     ];
     for (var i = 0; i < edgeCases.length; i++) {
       final input = edgeCases[i];
@@ -223,6 +239,35 @@ void main() {
         );
       }
     });
+  });
+
+  test('isHeadingLine זהה לשני ה-RegExp-ים הקודמים', () {
+    const edgeCases = [
+      '<h2>כותרת</h2>',
+      '  <H3 class="x">כותרת</H3>\t',
+      '<h2>פתוחה',
+      '<b>לא כותרת</b>',
+      '<hr>',
+      '# כותרת',
+      '###### ',
+      '####### שבע',
+      '#כותרת',
+      '\uFEFF<h1>א</h1>',
+      '\u00A0# א',
+      'א <h1>ב</h1>',
+    ];
+    final random = Random(20261029);
+    final inputs = [
+      ...edgeCases,
+      for (var i = 0; i < 5000; i++) _randomInput(random),
+    ];
+    for (final input in inputs) {
+      expect(
+        isHeadingLine(input),
+        _oracleIsHeadingLine(input),
+        reason: 'קלט: ${input.codeUnits}',
+      );
+    }
   });
 
   test('מהיר לפחות פי 1.5 מהמימוש הקודם על שורות בלי גרשיים', () {

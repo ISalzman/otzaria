@@ -527,8 +527,8 @@ packages:
     dependency: "direct main"
     description:
       path: flutter_inappwebview
-      ref: ff92d4b71a15fdebfbbe64c4a4115d352dff16b0
-      resolved-ref: ff92d4b71a15fdebfbbe64c4a4115d352dff16b0
+      ref: "4a4e082eb9d7e8078fc0878ff4e028e121663b10"
+      resolved-ref: "4a4e082eb9d7e8078fc0878ff4e028e121663b10"
       url: "https://github.com/Otzaria/flutter_inappwebview"
     source: git
     version: "6.2.0-beta.3"
@@ -536,8 +536,8 @@ packages:
     dependency: "direct overridden"
     description:
       path: flutter_inappwebview_android
-      ref: ff92d4b71a15fdebfbbe64c4a4115d352dff16b0
-      resolved-ref: ff92d4b71a15fdebfbbe64c4a4115d352dff16b0
+      ref: "4a4e082eb9d7e8078fc0878ff4e028e121663b10"
+      resolved-ref: "4a4e082eb9d7e8078fc0878ff4e028e121663b10"
       url: "https://github.com/Otzaria/flutter_inappwebview"
     source: git
     version: "1.2.0-beta.3"
@@ -553,8 +553,8 @@ packages:
     dependency: "direct overridden"
     description:
       path: flutter_inappwebview_ios
-      ref: ff92d4b71a15fdebfbbe64c4a4115d352dff16b0
-      resolved-ref: ff92d4b71a15fdebfbbe64c4a4115d352dff16b0
+      ref: "4a4e082eb9d7e8078fc0878ff4e028e121663b10"
+      resolved-ref: "4a4e082eb9d7e8078fc0878ff4e028e121663b10"
       url: "https://github.com/Otzaria/flutter_inappwebview"
     source: git
     version: "1.2.0-beta.3"
@@ -562,8 +562,8 @@ packages:
     dependency: "direct main"
     description:
       path: flutter_inappwebview_linux
-      ref: ff92d4b71a15fdebfbbe64c4a4115d352dff16b0
-      resolved-ref: ff92d4b71a15fdebfbbe64c4a4115d352dff16b0
+      ref: "4a4e082eb9d7e8078fc0878ff4e028e121663b10"
+      resolved-ref: "4a4e082eb9d7e8078fc0878ff4e028e121663b10"
       url: "https://github.com/Otzaria/flutter_inappwebview"
     source: git
     version: "0.1.0-beta.1"
@@ -571,8 +571,8 @@ packages:
     dependency: "direct overridden"
     description:
       path: flutter_inappwebview_macos
-      ref: ff92d4b71a15fdebfbbe64c4a4115d352dff16b0
-      resolved-ref: ff92d4b71a15fdebfbbe64c4a4115d352dff16b0
+      ref: "4a4e082eb9d7e8078fc0878ff4e028e121663b10"
+      resolved-ref: "4a4e082eb9d7e8078fc0878ff4e028e121663b10"
       url: "https://github.com/Otzaria/flutter_inappwebview"
     source: git
     version: "1.2.0-beta.3"
@@ -580,25 +580,26 @@ packages:
     dependency: "direct overridden"
     description:
       path: flutter_inappwebview_platform_interface
-      ref: ff92d4b71a15fdebfbbe64c4a4115d352dff16b0
-      resolved-ref: ff92d4b71a15fdebfbbe64c4a4115d352dff16b0
+      ref: "4a4e082eb9d7e8078fc0878ff4e028e121663b10"
+      resolved-ref: "4a4e082eb9d7e8078fc0878ff4e028e121663b10"
       url: "https://github.com/Otzaria/flutter_inappwebview"
     source: git
     version: "1.4.0-beta.3"
   flutter_inappwebview_web:
     dependency: transitive
     description:
-      name: flutter_inappwebview_web
-      sha256: e98b8875ccb6a3fd255873318db45c18ab135ed0ed22d20169abad9f5c810eb9
-      url: "https://pub.dev"
-    source: hosted
+      path: flutter_inappwebview_web
+      ref: "4a4e082eb9d7e8078fc0878ff4e028e121663b10"
+      resolved-ref: "4a4e082eb9d7e8078fc0878ff4e028e121663b10"
+      url: "https://github.com/Otzaria/flutter_inappwebview"
+    source: git
     version: "1.2.0-beta.3"
   flutter_inappwebview_windows:
     dependency: "direct main"
     description:
       path: flutter_inappwebview_windows
-      ref: ff92d4b71a15fdebfbbe64c4a4115d352dff16b0
-      resolved-ref: ff92d4b71a15fdebfbbe64c4a4115d352dff16b0
+      ref: "4a4e082eb9d7e8078fc0878ff4e028e121663b10"
+      resolved-ref: "4a4e082eb9d7e8078fc0878ff4e028e121663b10"
       url: "https://github.com/Otzaria/flutter_inappwebview"
     source: git
     version: "0.7.0-beta.3"
@@ -1200,10 +1201,11 @@ packages:
   otzaria_search_engine:
     dependency: "direct main"
     description:
-      name: otzaria_search_engine
-      sha256: "1c077f9c853700a3340ccb50d5dd4cb74d8d194195bcc24142bef952b56bd4ee"
-      url: "https://pub.dev"
-    source: hosted
+      path: "."
+      ref: d8ebace9d55f73a6e0baa2f794d55a97efd95e28
+      resolved-ref: d8ebace9d55f73a6e0baa2f794d55a97efd95e28
+      url: "https://github.com/Otzaria/otzaria_search_engine.git"
+    source: git
     version: "6.0.0"
   package_config:
     dependency: transitive
@@ -1400,7 +1402,7 @@ packages:
     source: hosted
     version: "0.2.4"
   posix:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: posix
       sha256: bc1bad54ad2b735816e31f8d4600cfde6c7839975085ddfbca48b6c9f7c4044e
@@ -1621,8 +1623,8 @@ packages:
     dependency: "direct main"
     description:
       path: "packages/flutter"
-      ref: e31f9068de53d0dd826d217e4dc7c8ccd7dd5261
-      resolved-ref: e31f9068de53d0dd826d217e4dc7c8ccd7dd5261
+      ref: "93e7398355e80557a342666f98b23cc9bb832848"
+      resolved-ref: "93e7398355e80557a342666f98b23cc9bb832848"
       url: "https://github.com/Otzaria/sentry-dart"
     source: git
     version: "9.30.1"

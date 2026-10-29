@@ -755,6 +755,40 @@ void main() {
     DbReadWorker.allowReopen();
   });
 
+  test('worker שלא עונה בזמן נרשם ב-errors.txt (issue #3325)', () async {
+    final dbPath = await seedDb('seforim', bigBookLines: 200000);
+    await DbReadWorker.request('textRange', textRangeArgs(dbPath, 'בראשית'));
+    AppPaths.debugOverrideDataRootPath(path.join(tempDir.path, 'data'));
+    DbReadWorker.logFailuresInDebug = true;
+    DbReadWorker.resetLoggedFailuresForTesting();
+    addTearDown(() {
+      DbReadWorker.logFailuresInDebug = false;
+      DbReadWorker.resetLoggedFailuresForTesting();
+      AppPaths.debugOverrideDataRootPath(null);
+    });
+
+    DbReadWorker.stallTimeout = Duration.zero;
+    await expectLater(
+      DbReadWorker.request('textRange', {
+        ...textRangeArgs(dbPath, 'ספר גדול'),
+        'startLine': 0,
+        'endLine': 199999,
+      }),
+      throwsA(isA<DbReadWorkerUnavailable>()),
+    );
+
+    final file = ErrorLogFile.resolveFile();
+    var log = '';
+    for (var i = 0; i < 100 && !log.contains('stalled'); i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      if (file.existsSync()) log = file.readAsStringSync();
+    }
+    expect(log, contains('DB read worker stalled'));
+    expect(log, contains('Method: textRange'));
+    expect(log, contains('endLine=199999'));
+    expect(log, isNot(contains(dbPath)));
+  });
+
   test('worker שלא עונה בזמן נופל למסלול הישיר עד שיענה', () async {
     final dbPath = await seedDb('seforim', bigBookLines: 200000);
     // חיבור פתוח מראש — כדי שהבקשה האיטית תהיה השאילתה עצמה.
@@ -1059,6 +1093,25 @@ void main() {
       expect([for (final c in detailed.commentators) c.title], ['מפרש']);
       expect(detailed.commentators.single.linkCount, 1);
       expect(DbReadWorker.sentMessageCount - before, 1);
+    });
+
+    test('רשימת המפרשים לא רצה על ה-UI isolate כשה-worker אינו זמין', () async {
+      addCommentaryLink(dbPath);
+      final repository = TextBookRepository(
+        fileSystem: FileSystemData.instance,
+      );
+      // טבלת temp מסתירה את link בחיבור הראשי בלבד: שאילתה עליו מחזירה ריק.
+      final mainDb =
+          await SqliteDataProvider.instance.repository!.database.database;
+      mainDb.execute('PRAGMA query_only=OFF');
+      mainDb.execute('CREATE TEMP TABLE link AS SELECT * FROM main.link');
+      mainDb.execute('DELETE FROM temp.link');
+      DbReadWorker.stallTimeout = Duration.zero;
+
+      final detailed = await repository.getCommentatorsDetailed(
+        TextBook(id: 1, title: 'בראשית', categoryId: 7),
+      );
+      expect([for (final c in detailed.commentators) c.title], ['מפרש']);
     });
 
     test('כותרות ספרי המסד נטענות ב-worker', () async {

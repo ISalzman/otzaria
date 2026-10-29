@@ -313,3 +313,56 @@ class TabTitleTooltip extends StatelessWidget {
     );
   }
 }
+
+/// כפתור ה-X של כרטיסיה — משותף לפס העליון ולעמודה הצדדית.
+///
+/// ה-tooltip ניתן לכפתור עצמו (`IconButton.tooltip`) ולא עוטף אותו מבחוץ:
+/// IconButton בונה את ה-Tooltip *בתוך* מכולת הסמנטיקה שלו, ולכן ההודעה
+/// ועוגן ה-OverlayPortal של הבלון שייכים לצומת הסמנטיקה של הכפתור. Tooltip
+/// חיצוני אינו יוצר צומת משלו — הוא מתמזג לצומת הסמנטיקה הקרוב, כאן צומת
+/// הכרטיסיה, שכבר נושא את ה-tooltip של הכותרת. לצומת יש מקום לעוגן אחד
+/// בלבד (`traversalParentIdentifier`), ולכן עוגן ה-X נשמט; כשהבלון שלו נפתח
+/// הוא נשלח למערכת ההפעלה בלי אב, Windows דוחה את עדכון עץ הנגישות והעץ
+/// קופא — עד קריסה של התוכנה במעבר הפוקוס הבא (issue #1399).
+class TabCloseButton extends StatelessWidget {
+  final String tooltip;
+  final Size size;
+  final double iconSize;
+
+  /// null — לפי ה-[TooltipTheme] שמעליו.
+  final bool? preferBelow;
+
+  final VoidCallback onPressed;
+
+  const TabCloseButton({
+    super.key,
+    required this.tooltip,
+    required this.size,
+    required this.iconSize,
+    required this.onPressed,
+    this.preferBelow,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return TooltipTheme(
+      // במגע לחיצה ארוכה פותחת את תפריט הכרטיסיה, כמו לחיצה ימנית על ה-X.
+      data: TooltipTheme.of(context).copyWith(
+        preferBelow: preferBelow,
+        triggerMode: TooltipTriggerMode.manual,
+      ),
+      child: IconButton(
+        tooltip: tooltip,
+        // shrinkWrap + padding אפס: בלעדיהם שטח-המגע ברירת-המחדל (48px)
+        // גולש בטאב צר.
+        style: IconButton.styleFrom(
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          padding: EdgeInsets.zero,
+        ),
+        constraints: BoxConstraints.tight(size),
+        onPressed: onPressed,
+        icon: Icon(FluentIcons.dismiss_24_regular, size: iconSize),
+      ),
+    );
+  }
+}

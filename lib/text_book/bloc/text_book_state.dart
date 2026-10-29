@@ -207,6 +207,9 @@ class TextBookLoaded extends TextBookState {
   final List<CommentatorGroup> commentatorGroups;
   final List<String> availableCommentators;
 
+  /// טעינת רשימת המפרשים הסתיימה; מבחין בין ספר בלי מפרשים לרשימה שעוד נטענת.
+  final bool commentatorsLoaded;
+
   /// מפרשים "נדירים" שמוסתרים מרשימת הבחירה הכללית (ספרים גדולים בלבד).
   /// מוצגים ברשימה רק כשהשורה הנוכחית כוללת קישור מהם.
   final Set<String> rareCommentators;
@@ -322,6 +325,7 @@ class TextBookLoaded extends TextBookState {
     required this.activeCommentators,
     required this.commentatorGroups,
     required this.availableCommentators,
+    this.commentatorsLoaded = false,
     this.rareCommentators = const {},
     required this.links,
     this.visibleLinks = const [],
@@ -461,8 +465,6 @@ class TextBookLoaded extends TextBookState {
       showPageShapeView ? TextView.pageShape : TextView.regular;
 
   /// כל השכבות מהספציפי לכללי, בסדר שהרזולבר מצפה לו.
-  List<TextDisplayLayer> get displayLayers => _layersWith(displayPolicy);
-
   List<TextDisplayLayer> _layersWith(TextDisplayPolicy policy) => [
     displayOverrides,
     bookDisplayLayer,
@@ -539,6 +541,7 @@ class TextBookLoaded extends TextBookState {
     List<String>? activeCommentators,
     List<CommentatorGroup>? commentatorGroups,
     List<String>? availableCommentators,
+    bool? commentatorsLoaded,
     Set<String>? rareCommentators,
     List<Link>? links,
     List<Link>? visibleLinks,
@@ -687,6 +690,7 @@ class TextBookLoaded extends TextBookState {
       commentatorGroups: commentatorGroups ?? this.commentatorGroups,
       availableCommentators:
           availableCommentators ?? this.availableCommentators,
+      commentatorsLoaded: commentatorsLoaded ?? this.commentatorsLoaded,
       rareCommentators: rareCommentators ?? this.rareCommentators,
       links: links ?? this.links,
       visibleLinks: visibleLinks ?? this.visibleLinks,
@@ -793,6 +797,7 @@ class TextBookLoaded extends TextBookState {
     divineNames,
     bookNotes,
     availableCommentators.length,
+    commentatorsLoaded,
     _SetProp(rareCommentators),
     links.length,
     visibleLinks.length,

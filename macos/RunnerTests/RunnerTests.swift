@@ -106,3 +106,19 @@ class ViewWindowGeometryTests: XCTestCase {
       ["x": 1, "y": 2, "width": 3, "height": 4])
   }
 }
+
+class DartProjectTests: XCTestCase {
+
+  // בלי נתוני ICU המנוע שובר שורות בכל תו, גם באמצע מילה (#3546).
+  func testMainEngineProjectFindsIcuData() throws {
+    XCTAssertNotNil(
+      class_getInstanceMethod(FlutterDartProject.self, NSSelectorFromString("ICUDataPath")),
+      "FlutterDartProject.ICUDataPath was renamed; the ICU override is dead")
+    let main = try XCTUnwrap(
+      NSApp.windows.lazy.compactMap { $0.contentViewController as? FlutterViewController }.first,
+      "the main FlutterViewController")
+    let project = try XCTUnwrap(main.engine.value(forKey: "project") as? NSObject)
+    let path = try XCTUnwrap(project.value(forKey: "ICUDataPath") as? String, "no icudtl.dat path")
+    XCTAssertTrue(FileManager.default.fileExists(atPath: path), path)
+  }
+}

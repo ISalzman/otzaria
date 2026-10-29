@@ -1,10 +1,12 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:isolate';
 import 'dart:typed_data';
 
 import 'package:archive/archive_io.dart';
 import 'package:path/path.dart' as p;
 import 'package:otzaria/plugins/services/plugin_path_safety.dart';
+import 'package:otzaria/utils/file/zip_entry_io.dart';
 
 /// רשומה במרחב הפרטי של תוסף — קובץ או תיקייה, עם נתיב **יחסי** לשורש בלבד.
 /// הנתיב המוחלט אינו נחשף לתוסף (הוא מכיל את שם המשתמש במערכת).
@@ -48,6 +50,9 @@ class PluginWorkspaceEntry {
 /// ואוכפות בעצמן את הגבול דרך [resolveWithinRoot] — כל נתיב שיוצא מהשורש נדחה
 /// ב-`error.forbidden`, גם דרך `..` וגם דרך symlink.
 class PluginFsService {
+  // משותף לכל המופעים ב-isolate הקורא: כותבים מקבילים עלולים לערבב קובץ.
+  static Future<void> _extractionQueue = Future.value();
+
   /// תקרת הגודל הכולל (לא דחוס) שמותר לחלץ. חילוץ שחורג ממנה נקטע
   /// ב-`error.too_large` — הגנת zip bomb (ארכיון דחוס קטן שמתרחב לגיגה-בייטים).
   final int maxUncompressedBytes;
@@ -88,15 +93,41 @@ class PluginFsService {
   ///
   /// זורקת [Exception] אם הקובץ ב-[zipPath] אינו קיים, אם החילוץ נכשל, או
   /// `error.too_large` אם הארכיון חורג מאחת התקרות.
-  Future<void> extractZip(String zipPath, String destFolder) async {
+  Future<void> extractZip(String zipPath, String destFolder) {
+    final maxEntries = this.maxEntries;
+    final maxUncompressedBytes = this.maxUncompressedBytes;
+    // הפענוח צורך CPU ולכן נשאר מחוץ ל-isolate של הממשק.
+    final result = _extractionQueue.then(
+      (_) => Isolate.run(
+        () => _extractZip(
+          zipPath,
+          destFolder,
+          maxEntries: maxEntries,
+          maxUncompressedBytes: maxUncompressedBytes,
+        ),
+      ),
+    );
+    _extractionQueue = result.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace _) {},
+    );
+    return result;
+  }
+
+  static Future<void> _extractZip(
+    String zipPath,
+    String destFolder, {
+    required int maxEntries,
+    required int maxUncompressedBytes,
+  }) async {
     final zipFile = File(zipPath);
-    if (!await zipFile.exists()) {
+    if (!zipFile.existsSync()) {
       throw Exception('error.not_found: zip file does not exist');
     }
-    await Directory(destFolder).create(recursive: true);
+    Directory(destFolder).createSync(recursive: true);
 
     final realDest = Directory(destFolder).resolveSymbolicLinksSync();
-    final input = InputFileStream(zipPath);
+    final input = openZipInput(zipPath);
     try {
       final archive = ZipDecoder().decodeStream(input);
       var entryCount = 0;
@@ -110,9 +141,7 @@ class PluginFsService {
         }
 
         final outPath = p.join(destFolder, p.normalize(file.name));
-        // הנתיב הקנוני האמיתי (כולל פתרון symlink-תיקייה קיים ביעד) חייב
-        // להישאר בתוך היעד — נבדק *לפני* כל יצירת תיקייה, כדי שגם רשומת תיקייה
-        // או אב של קובץ לא ייצרו תיקיות מחוץ ליעד דרך symlink, וגם `../` נחסם.
+        // בודקים לפני יצירת תיקיות כדי לחסום גם בריחה דרך symlink קיים.
         final canonical = canonicalizeNearestExisting(outPath);
         if (canonical == null ||
             (!p.equals(canonical, realDest) &&
@@ -121,7 +150,7 @@ class PluginFsService {
         }
 
         if (file.isDirectory) {
-          await Directory(outPath).create(recursive: true);
+          Directory(outPath).createSync(recursive: true);
           continue;
         }
 
@@ -129,25 +158,19 @@ class PluginFsService {
         if (totalBytes + file.size > maxUncompressedBytes) {
           throw Exception('error.too_large: extracted size exceeds limit');
         }
-        await File(outPath).parent.create(recursive: true);
+        File(outPath).parent.createSync(recursive: true);
         // קובץ-symlink קיים ייכתב דרכו אל היעד שלו; מוחקים כדי לכתוב קובץ רגיל.
         if (FileSystemEntity.isLinkSync(outPath)) {
           Link(outPath).deleteSync();
         }
-        final output = OutputFileStream(outPath);
-        try {
-          file.writeContent(output);
-        } finally {
-          await output.close();
-        }
         // הגודל המוצהר עלול לשקר; סופרים את מה שנכתב בפועל ובודקים שוב.
-        totalBytes += output.length;
+        totalBytes += await writeZipEntry(file, outPath);
         if (totalBytes > maxUncompressedBytes) {
           throw Exception('error.too_large: extracted size exceeds limit');
         }
       }
     } finally {
-      await input.close();
+      input.closeSync();
     }
   }
 

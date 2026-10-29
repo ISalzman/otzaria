@@ -382,7 +382,6 @@ void main() {
           isNull,
           reason: html,
         );
-        expect(SimpleInlineHtml.tryParseHeading(html, _base), isNull);
       }
     });
 

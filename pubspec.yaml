@@ -81,6 +81,7 @@ dependencies:
   bidi: ^2.0.13
   kosher_dart: ^2.0.20
   archive: ^4.5.2
+  posix: ^6.5.2
   package_info_plus: ^10.2.2
   convert: ^3.1.2
   crypto: ^3.0.7
@@ -102,7 +103,10 @@ dependencies:
   googleapis_auth: ^2.3.4
   characters: ^1.4.1
   collection: ^1.19.1
-  otzaria_search_engine: ^6.0.0
+  otzaria_search_engine:
+    git:
+      url: https://github.com/Otzaria/otzaria_search_engine.git
+      ref: d8ebace9d55f73a6e0baa2f794d55a97efd95e28
   # חוזה הדיווחים מול השרת, משותף עם "עדכוני אוצריא" (Dart טהור).
   otzaria_report_contract:
     path: packages/otzaria_report_contract
@@ -131,11 +135,11 @@ dependencies:
   flutter_markdown: ^0.7.7+1
   flutter_quill: ^11.6.0
   # הפורק Otzaria/flutter_inappwebview מתוחזק אצלנו (upstream אינו פעיל).
-  # כל ה-overrides מוצמדים לאותו קומיט: ראש Otzaria/flutter_inappwebview#32.
+  # כל ה-overrides מוצמדים לאותו קומיט.
   flutter_inappwebview:
     git:
       url: https://github.com/Otzaria/flutter_inappwebview
-      ref: ff92d4b71a15fdebfbbe64c4a4115d352dff16b0
+      ref: 4a4e082eb9d7e8078fc0878ff4e028e121663b10
       path: flutter_inappwebview
   # נדרש ישירות עבור WindowsFileDropManager (גרירת קבצים אל החלון).
   flutter_inappwebview_windows: any
@@ -166,12 +170,12 @@ dependency_overrides:
       url: https://github.com/Otzaria/flutter_local_notifications
       ref: 77e31035890167e782bccfd4982e0d1309f9e2e0
       path: flutter_local_notifications_windows
-  # TODO: להחזיר ל-pub.dev כשיתמזג וישוחרר getsentry/sentry-dart#4094 (ה-backport ל-9.x בענף
-  # feat/9.x-nonblocking-native-init: sentry_init ב-isolate עזר ב-Windows).
+  # TODO: להחזיר ל-pub.dev כשימוזגו וישוחררו getsentry/sentry-dart#4094 ו-#4126 (ה-backport ל-9.x בענף
+  # fix/9.x-windows-scope-sync-worker: טעינת sentry.dll, sentry_init ועדכוני ה-scope ב-isolate עזר ב-Windows).
   sentry_flutter:
     git:
       url: https://github.com/Otzaria/sentry-dart
-      ref: e31f9068de53d0dd826d217e4dc7c8ccd7dd5261
+      ref: 93e7398355e80557a342666f98b23cc9bb832848
       path: packages/flutter
   # TODO: לחזור ל-pub.dev אחרי שחרור DavBfr/dart_pdf#1984, #1985, #1986, #1987, #1988, #1993, #1994, #1995, #1996
   # (הדפסה ב-Windows ב-thread נפרד, PDFium עצל ופרטי, השלמת עבודה שנכשלה ב-Linux, בעלי הדיאלוג בריבוי חלונות, בעלים מפורש לכל עבודה). קומיט שילוב.
@@ -195,33 +199,33 @@ dependency_overrides:
   flutter_inappwebview_windows:
     git:
       url: https://github.com/Otzaria/flutter_inappwebview
-      ref: ff92d4b71a15fdebfbbe64c4a4115d352dff16b0
+      ref: 4a4e082eb9d7e8078fc0878ff4e028e121663b10
       path: flutter_inappwebview_windows
   flutter_inappwebview_platform_interface:
     git:
       url: https://github.com/Otzaria/flutter_inappwebview
-      ref: ff92d4b71a15fdebfbbe64c4a4115d352dff16b0
+      ref: 4a4e082eb9d7e8078fc0878ff4e028e121663b10
       path: flutter_inappwebview_platform_interface
   flutter_inappwebview_ios:
     git:
       url: https://github.com/Otzaria/flutter_inappwebview
-      ref: ff92d4b71a15fdebfbbe64c4a4115d352dff16b0
+      ref: 4a4e082eb9d7e8078fc0878ff4e028e121663b10
       path: flutter_inappwebview_ios
   flutter_inappwebview_macos:
     git:
       url: https://github.com/Otzaria/flutter_inappwebview
-      ref: ff92d4b71a15fdebfbbe64c4a4115d352dff16b0
+      ref: 4a4e082eb9d7e8078fc0878ff4e028e121663b10
       path: flutter_inappwebview_macos
   flutter_inappwebview_linux:
     git:
       url: https://github.com/Otzaria/flutter_inappwebview
-      ref: ff92d4b71a15fdebfbbe64c4a4115d352dff16b0
+      ref: 4a4e082eb9d7e8078fc0878ff4e028e121663b10
       path: flutter_inappwebview_linux
   # הגרסה שב-pub.dev קוראת ל-setStatusBarColor שהוצא משימוש ב-Android 15.
   flutter_inappwebview_android:
     git:
       url: https://github.com/Otzaria/flutter_inappwebview
-      ref: ff92d4b71a15fdebfbbe64c4a4115d352dff16b0
+      ref: 4a4e082eb9d7e8078fc0878ff4e028e121663b10
       path: flutter_inappwebview_android
   otzaria_search_engine:
     git:

@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:isolate';
 
 import 'package:crypto/crypto.dart';
 import 'package:logging/logging.dart';
@@ -31,7 +32,8 @@ class BackupStore {
   /// שומר בייטים במחסן ומחזיר את ההפניה (`sha256:<hex>`).
   /// אם ה-blob כבר קיים — לא נכתב דבר (אידמפוטנטי).
   Future<String> putBytes(List<int> bytes) async {
-    final hex = sha256.convert(bytes).toString();
+    // user_books.db מגיע לכמה מאות MB; גיבוב ודחיסה ב-isolate הראשי תוקעים את ה-UI.
+    final hex = await Isolate.run(() => sha256.convert(bytes).toString());
     final target = File(_pathForHash(hex));
     if (await target.exists()) return '$hashPrefix$hex';
 
@@ -39,7 +41,8 @@ class BackupStore {
     final tmp = File(
       '${target.path}.${DateTime.now().microsecondsSinceEpoch}.tmp',
     );
-    await tmp.writeAsBytes(gzip.encode(bytes), flush: true);
+    final compressed = await Isolate.run(() => gzip.encode(bytes));
+    await tmp.writeAsBytes(compressed, flush: true);
     try {
       await tmp.rename(target.path);
     } catch (_) {
@@ -57,8 +60,12 @@ class BackupStore {
     final file = File(_pathForHash(hex));
     if (!await file.exists()) return null;
     try {
-      final bytes = gzip.decode(await file.readAsBytes());
-      if (sha256.convert(bytes).toString() != hex) {
+      final compressed = await file.readAsBytes();
+      final (bytes, actual) = await Isolate.run(() {
+        final bytes = gzip.decode(compressed);
+        return (bytes, sha256.convert(bytes).toString());
+      });
+      if (actual != hex) {
         _logger.warning('Corrupt blob (hash mismatch): $hex');
         return null;
       }
@@ -90,16 +97,15 @@ class BackupStore {
   ///
   /// ה-grace מגן מפני מחיקת blob שנכתב זה עתה ע"י מופע/מחשב אחר החולק את
   /// תיקיית הגיבוי (למשל תיקייה מסונכרנת לענן), לפני שהמניפסט שלו הגיע.
-  /// מחזיר (מספר קבצים שנמחקו, בייטים שהתפנו).
-  Future<({int deleted, int freedBytes})> sweep(
+  /// מחזיר את מספר הבייטים שהתפנו.
+  Future<int> sweep(
     Set<String> referenced, {
     Duration grace = const Duration(days: 30),
   }) async {
     final dir = Directory(objectsPath);
-    if (!await dir.exists()) return (deleted: 0, freedBytes: 0);
+    if (!await dir.exists()) return 0;
 
     final cutoff = DateTime.now().subtract(grace);
-    var deleted = 0;
     var freedBytes = 0;
 
     await for (final entity in dir.list(recursive: true)) {
@@ -112,13 +118,12 @@ class BackupStore {
         if (stat.modified.isAfter(cutoff)) continue;
         final size = stat.size;
         await entity.delete();
-        deleted++;
         freedBytes += size;
       } catch (e) {
         _logger.warning('Failed to sweep blob $name: $e');
       }
     }
-    return (deleted: deleted, freedBytes: freedBytes);
+    return freedBytes;
   }
 
   /// אוסף את כל הפניות ה-blob ממניפסט גיבוי (סעיפי `files`/`data` בתוספים,

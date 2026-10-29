@@ -13,7 +13,6 @@ import 'package:otzaria/widgets/misc/app_menu_exports.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/search/search_query_builder.dart';
 import 'package:otzaria/tabs/models/searching_tab.dart';
-import 'package:otzaria/search/view/tantivy_search_results.dart';
 import 'package:otzaria_search_engine/otzaria_search_engine.dart';
 
 class FuzzyDistance extends StatefulWidget {
@@ -766,13 +765,7 @@ const BoxConstraints _iconOnlyConstraints = BoxConstraints.tightFor(
 );
 
 class OrderOfResults extends StatelessWidget {
-  const OrderOfResults({
-    super.key,
-    required this.widget,
-    this.iconOnly = false,
-  });
-
-  final TantivySearchResults widget;
+  const OrderOfResults({super.key, this.iconOnly = false});
 
   /// כשאין מקום בסרגל — כפתור אייקון מיון בלבד במקום ה-dropdown.
   final bool iconOnly;
@@ -812,7 +805,6 @@ class OrderOfResults extends StatelessWidget {
               value: state.sortBy,
               decoration: const InputDecoration(
                 labelText: 'מיון',
-                border: OutlineInputBorder(),
               ),
               entries: _entries,
               onSelected: (value) {
@@ -877,7 +869,6 @@ class GroupingOfResults extends StatelessWidget {
                 value: state.resultGrouping,
                 decoration: const InputDecoration(
                   labelText: 'איחוד תוצאות',
-                  border: OutlineInputBorder(),
                 ),
                 entries: _entries,
                 onSelected: (value) {
@@ -989,7 +980,6 @@ class ExternalResultsPositionControl extends StatelessWidget {
                   value: settings.externalResultsFirst,
                   decoration: InputDecoration(
                     labelText: 'מיקום תוצאות ${status.sourceTitle}',
-                    border: const OutlineInputBorder(),
                   ),
                   entries: entries,
                   onSelected: (value) {

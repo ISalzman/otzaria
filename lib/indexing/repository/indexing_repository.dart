@@ -55,6 +55,12 @@ import 'package:otzaria_search_engine/otzaria_search_engine.dart';
 export 'package:otzaria/indexing/utils/pdf_extraction_prefetcher.dart'
     show PdfExtraction;
 
+typedef PackedPdfPages = ({
+  Uint8List bytes,
+  Uint32List ends,
+  Uint32List pageIndexes,
+});
+
 class _PdfExtractionFailure implements Exception {
   const _PdfExtractionFailure(this.cause);
 
@@ -943,7 +949,7 @@ class IndexingRepository {
         removedFromIndexed.where(replaceKeys.contains),
       );
       prefetcher?.dispose();
-      IndexingCrashCanary.current?.finish();
+      await IndexingCrashCanary.current?.finish();
       _tantivyDataProvider.isIndexing.value = false;
       _runEnded();
       await LibraryLineSource.reportLibraryFallbacks();
@@ -979,7 +985,7 @@ class IndexingRepository {
     // אחת בלבד. במסלול הרגיל (ספר מ-DB) התוכן נקרא כבייטים גולמיים
     // (UTF-8 כפי שמאוחסן ב-SQLite) ונמסר ל-addTextBookBytes — בלי פענוח
     // ל-String וקידוד חוזר על הגשר (~180ms/MB שנמדדו בלוגים).
-    _beginBook(book);
+    await _beginBook(book);
     final loadStopwatch = Stopwatch()..start();
     final source = await loadTextBookSource(book);
     final bytes = source.bytes;
@@ -1149,6 +1155,7 @@ class IndexingRepository {
         pickedKeys.add(key);
         picked.add((book as TextBook, source));
       }
+      await canary?.flush();
       if (picked.isEmpty) break;
 
       onActualIndexingStarted?.call();
@@ -1327,10 +1334,8 @@ class IndexingRepository {
     );
   }
 
-  /// שולח את עמודי ה-PDF למנוע בקריאת FFI אחת (add_pdf_book: נרמול, סינון
-  /// זבל ואינדוקס בתוך המנוע) ומחזיר את מספר המסמכים שנוספו. מחליף את
-  /// המסלול הישן — isolate ← נרמול באצוות ← העתקת SendPort ←
-  /// addDocumentsBatch — שהעתיק את הטקסט המחולץ ארבע-חמש פעמים לכל ספר.
+  /// שולח את עמודי ה-PDF למנוע בקריאת FFI אחת (נרמול, סינון זבל ואינדוקס
+  /// בתוך המנוע) ומחזיר את מספר המסמכים שנוספו.
   Future<int> _addPdfBookToEngine(
     PdfBook book,
     List<({String reference, String text, int pageIndex})> pages, {
@@ -1338,24 +1343,22 @@ class IndexingRepository {
     void Function()? onActualIndexingStarted,
   }) async {
     onActualIndexingStarted?.call();
+    // FRB מקודד ומפענח את הארגומנטים על ה-UI thread; רשימת עמודים גדולה הקפיאה
+    // אותו (#3443). חוצץ בתים שנארז ב-isolate עובר כהעתקה אחת.
+    final packed = await _packPdfPagesOffFrame(pages);
     if (!_tantivyDataProvider.isIndexing.value) {
       return 0;
     }
     final engine = await _tantivyDataProvider.engine;
     final engineStopwatch = Stopwatch()..start();
-    final added = await engine.addPdfBook(
+    final added = await engine.addPdfBookBytes(
       title: book.title,
       topics: _bookTopics(book),
       filePath: BookIdentity.indexedFilePath(book),
       extraFacets: _bookExtraFacets(book),
-      pages: [
-        for (final page in pages)
-          PdfPageInput(
-            reference: page.reference,
-            text: page.text,
-            pageIndex: page.pageIndex,
-          ),
-      ],
+      bytes: packed.bytes,
+      ends: packed.ends,
+      pageIndexes: packed.pageIndexes,
     );
     engineStopwatch.stop();
     debugPrint(
@@ -1363,6 +1366,34 @@ class IndexingRepository {
       'מנוע ${engineStopwatch.elapsedMilliseconds}ms',
     );
     return added;
+  }
+
+  static Future<PackedPdfPages> _packPdfPagesOffFrame(
+    List<({String reference, String text, int pageIndex})> pages,
+  ) => Isolate.run(() => packPdfPages(pages));
+
+  /// אורז את העמודים לפורמט של `addPdfBookBytes`: לכל עמוד ההפניה ואחריה
+  /// הטקסט ב-UTF-8, ו-[PackedPdfPages.ends] מחזיק את סוף כל אחד מהם.
+  @visibleForTesting
+  static PackedPdfPages packPdfPages(
+    List<({String reference, String text, int pageIndex})> pages,
+  ) {
+    final builder = BytesBuilder(copy: false);
+    final ends = Uint32List(pages.length * 2);
+    final pageIndexes = Uint32List(pages.length);
+    for (var i = 0; i < pages.length; i++) {
+      final page = pages[i];
+      builder.add(utf8.encode(page.reference));
+      ends[2 * i] = builder.length;
+      builder.add(utf8.encode(page.text));
+      ends[2 * i + 1] = builder.length;
+      pageIndexes[i] = page.pageIndex;
+    }
+    return (
+      bytes: builder.takeBytes(),
+      ends: ends,
+      pageIndexes: pageIndexes,
+    );
   }
 
   /// רושם באינדקס מסמך ריק יחיד עבור ספר שלא הניב תוכן לאינדוקס (למשל PDF
@@ -1491,13 +1522,12 @@ class IndexingRepository {
   }
 
   // ספר שהפיל את התהליך פעמיים ברצף נזרק, ומסומן ככשל קבוע במקום לנסותו לעד.
-  void _beginBook(Book book) {
-    if (IndexingCrashCanary.current?.begin(
-          BookIdentity.indexedFilePath(book),
-        ) ==
-        false) {
+  Future<void> _beginBook(Book book) async {
+    final canary = IndexingCrashCanary.current;
+    if (canary?.begin(BookIdentity.indexedFilePath(book)) == false) {
       throw const IndexingCrashedBefore();
     }
+    await canary?.flush();
   }
 
   /// עוטפת את [_extractPdfPages] כך שהתוצאה לעולם אינה זריקה: שגיאת פתיחה
@@ -1507,7 +1537,7 @@ class IndexingRepository {
   Future<PdfExtraction> extractPdfPagesGuarded(PdfBook book) async {
     final stopwatch = Stopwatch()..start();
     try {
-      _beginBook(book);
+      await _beginBook(book);
       // pdfium של האינדוקס ממתין בתור ה-worker לכל עבודה אחרת (הקורא קודם).
       final extracted = await Pdfrx.runAsBackgroundWork(
         () => _extractPdfPages(book),
