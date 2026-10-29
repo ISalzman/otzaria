@@ -436,6 +436,20 @@ String removeMarks(String s, {required bool nikud, required bool teamim}) {
   return s;
 }
 
+final RegExp _htmlBreak = RegExp(r'<br\s*/?>', caseSensitive: false);
+
+/// מקום ה-`.` או ה-`:` שאחריהם רק רווחים עד סוף [s] — כמו `[.:](\s*)$`,
+/// אבל נבדק מהסוף במקום לסרוק את כל השורה.
+int? _trailingAllowedPunctuation(String s) {
+  var i = s.length - 1;
+  while (i >= 0 && _isRegExpSpace(s.codeUnitAt(i))) {
+    i--;
+  }
+  if (i < 0) return null;
+  final c = s.codeUnitAt(i);
+  return c == 0x2E || c == 0x3A ? i : null;
+}
+
 /// הסרת סימני פיסוק מטקסט
 /// מסיר !:;.,?-— חוץ מ . או : בסוף הקטע
 /// מסיר " ״ אלא כשזה ראשי תיבות (אות אחת אחרי הגרשיים עד גבול מילה)
@@ -443,14 +457,14 @@ String removeMarks(String s, {required bool nikud, required bool teamim}) {
 String removePunctuation(String text) {
   if (text.isEmpty) return text;
 
-  final hadHtmlBreaks = RegExp(
-    r'<br\s*/?>',
-    caseSensitive: false,
-  ).hasMatch(text);
+  final hadHtmlBreaks = _htmlBreak.hasMatch(text);
   // סריקת RegExp של \r איטית גם כשאין התאמה, ורוב הטקסט בלי \r.
-  final normalizedText =
-      (text.contains('\r') ? text.replaceAll(RegExp(r'\r\n?'), '\n') : text)
-          .replaceAll(RegExp(r'<br\s*/?>', caseSensitive: false), '\n');
+  var normalizedText = text.contains('\r')
+      ? text.replaceAll(RegExp(r'\r\n?'), '\n')
+      : text;
+  if (hadHtmlBreaks) {
+    normalizedText = normalizedText.replaceAll(_htmlBreak, '\n');
+  }
 
   final lines = normalizedText.split('\n');
   final processedLines = <String>[];
@@ -463,7 +477,7 @@ String removePunctuation(String text) {
       continue;
     }
 
-    final endsWithAllowed = RegExp(r'[.:](\s*)$').hasMatch(line);
+    final endsWithAllowed = _trailingAllowedPunctuation(line) != null;
     originalEndsWithAllowed.add(endsWithAllowed);
 
     if (isHeadingLine(line.trim())) {
@@ -475,10 +489,7 @@ String removePunctuation(String text) {
     // ראשי התיבות נדבקים למילה הבאה ונראים כמירכאות ציטוט.
     String processed = _stripQuotesOutsideTags(line);
 
-    final lastAllowedPunctuationMatch = RegExp(
-      r'[.:](\s*)$',
-    ).firstMatch(processed);
-    final lastAllowedPunctuationIndex = lastAllowedPunctuationMatch?.start;
+    final lastAllowedPunctuationIndex = _trailingAllowedPunctuation(processed);
 
     // תגי HTML נשמרים בשלמותם כדי שפיסוק בתוך href לא ישבור קישורים.
     final buffer = StringBuffer();
@@ -750,6 +761,9 @@ String _stripQuotesOutsideTags(String text) {
 bool isHeadingLine(String line) {
   final trimmedLine = line.trim();
   if (trimmedLine.isEmpty) return false;
+  // שני הדפוסים מתחילים ב-`<` או ב-`#`; כך רוב השורות נדחות בלי RegExp.
+  final first = trimmedLine.codeUnitAt(0);
+  if (first != 0x3C && first != 0x23) return false;
   return RegExp(
         r'^<h[1-6][^>]*>.*?</h[1-6]>$',
         caseSensitive: false,
