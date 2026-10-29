@@ -21,16 +21,6 @@ class SimpleInlineHtml {
     return line.document.staticSpan;
   }
 
-  /// כותרת שהיא כל השורה (`<hN>` בלי attributes): fwfh מציג אותה כבלוק יחיד
-  /// שהשוליים שלו נחתכים בקצות הגוף, ולכן היא טקסט אחד בסגנון [SimpleHeading.style].
-  static SimpleHeading? tryParseHeading(String html, TextStyle baseStyle) {
-    final line = InlineHtmlDocument.parseLine(html, baseStyle);
-    if (line == null || !line.isHeading) return null;
-    final span = line.document.staticSpan;
-    if (span == null) return null;
-    return SimpleHeading(line.style, span);
-  }
-
   static final RegExp _wholeLineHeadingRegex = RegExp(
     r'^[\t\n\f\r ]*<h([1-6])>(.*)</h\1>[\t\n\f\r ]*$',
     dotAll: true,
@@ -91,12 +81,4 @@ class SimpleInlineHtml {
           AppFonts.boldFontVariations(fontFamily, weight),
     );
   }
-}
-
-/// שורת כותרת שלמה: [span] מוצג ב-[style] של רמת הכותרת.
-class SimpleHeading {
-  final TextStyle style;
-  final TextSpan span;
-
-  const SimpleHeading(this.style, this.span);
 }

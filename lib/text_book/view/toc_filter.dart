@@ -15,9 +15,6 @@ List<TocEntry> filterTocEntriesForSearch(
   return _sortEntriesByRelevance(filtered);
 }
 
-/// קובע אם צומת צריך להיות פתוח כברירת מחדל במצב חיפוש.
-bool shouldExpandInSearch(bool? expandedFlag) => expandedFlag ?? true;
-
 String _normalizeQuery(String rawQuery) {
   return normalizeFindQuery(rawQuery);
 }

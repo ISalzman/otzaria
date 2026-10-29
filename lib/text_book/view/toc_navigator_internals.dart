@@ -2,7 +2,6 @@ import 'package:otzaria/models/books.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart';
 
 /// פריט יחיד ברשימה השטוחה של ה-TOC.
-/// משמש כשעוברים למצב וירטואליזציה אמיתית (ספרים עם הרבה ערכי TOC).
 class TocFlatItem {
   final TocEntry entry;
   final bool isExpanded;
@@ -16,16 +15,6 @@ class TocFlatItem {
 
   @override
   int get hashCode => Object.hash(entry, isExpanded);
-}
-
-/// סופר רקורסיבית את כל ערכי ה-TOC (כל הרמות).
-/// משמש כדי להחליט אם לעבור למצב וירטואלי שטוח.
-int countAllTocEntries(List<TocEntry> entries) {
-  var count = entries.length;
-  for (final e in entries) {
-    count += countAllTocEntries(e.children);
-  }
-  return count;
 }
 
 /// שורשי העץ לתצוגה מתחת לכותרת [bookTitle]: שורש יחיד ששמו כשם הספר

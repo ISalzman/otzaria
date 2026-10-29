@@ -732,10 +732,6 @@ class CommentaryListBaseState extends State<CommentaryListBase>
   ValueNotifier<int> get currentSearchIndexNotifier =>
       _currentSearchIndexNotifier;
 
-  /// האזנה למצב הגלובלי של פתיחה/כיווץ כל המפרשים. שימושי לרכיבי הורה
-  /// (כגון [CommentatorsTabScreen]) שמציגים לחצן כווץ/הרחב מחוץ לפאנל זה.
-  ValueListenable<bool> get allExpandedListenable => _allExpandedNotifier;
-
   /// מתג מצב הכיווץ הגלובלי של כל המפרשים. מעדכן את כל הקבוצות בהתאם.
   void toggleAllExpanded() {
     _cancelPendingNavigation();
