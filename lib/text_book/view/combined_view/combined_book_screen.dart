@@ -2646,220 +2646,224 @@ class _CombinedViewState extends State<CombinedView> {
           builder: (itemContext) => DecoratedBox(
             // decoration קבוע שומר על עומק הטקסט ועל מצב <details> בבחירה.
             decoration: BoxDecoration(color: backgroundColor),
-            child: _withSelectionGutter(
-              isMultiLine: isMultiLine,
-              isSelected: isSelected,
-              selectedLines: selectedLines,
-              color: theme.colorScheme.primary,
-              child: Listener(
-                onPointerDown: (event) {
-                  if (event.buttons != kPrimaryMouseButton) return;
-                  _cancelCommentaryReveal();
-                  final hit = hitAt(itemContext, event.position);
-                  final root = context.findRenderObject();
-                  _selectionPointerLineIndex = isMultiLine
-                      ? hit?.lineIndex
-                      : primaryLineIndex;
-                  _selectionPointerColumn = hit != null || isMultiLine
-                      ? hit?.column
-                      : root == null
-                      ? null
-                      : renderedTextOffsetAtPosition(
-                          root: root,
-                          globalPosition: event.position,
-                        );
+            child: Listener(
+              onPointerDown: (event) {
+                if (event.buttons != kPrimaryMouseButton) return;
+                _cancelCommentaryReveal();
+                final hit = hitAt(itemContext, event.position);
+                final root = context.findRenderObject();
+                _selectionPointerLineIndex = isMultiLine
+                    ? hit?.lineIndex
+                    : primaryLineIndex;
+                _selectionPointerColumn = hit != null || isMultiLine
+                    ? hit?.column
+                    : root == null
+                    ? null
+                    : renderedTextOffsetAtPosition(
+                        root: root,
+                        globalPosition: event.position,
+                      );
+              },
+              child: EnhancedGestureDetector(
+                coordinationGroup: _commentaryStorage,
+                behavior: HitTestBehavior.translucent,
+                onDragSelectionStart: () {
+                  if (_hasLocalCorrections) return;
+                  // כניסה למצב בחירה בגלל drag
+                  final line = lineAtPointer();
+                  if (line != null && !_selectionManager.isInSelectionMode) {
+                    _selectionManager.setAnchor(line);
+                  }
                 },
-                child: EnhancedGestureDetector(
-                  coordinationGroup: _commentaryStorage,
-                  behavior: HitTestBehavior.translucent,
-                  onDragSelectionStart: () {
-                    if (_hasLocalCorrections) return;
-                    // כניסה למצב בחירה בגלל drag
-                    final line = lineAtPointer();
-                    if (line != null && !_selectionManager.isInSelectionMode) {
-                      _selectionManager.setAnchor(line);
-                    }
-                  },
-                  onSingleTap: () {
-                    if (_hasLocalCorrections) return;
-                    if (_anchorHandledCurrentTap) {
-                      _anchorHandledCurrentTap = false;
-                      return;
-                    }
-                    final line = lineAtPointer();
-                    if (line == null) return;
-                    _focusNode.requestFocus();
-                    // מאפס את הטקסט השמור כשלוחצים על הפסקה
-                    if (mounted) {
-                      _savedSelectedText.value = null;
-                      _savedSelectedIndex.value = null;
-                      _currentSelectedIndex.value = null;
-                      _selectionLineStart = null;
-                      _selectionLineEnd = null;
-                      _selectionStartColumn = null;
-                      widget.onSelectedTextChanged?.call(null, null, null);
-                    }
-                    if (state.selectedIndices.contains(line)) {
-                      _addTextBookEventIfOpen(const UpdateSelectedIndex(null));
-                      return;
-                    }
-                    _addTextBookEventIfOpen(UpdateSelectedIndex(line));
-                    if (widget.showCommentaryAsExpansionTiles &&
-                        _hasCommentaries(state, line)) {
-                      _revealCommentaryCardBelow(line);
-                    }
-                  },
-                  onDoubleTap: () {
-                    if (_hasLocalCorrections) return;
-                    // SelectionArea בוחר את המילה; כאן רק מצב הבחירה של השורה.
-                    final line = lineAtPointer();
-                    if (line == null) return;
-                    _focusNode.requestFocus();
-                    _selectionManager.enterDoubleClickMode(line);
-                  },
-                  onShiftClick: () {
-                    if (_hasLocalCorrections) return;
-                    // Shift+Click → בחירת טווח; SelectionArea בוחר את הטקסט.
-                    final line = lineAtPointer();
-                    if (line == null) return;
-                    _focusNode.requestFocus();
-                    if (!_selectionManager.hasAnchor()) {
-                      _selectionManager.setAnchor(line);
-                    }
-                  },
-                  onCtrlClick: () {
-                    if (_hasLocalCorrections) return;
-                    // Ctrl+Click → הוספה/הסרה של השורה מבחירה מרובה
-                    final line = lineAtPointer();
-                    if (line == null) return;
-                    _focusNode.requestFocus();
-                    _addTextBookEventIfOpen(
-                      UpdateSelectedIndex(line, additive: true),
-                    );
-                  },
-                  onSecondaryTapDown: (details) {
-                    // שומר את השורה שנלחצה לשימוש בתפריט ההקשר
-                    if (!mounted) return;
-                    final hit = hitAt(itemContext, details.globalPosition);
-                    _currentSelectedIndex.value =
-                        hit?.lineIndex ?? selectedLineIndex;
-                    final root = hit?.root ?? context.findRenderObject();
-                    final selectedText = _savedSelectedText.value;
-                    final occurrenceStart = root == null || selectedText == null
-                        ? null
-                        : renderedSelectionStartAtPosition(
-                            root: root,
-                            globalPosition: details.globalPosition,
-                            selectedSegment: selectedText,
-                            lineRange: hit?.lineRange,
+                onSingleTap: () {
+                  if (_hasLocalCorrections) return;
+                  if (_anchorHandledCurrentTap) {
+                    _anchorHandledCurrentTap = false;
+                    return;
+                  }
+                  final line = lineAtPointer();
+                  if (line == null) return;
+                  _focusNode.requestFocus();
+                  // מאפס את הטקסט השמור כשלוחצים על הפסקה
+                  if (mounted) {
+                    _savedSelectedText.value = null;
+                    _savedSelectedIndex.value = null;
+                    _currentSelectedIndex.value = null;
+                    _selectionLineStart = null;
+                    _selectionLineEnd = null;
+                    _selectionStartColumn = null;
+                    widget.onSelectedTextChanged?.call(null, null, null);
+                  }
+                  if (state.selectedIndices.contains(line)) {
+                    _addTextBookEventIfOpen(const UpdateSelectedIndex(null));
+                    return;
+                  }
+                  _addTextBookEventIfOpen(UpdateSelectedIndex(line));
+                  if (widget.showCommentaryAsExpansionTiles &&
+                      _hasCommentaries(state, line)) {
+                    _revealCommentaryCardBelow(line);
+                  }
+                },
+                onDoubleTap: () {
+                  if (_hasLocalCorrections) return;
+                  // SelectionArea בוחר את המילה; כאן רק מצב הבחירה של השורה.
+                  final line = lineAtPointer();
+                  if (line == null) return;
+                  _focusNode.requestFocus();
+                  _selectionManager.enterDoubleClickMode(line);
+                },
+                onShiftClick: () {
+                  if (_hasLocalCorrections) return;
+                  // Shift+Click → בחירת טווח; SelectionArea בוחר את הטקסט.
+                  final line = lineAtPointer();
+                  if (line == null) return;
+                  _focusNode.requestFocus();
+                  if (!_selectionManager.hasAnchor()) {
+                    _selectionManager.setAnchor(line);
+                  }
+                },
+                onCtrlClick: () {
+                  if (_hasLocalCorrections) return;
+                  // Ctrl+Click → הוספה/הסרה של השורה מבחירה מרובה
+                  final line = lineAtPointer();
+                  if (line == null) return;
+                  _focusNode.requestFocus();
+                  _addTextBookEventIfOpen(
+                    UpdateSelectedIndex(line, additive: true),
+                  );
+                },
+                onSecondaryTapDown: (details) {
+                  // שומר את השורה שנלחצה לשימוש בתפריט ההקשר
+                  if (!mounted) return;
+                  final hit = hitAt(itemContext, details.globalPosition);
+                  _currentSelectedIndex.value =
+                      hit?.lineIndex ?? selectedLineIndex;
+                  final root = hit?.root ?? context.findRenderObject();
+                  final selectedText = _savedSelectedText.value;
+                  final occurrenceStart = root == null || selectedText == null
+                      ? null
+                      : renderedSelectionStartAtPosition(
+                          root: root,
+                          globalPosition: details.globalPosition,
+                          selectedSegment: selectedText,
+                          lineRange: hit?.lineRange,
+                        );
+                  if (occurrenceStart != null) {
+                    _selectionStartColumn = occurrenceStart;
+                  }
+                },
+                // הטקסט הנבחר נקרא בפתיחת התפריט; האזנה אליו בנתה מחדש את
+                // שכבת התפריט של כל שורה גלויה בכל שינוי בבחירה.
+                child: _ChildBuilder(
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      return BlocBuilder<SettingsBloc, SettingsState>(
+                        builder: (context, settingsState) {
+                          // בתצוגה מקדימה הרוחב הזמין הוא של החלונית, לא של
+                          // אזור קריאה — הגבלת רוחב הטקסט הייתה מצרה אותו שוב.
+                          final textMaxWidth = widget.isPreviewMode
+                              ? 0.0
+                              : textColumnMaxWidthOf(
+                                  context,
+                                  setting: settingsState.textMaxWidth,
+                                  availableWidth: constraints.maxWidth,
+                                );
+                          final lineContext = _readerLineContext(
+                            state,
+                            settingsState,
+                            noteMap,
                           );
-                    if (occurrenceStart != null) {
-                      _selectionStartColumn = occurrenceStart;
-                    }
-                  },
-                  // הטקסט הנבחר נקרא בפתיחת התפריט; האזנה אליו בנתה מחדש את
-                  // שכבת התפריט של כל שורה גלויה בכל שינוי בבחירה.
-                  child: _ChildBuilder(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 2.0),
-                      child: LayoutBuilder(
-                        builder: (context, constraints) {
-                          return BlocBuilder<SettingsBloc, SettingsState>(
-                            builder: (context, settingsState) {
-                              // בתצוגה מקדימה הרוחב הזמין הוא של החלונית, לא של
-                              // אזור קריאה — הגבלת רוחב הטקסט הייתה מצרה אותו שוב.
-                              final textMaxWidth = widget.isPreviewMode
-                                  ? 0.0
-                                  : textColumnMaxWidthOf(
-                                      context,
-                                      setting: settingsState.textMaxWidth,
-                                      availableWidth: constraints.maxWidth,
-                                    );
-                              final lineContext = _readerLineContext(
-                                state,
-                                settingsState,
-                                noteMap,
-                              );
-                              final content = isMultiLine
-                                  ? _buildMultiLineItem(
-                                      itemContext,
-                                      itemLines,
-                                      state,
+                          final content = isMultiLine
+                              ? _buildMultiLineItem(
+                                  itemContext,
+                                  itemLines,
+                                  state,
+                                  lineContext,
+                                  settingsState,
+                                  noteMap,
+                                  commentaryAfter:
+                                      widget.showCommentaryAsExpansionTiles &&
+                                          isSelected &&
+                                          _hasCommentaries(
+                                            state,
+                                            selectedLineIndex,
+                                          )
+                                      ? selectedLineIndex
+                                      : null,
+                                )
+                              : ReaderLineBlock(
+                                  lineIndex: primaryLineIndex,
+                                  child: _lineTextWidget(
+                                    buildReaderLineSpec(
+                                      primaryLineIndex,
                                       lineContext,
-                                      settingsState,
-                                      noteMap,
-                                      commentaryAfter:
-                                          widget.showCommentaryAsExpansionTiles &&
-                                              isSelected &&
-                                              _hasCommentaries(
-                                                state,
-                                                selectedLineIndex,
-                                              )
-                                          ? selectedLineIndex
-                                          : null,
-                                    )
-                                  : ReaderLineBlock(
-                                      lineIndex: primaryLineIndex,
-                                      child: _lineTextWidget(
-                                        buildReaderLineSpec(
-                                          primaryLineIndex,
-                                          lineContext,
-                                        ),
-                                        state,
-                                        notesForLine,
-                                      ),
-                                    );
-                              return textMaxWidth > 0
-                                  ? Center(
-                                      child: ConstrainedBox(
-                                        constraints: BoxConstraints(
-                                          maxWidth: textMaxWidth,
-                                        ),
-                                        child: content,
-                                      ),
-                                    )
-                                  : content;
-                            },
+                                    ),
+                                    state,
+                                    notesForLine,
+                                  ),
+                                );
+                          // הסמן עוטף את עמודת הטקסט, כדי שיהיה צמוד אליה גם
+                          // כשהיא ממורכזת וצרה מהפריט.
+                          final column = _withSelectionGutter(
+                            isMultiLine: isMultiLine,
+                            isSelected: isSelected,
+                            selectedLines: selectedLines,
+                            color: theme.colorScheme.primary,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                vertical: 2.0,
+                              ),
+                              child: content,
+                            ),
                           );
+                          return textMaxWidth > 0
+                              ? Center(
+                                  child: ConstrainedBox(
+                                    constraints: BoxConstraints(
+                                      maxWidth: textMaxWidth,
+                                    ),
+                                    child: column,
+                                  ),
+                                )
+                              : column;
                         },
-                      ),
-                    ),
-                    builder: (context, child) {
-                      return AppContextMenuRegion(
-                        // לחיצה ימנית על הטקסט המסומן (כולל הרווח שבין שורות-תצוגה של
-                        // שורת-מקור שנשברה) לא תשחרר את הבחירה; לחיצה על חלק לא-מסומן
-                        // מבטלת כרגיל.
-                        shouldPreserveSelectionOnSecondaryTap:
-                            (globalPosition) {
-                              final hit = hitAt(itemContext, globalPosition);
-                              return _shouldPreserveSelectionAt(
-                                globalPosition,
-                                hit?.lineIndex ?? selectedLineIndex,
-                                context,
-                                hit: hit,
-                              );
-                            },
-                        menuBuilder: (menuCtx, tapPos) {
-                          final hit = hitAt(itemContext, tapPos);
-                          return [
-                            ...ContextMenuUtils.buildInlineLinkContextMenuEntries(
-                              menuCtx,
-                              tapPos,
-                            ),
-                            ..._buildContextMenuForIndex(
-                              state,
-                              hit?.lineIndex ?? selectedLineIndex,
-                              menuCtx,
-                              _savedSelectedText.value,
-                              tapPos,
-                              lineRange: hit?.lineRange,
-                            ),
-                          ];
-                        },
-                        child: child,
                       );
                     },
                   ),
+                  builder: (context, child) {
+                    return AppContextMenuRegion(
+                      // לחיצה ימנית על הטקסט המסומן (כולל הרווח שבין שורות-תצוגה של
+                      // שורת-מקור שנשברה) לא תשחרר את הבחירה; לחיצה על חלק לא-מסומן
+                      // מבטלת כרגיל.
+                      shouldPreserveSelectionOnSecondaryTap: (globalPosition) {
+                        final hit = hitAt(itemContext, globalPosition);
+                        return _shouldPreserveSelectionAt(
+                          globalPosition,
+                          hit?.lineIndex ?? selectedLineIndex,
+                          context,
+                          hit: hit,
+                        );
+                      },
+                      menuBuilder: (menuCtx, tapPos) {
+                        final hit = hitAt(itemContext, tapPos);
+                        return [
+                          ...ContextMenuUtils.buildInlineLinkContextMenuEntries(
+                            menuCtx,
+                            tapPos,
+                          ),
+                          ..._buildContextMenuForIndex(
+                            state,
+                            hit?.lineIndex ?? selectedLineIndex,
+                            menuCtx,
+                            _savedSelectedText.value,
+                            tapPos,
+                            lineRange: hit?.lineRange,
+                          ),
+                        ];
+                      },
+                      child: child,
+                    );
+                  },
                 ),
               ),
             ),
